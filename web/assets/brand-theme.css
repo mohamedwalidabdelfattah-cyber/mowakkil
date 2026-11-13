@@ -632,4 +632,42 @@ table button:not(.btn-ghost):not(.btn-secondary),
     font-weight: 700 !important;
     font-size: 14px !important;
     -webkit-text-fill-color: #FFFFFF !important;
+}/* ==========================================================
+   FIX LOGOUT BUTTON VISIBILITY (إظهار زرار الخروج)
+   ========================================================== */
+
+/* إجبار زرار الخروج إنه يظهر في الهيدر على كل الشاشات */
+#logout-btn {
+    display: inline-flex !important;
+    width: 40px !important;
+    height: 40px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #FFFFFF !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+/* لون أحمر عند الوقوف عليه */
+#logout-btn:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #FCA5A5 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* الأيقونة (SVG) جوه الزرار */
+#logout-btn svg {
+    width: 20px !important;
+    height: 20px !important;
+    stroke: currentColor !important;
+}
+
+/* على الموبايل، يفضل ظاهر في الهيدر (أو نخفيه لو مش عايزينه) */
+@media (max-width: 768px) {
+    #logout-btn {
+        display: inline-flex !important;
+    }
 }
