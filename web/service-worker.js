@@ -2,7 +2,7 @@
 // الاستراتيجية: Network First (بيجيب من النت الأول، ولو فشل يجيب من الكاش)
 // ده عشان أي تحديث يظهر فوراً بدون ما نغير رقم الإصدار يدوياً.
 
-const CACHE_NAME = 'mowakkil-cache-v61';
+const CACHE_NAME = 'mowakkil-cache-v62';
 
 // الملفات الأساسية اللي بنعملها كاش عشان التطبيق يشتغل أوفلاين
 const PRECACHE_ASSETS = [
