@@ -19,7 +19,12 @@
   <link rel="icon" type="image/png" sizes="512x512" href="/assets/logos/icon-512.png">
   <link rel="shortcut icon" href="/assets/logos/favicon.ico">
 
+  <!-- مكتبات أساسية -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+  <!-- ✅ مكتبات التصدير الاحترافي -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
 
   <!-- ملفات التنسيقات الأساسية -->
   <link rel="stylesheet" href="/assets/design-system.css">
@@ -454,6 +459,9 @@
     backdrop?.addEventListener('click', close);
   }
 </script>
+
+<!-- ✅ ملف التصدير (أزرار PDF / Word / Excel / طباعة) -->
+<script src="/js/export.js"></script>
 
 <script type="module" src="/js/main.js"></script>
 </body>

@@ -159,6 +159,48 @@ function initBottomNav() {
 }
 
 // ============================================================
+// Export Buttons (PDF / Word / Excel / Print)
+// ============================================================
+document.addEventListener('mowakkil:view-changed', (e) => {
+  setTimeout(() => {
+    const host = document.getElementById('view-host');
+    if (!host || !window.MowakkilExport) return;
+
+    // نجيب اسم الصفحة عشان نحدد اسم الملف
+    const viewName = e.detail?.name || 'report';
+    const titles = {
+      'dashboard': 'لوحة التحكم',
+      'cases': 'القضايا',
+      'clients': 'الموكلين',
+      'tasks': 'المهام',
+      'fees': 'الأتعاب',
+      'reports': 'التقارير',
+      'lawyers': 'المحامين',
+      'money': 'الإدارة المالية',
+      'accounting': 'المحاسبة',
+      'agenda': 'الأجندة',
+    };
+
+    const pageTitle = titles[viewName] || viewName;
+
+    // نشيل أزرار التصدير القديمة لو موجودة
+    const oldBtns = host.querySelector('.export-buttons');
+    if (oldBtns) oldBtns.remove();
+
+    // نضيف الأزرار الجديدة في أول الصفحة (تحت العنوان)
+    const btns = window.MowakkilExport.createExportButtons(pageTitle);
+
+    // نحطهم بعد الـ app-top (لو موجود)، أو في الأول
+    const appTop = host.querySelector('.app-top');
+    if (appTop) {
+      appTop.after(btns);
+    } else {
+      host.insertBefore(btns, host.firstChild);
+    }
+  }, 600); // ننتظر شوية لحد ما الصفحة ترسم
+});
+
+// ============================================================
 // Events
 // ============================================================
 document.addEventListener('mowakkil:auth-expired', () => {
@@ -239,4 +281,4 @@ if (getToken()) {
   });
 } else {
   showLanding();
-} 
+}
