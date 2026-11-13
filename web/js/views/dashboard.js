@@ -74,14 +74,14 @@ export async function render(host) {
       <!-- Welcome Hero (Premium) -->
       <div class="welcome-hero" style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); padding: 32px;">
         <div>
-          <div class="welcome-label" style="color: #D97706; font-weight: 700;">${greeting} 👋</div>
+          <div class="welcome-label" style="color: #D4AF37; font-weight: 700;">${greeting} 👋</div>
           <div class="welcome-title" style="font-size: 32px; font-weight: 900; margin-top: 4px;">${esc(userName)}</div>
           <div class="welcome-sub" style="opacity: 0.8;">${esc(now.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))}</div>
         </div>
         ${hasFinance ? `
           <div class="welcome-badge" style="background: rgba(217, 119, 6, 0.15); border: 1px solid rgba(217, 119, 6, 0.3);">
-            <div class="badge-label" style="color: #D97706;">${isProfit ? 'صافي الربح' : 'صافي الخسارة'}</div>
-            <div class="badge-value" style="color: #D97706;">${fmtMoney(Math.abs(netDue))} ج</div>
+            <div class="badge-label" style="color: #D4AF37;">${isProfit ? 'صافي الربح' : 'صافي الخسارة'}</div>
+            <div class="badge-value" style="color: #D4AF37;">${fmtMoney(Math.abs(netDue))} ج</div>
           </div>
         ` : `
           <div class="welcome-badge" style="background: rgba(255,255,255,0.1);">
@@ -125,8 +125,8 @@ export async function render(host) {
           </div>
         </div>
 
-        <div class="stat" style="border-right: 4px solid #F59E0B;">
-          <div class="stat-icon" style="background: #FFFBEB; color: #F59E0B;">📅</div>
+        <div class="stat" style="border-right: 4px solid #D4AF37;">
+          <div class="stat-icon" style="background: #FFFBEB; color: #D4AF37;">📅</div>
           <div class="stat-body">
             <div class="l">جلسات النهاردة</div>
             <div class="n warning">${(dashboard.sessions_today || []).length}</div>
@@ -175,7 +175,7 @@ export async function render(host) {
             <div style="font-size: 48px;">📊</div>
             <div style="flex: 1; min-width: 200px;">
               <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 800; color: #92400E;">التقارير المالية والرسوم البيانية</h3>
-              <p style="margin: 0; font-size: 14px; color: #B45309;">
+              <p style="margin: 0; font-size: 14px; color: #B8860B;">
                 متاحة في الباقة الأساسية — شوف إيراداتك ومصاريفك وربحك بشكل تفاعلي
               </p>
             </div>
@@ -196,7 +196,7 @@ export async function render(host) {
             <div style="font-size: 28px; margin-bottom: 8px;">👥</div>
             إضافة موكل
           </button>
-          <button class="quick-action-btn" data-goto="money-invoices" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; border: none; padding: 20px; border-radius: 16px; cursor: pointer; text-align: center; font-weight: 700; font-size: 14px; transition: transform 0.2s;">
+          <button class="quick-action-btn" data-goto="money-invoices" style="background: #0F172A; color: white; border: none; padding: 20px; border-radius: 16px; cursor: pointer; text-align: center; font-weight: 700; font-size: 14px; transition: transform 0.2s;">
             <div style="font-size: 28px; margin-bottom: 8px;">📄</div>
             فاتورة جديدة
           </button>
@@ -382,7 +382,7 @@ function drawExpensesChart(groups) {
 
   const data = [
     { label: 'مرتبات', value: groups.salaries || 0, color: '#0F172A' },
-    { label: 'مكتب', value: groups.office || 0, color: '#F59E0B' },
+    { label: 'مكتب', value: groups.office || 0, color: '#D4AF37' },
     { label: 'قضايا', value: groups.cases || 0, color: '#10B981' },
     { label: 'إدارية', value: groups.admin || 0, color: '#EF4444' },
   ];
@@ -444,7 +444,7 @@ function drawRevenueChart(revenues) {
     return;
   }
 
-  const colors = ['#0F172A', '#10B981', '#F59E0B', '#EF4444', '#D97706', '#06B6D4'];
+  const colors = ['#0F172A', '#10B981', '#D4AF37', '#EF4444', '#D4AF37', '#06B6D4'];
 
   charts.revenue = new Chart(ctx, {
     type: 'bar',

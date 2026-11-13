@@ -1,0 +1,268 @@
+﻿==========================================================
+           COLOR AUDIT REPORT - 2026-11-13 12:59
+==========================================================
+
+--- 1. PURPLE COLORS CHECK ---
+[WARNING] Purple color found!
+  File: brand-theme.css | Line 322 | Color: #6366F1
+  Code: [style*="#6366F1"],
+
+  File: brand-theme.css | Line 323 | Color: #4F46E5
+  Code: [style*="#4F46E5"],
+
+  File: brand-theme.css | Line 324 | Color: #8B5CF6
+  Code: [style*="#8B5CF6"] {
+
+  File: design-system.css | Line 23 | Color: #6366F1
+  Code: --primary-500: #6366F1;
+
+  File: design-system.css | Line 24 | Color: #4F46E5
+  Code: --primary-600: #4F46E5;
+
+  File: pricing.css | Line 89 | Color: 99, 102, 241
+  Code: box-shadow: 0 12px 32px rgba(99, 102, 241, 0.18);
+
+  File: pricing.css | Line 108 | Color: 99, 102, 241
+  Code: box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+
+  File: pricing.css | Line 207 | Color: 99, 102, 241
+  Code: box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+
+  File: pricing.css | Line 211 | Color: 99, 102, 241
+  Code: box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+
+  File: pricing.css | Line 340 | Color: 99, 102, 241
+  Code: box-shadow: 0 20px 40px rgba(99, 102, 241, 0.25);
+
+  File: styles.clean.css | Line 402 | Color: #6366F1
+  Code: background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.clean.css | Line 402 | Color: #4F46E5
+  Code: background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.clean.css | Line 474 | Color: 99, 102, 241
+  Code: box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+
+  File: styles.clean.css | Line 687 | Color: 99, 102, 241
+  Code: box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+
+  File: styles.clean.css | Line 2023 | Color: 99, 102, 241
+  Code: background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+
+  File: styles.clean.css | Line 2196 | Color: 99, 102, 241
+  Code: box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+
+  File: styles.clean.css | Line 2532 | Color: #6366F1
+  Code: color: #6366F1;
+
+  File: styles.clean.css | Line 2553 | Color: #6366F1
+  Code: border-color: #6366F1;
+
+  File: styles.clean.css | Line 2554 | Color: #6366F1
+  Code: color: #6366F1;
+
+  File: styles.clean.css | Line 3474 | Color: 99, 102, 241
+  Code: box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+
+  File: styles.css | Line 511 | Color: 99, 102, 241
+  Code: box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+
+  File: styles.css | Line 615 | Color: 99, 102, 241
+  Code: box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+
+  File: styles.css | Line 726 | Color: 99, 102, 241
+  Code: box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+
+  File: styles.css | Line 901 | Color: 99, 102, 241
+  Code: box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+
+  File: styles.css | Line 2677 | Color: 99, 102, 241
+  Code: box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+
+  File: styles.css | Line 2855 | Color: #6366F1
+  Code: padding: 32px; background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.css | Line 2855 | Color: #4F46E5
+  Code: padding: 32px; background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.css | Line 2857 | Color: 99, 102, 241
+  Code: box-shadow: 0 12px 32px -8px rgba(99, 102, 241, 0.4);
+
+  File: styles.css | Line 2905 | Color: #6366F1
+  Code: .quick-expense { background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); }
+
+  File: styles.css | Line 2905 | Color: #4F46E5
+  Code: .quick-expense { background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); }
+
+  File: styles.css | Line 3104 | Color: 99, 102, 241
+  Code: .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+
+  File: styles.css | Line 3376 | Color: 99, 102, 241
+  Code: box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+
+  File: styles.css | Line 3993 | Color: #6366F1
+  Code: .stat-body .n.primary { color: #6366F1; }
+
+  File: styles.css | Line 4014 | Color: #6366F1
+  Code: border-color: #6366F1;
+
+  File: styles.css | Line 4015 | Color: #6366F1
+  Code: color: #6366F1;
+
+  File: reports.js | Line 115 | Color: 99, 102, 241
+  Code: 'rgba(99, 102, 241, 0.8)',
+
+
+--- 2. BUTTON COLORS CHECK ---
+[WARNING] Old button color found!
+  File: brand-theme.css | Line 322 | Color: #6366F1
+  Code: [style*="#6366F1"],
+
+  File: brand-theme.css | Line 323 | Color: #4F46E5
+  Code: [style*="#4F46E5"],
+
+  File: design-system.css | Line 23 | Color: #6366F1
+  Code: --primary-500: #6366F1;
+
+  File: design-system.css | Line 24 | Color: #4F46E5
+  Code: --primary-600: #4F46E5;
+
+  File: design-system.css | Line 40 | Color: #D97706
+  Code: --warning-600: #D97706;
+
+  File: landing.css | Line 7 | Color: #D97706
+  Code: --brand-gold: #D97706;
+
+  File: landing.css | Line 8 | Color: #B45309
+  Code: --brand-gold-hover: #B45309;
+
+  File: styles.clean.css | Line 402 | Color: #6366F1
+  Code: background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.clean.css | Line 402 | Color: #4F46E5
+  Code: background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.clean.css | Line 996 | Color: #D97706
+  Code: color: #D97706;
+
+  File: styles.clean.css | Line 2223 | Color: #D97706
+  Code: color: #D97706;
+
+  File: styles.clean.css | Line 2532 | Color: #6366F1
+  Code: color: #6366F1;
+
+  File: styles.clean.css | Line 2553 | Color: #6366F1
+  Code: border-color: #6366F1;
+
+  File: styles.clean.css | Line 2554 | Color: #6366F1
+  Code: color: #6366F1;
+
+  File: styles.clean.css | Line 2591 | Color: #D97706
+  Code: border: 2px solid #D97706;
+
+  File: styles.clean.css | Line 2607 | Color: #D97706
+  Code: color: #D97706;
+
+  File: styles.clean.css | Line 2641 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: styles.clean.css | Line 2745 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: styles.clean.css | Line 2765 | Color: #D97706
+  Code: background: #D97706;
+
+  File: styles.clean.css | Line 2784 | Color: #D97706
+  Code: background: #D97706;
+
+  File: styles.clean.css | Line 2820 | Color: #D97706
+  Code: background: #D97706;
+
+  File: styles.clean.css | Line 2821 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: styles.clean.css | Line 2892 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: styles.css | Line 2855 | Color: #6366F1
+  Code: padding: 32px; background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.css | Line 2855 | Color: #4F46E5
+  Code: padding: 32px; background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+
+  File: styles.css | Line 2905 | Color: #6366F1
+  Code: .quick-expense { background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); }
+
+  File: styles.css | Line 2905 | Color: #4F46E5
+  Code: .quick-expense { background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); }
+
+  File: styles.css | Line 3519 | Color: #D97706
+  Code: color: #D97706; /* أيقونات دهبي */
+
+  File: styles.css | Line 3539 | Color: #D97706
+  Code: color: #D97706;
+
+  File: styles.css | Line 3993 | Color: #6366F1
+  Code: .stat-body .n.primary { color: #6366F1; }
+
+  File: styles.css | Line 4014 | Color: #6366F1
+  Code: border-color: #6366F1;
+
+  File: styles.css | Line 4015 | Color: #6366F1
+  Code: color: #6366F1;
+
+  File: styles.css | Line 4077 | Color: #D97706
+  Code: border: 2px solid #D97706;
+
+  File: styles.css | Line 4093 | Color: #D97706
+  Code: color: #D97706;
+
+  File: styles.css | Line 4136 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: styles.css | Line 4253 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: styles.css | Line 4273 | Color: #D97706
+  Code: background: #D97706;
+
+  File: styles.css | Line 4292 | Color: #D97706
+  Code: background: #D97706;
+
+  File: styles.css | Line 4340 | Color: #D97706
+  Code: background: #D97706;
+
+  File: styles.css | Line 4341 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: styles.css | Line 4412 | Color: #D97706
+  Code: border-color: #D97706;
+
+  File: dashboard.js | Line 77 | Color: #D97706
+  Code: <div class="welcome-label" style="color: #D97706; font-weight: 700;">${greeting} 👋</div>
+
+  File: dashboard.js | Line 83 | Color: #D97706
+  Code: <div class="badge-label" style="color: #D97706;">${isProfit ? 'صافي الربح' : 'صافي الخسارة'}</div>
+
+  File: dashboard.js | Line 84 | Color: #D97706
+  Code: <div class="badge-value" style="color: #D97706;">${fmtMoney(Math.abs(netDue))} ج</div>
+
+  File: dashboard.js | Line 178 | Color: #B45309
+  Code: <p style="margin: 0; font-size: 14px; color: #B45309;">
+
+  File: dashboard.js | Line 199 | Color: #D97706
+  Code: <button class="quick-action-btn" data-goto="money-invoices" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; border: none; padding: 20px; border-radius: 16px; cursor: pointer; text-align: center; font-weight: 700; font-size: 14px; transition: transform 0.2s;">
+
+  File: dashboard.js | Line 447 | Color: #D97706
+  Code: const colors = ['#0F172A', '#10B981', '#F59E0B', '#EF4444', '#D97706', '#06B6D4'];
+
+
+--- 3. BRAND THEME LINK CHECK ---
+  [OK] index.html - Linked
+  [MISSING] pay.html - brand-theme.css is NOT linked!
+  [MISSING] pricing.html - brand-theme.css is NOT linked!
+  [MISSING] signup.html - brand-theme.css is NOT linked!
+
+==========================================================
+                     END OF REPORT
+==========================================================

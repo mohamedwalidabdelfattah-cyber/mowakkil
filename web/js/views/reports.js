@@ -112,7 +112,7 @@ async function load(host) {
               d.net || 0,
             ],
             backgroundColor: [
-              'rgba(99, 102, 241, 0.8)',
+              'rgba(212, 175, 55, 0.8)',
               'rgba(16, 185, 129, 0.8)',
               'rgba(245, 158, 11, 0.8)',
               'rgba(239, 68, 68, 0.8)',

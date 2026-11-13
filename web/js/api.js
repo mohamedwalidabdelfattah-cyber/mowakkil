@@ -21,7 +21,7 @@ export function setSAToken(t)  { localStorage.setItem(STORAGE_KEYS.SA_TOKEN, t);
 export function clearSAToken() { localStorage.removeItem(STORAGE_KEYS.SA_TOKEN); }
 
 // ============================================================
-// استخراج بيانات المستخدم من التوكن مباشرة
+// استخراج بيانات المستخدم من التوكن مباشرة (UTF-8 Safe)
 // ============================================================
 export function getCurrentUser() {
   const token = getToken();
@@ -31,10 +31,16 @@ export function getCurrentUser() {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
+    // ✅ فك التشفير باستخدام TextDecoder (UTF-8) بدل atob العادي
     let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     while (payload.length % 4) payload += '=';
 
-    const decoded = JSON.parse(atob(payload));
+    const binary = atob(payload);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const decoded = JSON.parse(new TextDecoder().decode(bytes));
 
     if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
       return null;

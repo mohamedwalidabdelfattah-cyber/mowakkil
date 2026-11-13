@@ -1,4 +1,4 @@
-﻿/* ==========================================================
+/* ==========================================================
    Mowakkil - styles.clean.css
    Clean version of styles.css (no duplicates)
    Last definition of each selector
@@ -399,7 +399,7 @@ font-size: 12.5px;
 }
 
 .quick-expense {
-background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+background: #0F172A;
 }
 
 .quick-invoice {
@@ -411,7 +411,7 @@ margin-bottom: 70px;
 }
 
 footer::before {
-content: 'âš–ï¸';
+content: '–ï¸';
   display: block;
   font-size: 20px;
   margin-bottom: 8px;
@@ -471,7 +471,7 @@ display: inline-flex;
   padding: 16px 28px;
   border-radius: var(--radius-lg);
   margin-bottom: 20px;
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
 }
 
 .upgrade-price-num {
@@ -684,7 +684,7 @@ transform: translateY(-4px);
 
 .plan-card.popular {
 border-color: var(--primary);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
 }
 
 .plan-card.current {
@@ -993,7 +993,7 @@ margin-top: 20px;
 margin-top: 12px;
   font-style: normal;
   font-size: 13px;
-  color: #D97706;
+  color: #D4AF37;
   font-weight: 700;
 }
 
@@ -2020,7 +2020,7 @@ background: var(--primary); color: white;
 }
 
 .btn-primary:hover {
-background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
 }
 
 .btn-ghost {
@@ -2193,7 +2193,7 @@ flex-shrink: 0 !important;
 background: var(--primary) !important;
     color: white !important;
     border-color: var(--primary) !important;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3) !important;
 }
 
 .accounting-home-grid {
@@ -2220,7 +2220,7 @@ content: '';
 }
 
 .signup-features li span {
-color: #D97706; 
+color: #D4AF37; 
   font-size: 20px;
 }
 
@@ -2529,7 +2529,7 @@ font-size: 22px;
 }
 
 .stat-body .n.primary {
-color: #6366F1;
+color: #D4AF37;
 }
 
 .stat-body .n.success {
@@ -2550,8 +2550,8 @@ padding: 6px 10px;
 }
 
 .period-btn:hover {
-border-color: #6366F1;
-  color: #6366F1;
+border-color: #D4AF37;
+  color: #D4AF37;
 }
 
 .period-btn.active {
@@ -2588,7 +2588,7 @@ display: flex;
 width: 48px;
   height: 48px;
   background: rgba(217, 119, 6, 0.2);
-  border: 2px solid #D97706;
+  border: 2px solid #D4AF37;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2604,7 +2604,7 @@ font-size: 16px;
 
 .chat-subtitle {
 font-size: 12px;
-  color: #D97706;
+  color: #D4AF37;
   font-weight: 600;
 }
 
@@ -2638,7 +2638,7 @@ padding: 12px 16px;
 }
 
 .chat-suggestion:hover {
-border-color: #D97706;
+border-color: #D4AF37;
   background: #FFFBEB;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
@@ -2742,7 +2742,7 @@ flex: 1;
 }
 
 .chat-input:focus {
-border-color: #D97706;
+border-color: #D4AF37;
   box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.1);
 }
 
@@ -2762,7 +2762,7 @@ width: 44px;
 }
 
 .chat-send-btn:hover:not(:disabled) {
-background: #D97706;
+background: #0F172A;
   transform: scale(1.05);
 }
 
@@ -2781,7 +2781,7 @@ display: flex;
 .typing-dots span {
 width: 8px;
   height: 8px;
-  background: #D97706;
+  background: #0F172A;
   border-radius: 50%;
   animation: typing-bounce 1.4s infinite;
 }
@@ -2817,8 +2817,8 @@ width: 36px;
 }
 
 .chat-new-btn:hover {
-background: #D97706;
-  border-color: #D97706;
+background: #0F172A;
+  border-color: #D4AF37;
 }
 
 .chat-attachment {
@@ -2889,7 +2889,7 @@ display: flex;
 }
 
 .chat-history-item:hover {
-border-color: #D97706;
+border-color: #D4AF37;
   background: #FFFBEB;
 }
 
@@ -3160,7 +3160,7 @@ opacity: 1;
 }
 
 @media (max-width: 768px) {
-  /* Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ø³ÙƒØ±ÙˆÙ„ Ø§Ù„Ø£ÙÙ‚ÙŠ Ù†Ù‡Ø§Ø¦ÙŠØ§Ù‹ */
+  /* Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ø³ÙƒØ±ÙˆÙ„ Ø§Ù„Ø£ÙÙ‚Ù Ù†Ù‡Ø§Ø¦ÙØ§Ù‹ */
   html, body {
     overflow-x: hidden !important;
     max-width: 100vw !important;
@@ -3168,18 +3168,18 @@ opacity: 1;
 
   /* Topbar */
   .topbar { padding: 10px 12px; gap: 8px; }
-  .brand h1 { display: none; /* Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ø§Ø³Ù… Ù„ØªÙˆÙÙŠØ± Ù…Ø³Ø§Ø­Ø© */ }
+  .brand h1 { display: none; /* Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ø§Ø³Ù… Ù„ØªÙˆÙÙØ± Ù…Ø³Ø§Ø­Ø© */ }
   .brand-logo { width: 32px !important; height: 32px !important; }
   
-  /* ØªØ­ÙˆÙŠÙ„ Ø§Ù„Ø¨Ø­Ø« Ù„Ø£ÙŠÙ‚ÙˆÙ†Ø© */
+  /* ØªØ­ÙˆÙÙ„ Ø§Ù„Ø¨Ø­Ø« Ù„Ø£ÙÙ‚ÙˆÙ†Ø© */
   .search-trigger { padding: 0 !important; width: 36px !important; height: 36px !important; justify-content: center !important; border-radius: 50% !important; background: transparent !important; }
   .search-trigger-text, .search-trigger-kbd { display: none !important; }
   
   .topbar-actions { gap: 2px !important; }
   .icon-btn, .menu-btn { width: 36px !important; height: 36px !important; }
 
-  /* Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø¬Ø§Ù†Ø¨ÙŠØ© */
-  .menu-btn { display: flex !important; } /* Ø¥Ø¬Ø¨Ø§Ø±Ù‡Ø§ ØªØ¸Ù‡Ø± */
+  /* Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„ØØ§Ù†Ø¨ÙØ© */
+  .menu-btn { display: flex !important; } /* Ø¥ØØ¨Ø§Ø±Ù‡Ø§ ØªØ¸Ù‡Ø± */
   .drawer { display: flex !important; z-index: 9999 !important; }
   .drawer-backdrop { display: block !important; z-index: 9998 !important; }
 
@@ -3240,7 +3240,7 @@ opacity: 1;
 @media (min-width: 900px) { .more-grid { grid-template-columns: repeat(5, 1fr); max-width: 720px; margin: 0 auto; } }
 
 @media (max-width: 768px) {
-  /* ØªØ­ÙˆÙŠÙ„ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø¬Ø§Ù†Ø¨ÙŠØ© Ù„Ø´Ø±ÙŠØ· Ø£ÙÙ‚ÙŠ Ù†Ø¸ÙŠÙ */
+  /* ØªØ­ÙˆÙÙ„ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„ØØ§Ù†Ø¨ÙØ© Ù„Ø´Ø±ÙØ· Ø£ÙÙ‚Ù Ù†Ø¸ÙÙ */
   .settings-sidebar {
     display: flex !important;
     flex-direction: row !important;
@@ -3291,9 +3291,9 @@ opacity: 1;
 }
 
 @media (max-width: 768px) {
-  /* ØªØ­ÙˆÙŠÙ„ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø¬Ø§Ù†Ø¨ÙŠØ© Ù„Ø´Ø±ÙŠØ· Ø£ÙÙ‚ÙŠ */
+  /* ØªØ­ÙˆÙÙ„ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„ØØ§Ù†Ø¨ÙØ© Ù„Ø´Ø±ÙØ· Ø£ÙÙ‚Ù */
   .settings-layout {
-    display: block !important; /* Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ù€ Grid */
+    display: block !important; /* Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ù Grid */
   }
   
   .settings-sidebar {
@@ -3311,7 +3311,7 @@ opacity: 1;
     width: 100% !important;
   }
 
-  /* Ø¥Ø®ÙØ§Ø¡ Ø´Ø±ÙŠØ· Ø§Ù„ØªÙ…Ø±ÙŠØ± */
+  /* Ø¥Ø®ÙØ§Ø¡ Ø´Ø±ÙØ· Ø§Ù„ØªÙ…Ø±ÙØ± */
   .settings-sidebar::-webkit-scrollbar { display: none; }
 
   /* Ø´ÙƒÙ„ Ø§Ù„ØªØ§Ø¨ */
@@ -3340,7 +3340,7 @@ opacity: 1;
 }
 
 @media (max-width: 768px) {
-  /* ØªØ­ÙˆÙŠÙ„ Ø£ÙŠ Ø­Ø§ÙˆÙŠØ© ØªØ§Ø¨Ø§Øª Ù„Ø´Ø±ÙŠØ· Ø£ÙÙ‚ÙŠ */
+  /* ØªØ­ÙˆÙÙ„ Ø£Ù Ø­Ø§ÙˆÙØ© ØªØ§Ø¨Ø§Øª Ù„Ø´Ø±ÙØ· Ø£ÙÙ‚Ù */
   .tabs, 
   .money-tabs, 
   .finance-tabs,
@@ -3358,7 +3358,7 @@ opacity: 1;
     width: 100% !important;
   }
 
-  /* Ø¥Ø®ÙØ§Ø¡ Ø´Ø±ÙŠØ· Ø§Ù„ØªÙ…Ø±ÙŠØ± */
+  /* Ø¥Ø®ÙØ§Ø¡ Ø´Ø±ÙØ· Ø§Ù„ØªÙ…Ø±ÙØ± */
   .tabs::-webkit-scrollbar, 
   .money-tabs::-webkit-scrollbar, 
   .finance-tabs::-webkit-scrollbar {
@@ -3397,7 +3397,7 @@ opacity: 1;
 
 @media (max-width: 768px) {
   
-  /* 1. ØªØ­ÙˆÙŠÙ„ Ø£ÙŠ Ø­Ø§ÙˆÙŠØ© ØªØ§Ø¨Ø§Øª Ù„Ø´Ø±ÙŠØ· Ø£ÙÙ‚ÙŠ Ù‚Ø§Ø¨Ù„ Ù„Ù„Ø³Ø­Ø¨ */
+  /* 1. ØªØ­ÙˆÙÙ„ Ø£Ù Ø­Ø§ÙˆÙØ© ØªØ§Ø¨Ø§Øª Ù„Ø´Ø±ÙØ· Ø£ÙÙ‚Ù Ù‚Ø§Ø¨Ù„ Ù„Ù„Ø³Ø­Ø¨ */
   .tabs, 
   .nav-tabs, 
   .finance-tabs,
@@ -3413,7 +3413,7 @@ opacity: 1;
     padding: 8px 12px !important;
     gap: 8px !important;
     -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important; /* ÙØ§ÙŠØ±ÙÙˆÙƒØ³ */
+    scrollbar-width: none !important; /* ÙØ§ÙØ±ÙÙˆÙƒØ³ */
     border-bottom: 1px solid var(--border-soft) !important;
     background: var(--surface) !important;
     width: 100% !important;
@@ -3421,7 +3421,7 @@ opacity: 1;
     margin-bottom: 16px;
   }
 
-  /* Ø¥Ø®ÙØ§Ø¡ Ø´Ø±ÙŠØ· Ø§Ù„ØªÙ…Ø±ÙŠØ± */
+  /* Ø¥Ø®ÙØ§Ø¡ Ø´Ø±ÙØ· Ø§Ù„ØªÙ…Ø±ÙØ± */
   .tabs::-webkit-scrollbar, 
   .nav-tabs::-webkit-scrollbar,
   .finance-tabs::-webkit-scrollbar,
@@ -3471,11 +3471,11 @@ opacity: 1;
     background: var(--primary) !important;
     color: white !important;
     border-color: var(--primary) !important;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3) !important;
   }
 
   /* 4. Ø¥ØµÙ„Ø§Ø­ ÙƒØ±ÙˆØª ØµÙØ­Ø© Ø§Ù„Ù…Ø­Ø§Ø³Ø¨Ø© (renderAccountingHome) */
-  /* Ø§Ù„ÙƒÙˆØ¯ Ø¨ÙŠØ³ØªØ®Ø¯Ù… grid-template-columns:1fr 1frØŒ Ù‡Ù†Ø®Ù„ÙŠÙ‡ Ø¹Ù…ÙˆØ¯ÙŠ Ø£Ùˆ 2x2 Ø­Ø³Ø¨ Ø§Ù„Ù…Ø³Ø§Ø­Ø© */
+  /* Ø§Ù„ÙƒÙˆØ¯ Ø¨ÙØ³ØªØ®Ø¯Ù… grid-template-columns:1fr 1frØŒ Ù‡Ù†Ø®Ù„ÙÙ‡ Ø¹Ù…ÙˆØ¯Ù Ø£Ùˆ 2x2 Ø­Ø³Ø¨ Ø§Ù„Ù…Ø³Ø§Ø­Ø© */
   .accounting-home-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -3523,7 +3523,7 @@ opacity: 1;
     padding: 8px 10px;
   }
 
-  /* ØªØ­ÙˆÙŠÙ„ Ø´Ø±ÙŠØ· Ø§Ù„ÙÙ„Ø§ØªØ± Ù„Ø¹Ù…ÙˆØ¯ÙŠ */
+  /* ØªØ­ÙˆÙÙ„ Ø´Ø±ÙØ· Ø§Ù„ÙÙ„Ø§ØªØ± Ù„Ø¹Ù…ÙˆØ¯Ù */
   .filter-bar-inner {
     flex-direction: column;
     align-items: stretch;
