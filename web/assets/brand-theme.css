@@ -1,5 +1,5 @@
 /* ==========================================================
-   مُوكِّل — BRAND THEME v5.0 (Final Clean + Strongest Overrides)
+   مُوكِّل — BRAND THEME v6.0 (Final Master Clean)
    الهوية البصرية الموحدة (Royal Navy & Metallic Gold)
    ========================================================== */
 
@@ -117,7 +117,7 @@ h1, h2, h3, h4 {
 }
 
 /* ==========================================================
-   4. زرار البحث (Search Button Fix)
+   4. زرار البحث (Search Button)
    ========================================================== */
 .topbar .search-trigger {
   display: flex !important;
@@ -243,7 +243,7 @@ h1, h2, h3, h4 {
   box-shadow: var(--shadow-sm) !important;
   padding: 24px !important;
   transition: all 0.2s ease !important;
-  color: var(--text-primary) !important; /* نص الكارت كحلي */
+  color: var(--text-primary) !important;
 }
 
 .card:hover, 
@@ -254,7 +254,7 @@ h1, h2, h3, h4 {
   box-shadow: var(--shadow-md) !important;
 }
 
-/* إجبار أي نص أو عنوان جوه الكارت يبقى كحلي (مش أصفر) */
+/* إجبار أي نص أو عنوان جوه الكارت يبقى كحلي */
 .card h1, .card h2, .card h3, .card h4, 
 .card p, .card span:not(.badge), 
 .stat .n, 
@@ -293,12 +293,16 @@ button.primary,
 .settings-tab.active,
 [id*="btn"],
 [data-action="login"],
-[data-action="sa-login"] {
+[data-action="sa-login"],
+.btn-details,
+[class*="btn-primary"],
+[class*="btn-accent"] {
   background: var(--brand-navy) !important;
   background-image: none !important;
   color: #FFFFFF !important;
   border: 1px solid var(--brand-gold) !important;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .btn-primary:hover,
@@ -323,10 +327,41 @@ button.primary,
 }
 
 /* الأزرار الشفافة */
-.btn-ghost {
+.btn-ghost, 
+.btn-light, 
+.btn-outline, 
+button.ghost,
+.btn-secondary, 
+[class*="btn-ghost"], 
+[class*="btn-outline"] {
   background: transparent !important;
   color: var(--brand-navy) !important;
   border: 1px solid var(--border-light) !important;
+}
+
+.btn-ghost:hover, 
+.btn-light:hover {
+  background: var(--bg-hover) !important;
+  color: var(--brand-navy) !important;
+}
+
+/* أزرار الخطر (حمراء) */
+.btn-danger, 
+[class*="btn-danger"] {
+  background: var(--status-danger) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--status-danger) !important;
+}
+
+/* أزرار الجداول والتفاصيل */
+table button:not(.btn-ghost):not(.btn-secondary),
+.table button:not(.btn-ghost):not(.btn-secondary),
+.item .actions .btn-primary,
+.item .actions .btn-details {
+  background: var(--brand-navy) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--brand-gold) !important;
+  font-weight: 700 !important;
 }
 
 /* ==========================================================
@@ -388,7 +423,6 @@ textarea:focus {
   color: var(--brand-navy) !important;
 }
 
-/* إجبار نصوص كروت الباقات على الأبيض/الكحلي */
 .plan-card-lg, .faq-item, .landing-feature-card {
   color: var(--brand-navy) !important;
 }
@@ -416,51 +450,7 @@ textarea:focus {
 }
 
 /* ==========================================================
-   13. إصلاح تباين الأزرار (النصوص اللي مش بتظهر)
-   ========================================================== */
-.btn-primary, .btn-accent, .btn-gold, button.primary,
-.plan-cta-lg.primary, .pay-option.selected,
-.tab-btn.active, .tabs button.active, .money-tabs button.active,
-.accounting-tabs button.active, .settings-tab.active,
-#login-btn, [data-action="login"], [data-action="sa-login"],
-.btn-details, [class*="btn-primary"], [class*="btn-accent"] {
-    background-color: var(--brand-navy) !important;
-    color: #FFFFFF !important;
-    border: 1px solid var(--brand-gold) !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-}
-
-.btn-ghost, .btn-light, .btn-outline, button.ghost,
-.btn-secondary, [class*="btn-ghost"], [class*="btn-outline"] {
-    background-color: transparent !important;
-    color: var(--brand-navy) !important;
-    border: 1px solid var(--border-light) !important;
-}
-
-.btn-ghost:hover, .btn-light:hover {
-    background-color: var(--bg-hover) !important;
-    color: var(--brand-navy) !important;
-}
-
-.btn-danger, [class*="btn-danger"] {
-    background-color: var(--status-danger) !important;
-    color: #FFFFFF !important;
-    border: 1px solid var(--status-danger) !important;
-}
-
-/* أزرار الجداول والتفاصيل */
-table button:not(.btn-ghost):not(.btn-secondary),
-.table button:not(.btn-ghost):not(.btn-secondary),
-.item .actions .btn-primary,
-.item .actions .btn-details {
-    background-color: var(--brand-navy) !important;
-    color: #FFFFFF !important;
-    border: 1px solid var(--brand-gold) !important;
-    font-weight: 700 !important;
-}
-
-/* ==========================================================
-   14. إصلاح أزرار الإجراءات السريعة (الضربة القاضية)
+   13. إصلاح أزرار الإجراءات السريعة (النصوص)
    ========================================================== */
 .quick-action-btn,
 .quick-btn,
@@ -483,9 +473,11 @@ table button:not(.btn-ghost):not(.btn-secondary),
     padding: 20px !important;
     border-radius: 16px !important;
     transition: all 0.2s ease !important;
+    color: #FFFFFF !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    z-index: 10 !important;
 }
 
-/* إجبار أي نص أو أيقونة جوه الزرار إنه يبقى أبيض ناصع */
 .quick-action-btn *,
 .quick-btn *,
 .dashboard-quick-actions button *,
@@ -497,11 +489,11 @@ table button:not(.btn-ghost):not(.btn-secondary),
     stroke: #FFFFFF !important;
     opacity: 1 !important;
     visibility: visible !important;
-    display: block !important;
-    text-shadow: none !important;
+    display: inline-block !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    -webkit-text-fill-color: #FFFFFF !important;
 }
 
-/* الأيقونات جوه الأزرار دي تبقى ذهبية */
 .quick-action-btn svg,
 .quick-btn svg,
 .dashboard-quick-actions button svg,
@@ -513,6 +505,9 @@ table button:not(.btn-ghost):not(.btn-secondary),
     width: 24px !important;
     height: 24px !important;
     margin-bottom: 8px !important;
+    display: inline-block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
 .quick-action-btn:hover,
@@ -525,118 +520,8 @@ table button:not(.btn-ghost):not(.btn-secondary),
 }
 
 /* ==========================================================
-   15. التجاوب (Responsive)
+   14. إظهار زرار الخروج على كل الشاشات
    ========================================================== */
-@media (max-width: 768px) {
-  #app { padding: 16px 12px 90px !important; }
-  .topbar { padding: 10px 12px !important; }
-  .brand h1 { font-size: 16px !important; }
-  .topbar-actions { gap: 4px !important; }
-  .topbar .icon-btn, .topbar .menu-btn { width: 36px !important; height: 36px !important; }
-  
-  .topbar .search-trigger {
-    padding: 0 !important;
-    width: 36px !important;
-    height: 36px !important;
-    justify-content: center !important;
-    background: transparent !important;
-    border-color: transparent !important;
-  }
-  .topbar .search-trigger span, 
-  .topbar .search-trigger-kbd { display: none !important; }
-  .topbar .search-trigger svg { width: 20px !important; height: 20px !important; stroke: #E2E8F0 !important; }
-  
-  .stats { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
-  .stat { padding: 16px !important; }
-  .welcome-hero { padding: 24px 16px !important; text-align: center !important; flex-direction: column !important; }
-  
-  .settings-sidebar {
-    display: flex !important;
-    flex-direction: row !important;
-    overflow-x: auto !important;
-    white-space: nowrap !important;
-    padding: 8px !important;
-    gap: 8px !important;
-  }
-  .settings-sidebar::-webkit-scrollbar { display: none; }
-  .settings-tab { flex-shrink: 0 !important; width: auto !important; }
-  .topbar .icon-btn.danger#logout-btn { display: none !important; }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  #app { padding: 24px 20px 80px !important; }
-  .stats { grid-template-columns: repeat(2, 1fr) !important; }
-}
-
-@media (min-width: 1025px) {
-  #app { padding: 40px 32px 80px !important; max-width: 1280px !important; }
-  .stats { grid-template-columns: repeat(4, 1fr) !important; }
-}/* ==========================================================
-   ULTIMATE TEXT VISIBILITY FIX (إظهار النصوص جوه الأزرار)
-   ========================================================== */
-
-/* استهداف كل الأزرار اللي في الداشبورد (الإجراءات السريعة) */
-.quick-action-btn,
-.quick-btn,
-.dashboard-quick-actions button,
-.dashboard-quick-actions a,
-[class*="quick-action"],
-[id*="quick"] {
-    /* إجبار النص يبقى أبيض وناصع */
-    color: #FFFFFF !important;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important; /* ظل خفيف للنص عشان يبان */
-    position: relative !important;
-    z-index: 10 !important;
-}
-
-/* استهداف أي عنصر جوه الزرار (النص، الأيقونة، الـ span، الـ div) */
-.quick-action-btn *,
-.quick-btn *,
-.dashboard-quick-actions button *,
-.dashboard-quick-actions a *,
-[class*="quick-action"] *,
-[id*="quick"] * {
-    color: #FFFFFF !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    display: inline-block !important; /* مش block عشان ميكسرش التنسيق */
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
-    -webkit-text-fill-color: #FFFFFF !important; /* إجبار اللون في سفاري */
-}
-
-/* الأيقونات (SVG) جوه الأزرار */
-.quick-action-btn svg,
-.quick-btn svg,
-.dashboard-quick-actions button svg,
-.dashboard-quick-actions a svg,
-[class*="quick-action"] svg,
-[id*="quick"] svg {
-    stroke: #FFFFFF !important; /* الأيقونة بيضاء */
-    fill: none !important;
-    width: 24px !important;
-    height: 24px !important;
-    margin-bottom: 8px !important;
-    display: inline-block !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-}
-
-/* إجبار أي span أو div جوه الزرار يبقى أبيض */
-.quick-action-btn span,
-.quick-action-btn div,
-.quick-btn span,
-.quick-btn div,
-[class*="quick-action"] span,
-[class*="quick-action"] div {
-    color: #FFFFFF !important;
-    font-weight: 700 !important;
-    font-size: 14px !important;
-    -webkit-text-fill-color: #FFFFFF !important;
-}/* ==========================================================
-   FIX LOGOUT BUTTON VISIBILITY (إظهار زرار الخروج)
-   ========================================================== */
-
-/* إجبار زرار الخروج إنه يظهر في الهيدر على كل الشاشات */
 #logout-btn {
     display: inline-flex !important;
     width: 40px !important;
@@ -651,23 +536,70 @@ table button:not(.btn-ghost):not(.btn-secondary),
     transition: all 0.2s ease !important;
 }
 
-/* لون أحمر عند الوقوف عليه */
 #logout-btn:hover {
     background: rgba(239, 68, 68, 0.2) !important;
     color: #FCA5A5 !important;
     border-color: rgba(239, 68, 68, 0.3) !important;
 }
 
-/* الأيقونة (SVG) جوه الزرار */
 #logout-btn svg {
     width: 20px !important;
     height: 20px !important;
     stroke: currentColor !important;
 }
 
-/* على الموبايل، يفضل ظاهر في الهيدر (أو نخفيه لو مش عايزينه) */
+/* ==========================================================
+   15. التجاوب (Responsive)
+   ========================================================== */
 @media (max-width: 768px) {
-    #logout-btn {
-        display: inline-flex !important;
-    }
+  #app { padding: 16px 12px 90px !important; }
+  .topbar { padding: 10px 12px !important; }
+  .brand h1 { font-size: 16px !important; }
+  .topbar-actions { gap: 4px !important; }
+  .topbar .icon-btn, .topbar .menu-btn { width: 36px !important; height: 36px !important; }
+  
+  /* البحث كأيقونة */
+  .topbar .search-trigger {
+    padding: 0 !important;
+    width: 36px !important;
+    height: 36px !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .topbar .search-trigger span, 
+  .topbar .search-trigger-kbd { display: none !important; }
+  .topbar .search-trigger svg { width: 20px !important; height: 20px !important; stroke: #E2E8F0 !important; }
+  
+  /* الكروت والجداول */
+  .stats { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+  .stat { padding: 16px !important; }
+  .welcome-hero { padding: 24px 16px !important; text-align: center !important; flex-direction: column !important; }
+  
+  /* التابات الأفقية */
+  .settings-sidebar {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    padding: 8px !important;
+    gap: 8px !important;
+  }
+  .settings-sidebar::-webkit-scrollbar { display: none; }
+  .settings-tab { flex-shrink: 0 !important; width: auto !important; }
+  
+  /* ✅ إظهار زرار الخروج على الموبايل (تم إصلاحه) */
+  #logout-btn {
+    display: inline-flex !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  #app { padding: 24px 20px 80px !important; }
+  .stats { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+@media (min-width: 1025px) {
+  #app { padding: 40px 32px 80px !important; max-width: 1280px !important; }
+  .stats { grid-template-columns: repeat(4, 1fr) !important; }
 }
