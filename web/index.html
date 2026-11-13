@@ -21,9 +21,15 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
+  <!-- ملفات التنسيقات الأساسية -->
   <link rel="stylesheet" href="/assets/design-system.css">
   <link rel="stylesheet" href="/assets/styles.css">
   <link rel="stylesheet" href="/assets/styles.clean.css">
+  
+  <!-- ملف الهوية الجديدة (يغلب الألوان القديمة) -->
+  <link rel="stylesheet" href="/assets/brand-theme.css">
+  
+  <!-- تنسيقات الصفحة الرئيسية -->
   <link rel="stylesheet" href="/assets/landing.css">
 
   <style>
@@ -49,7 +55,6 @@
     try { localStorage.setItem('pwa-installed', '1'); } catch(e) {}
   });
 
-  // تسجيل الـ Service Worker (هو المسؤول عن التحديثات التلقائية دلوقتي)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/service-worker.js')
@@ -121,17 +126,17 @@
         </div>
       </div>
       <div class="landing-hero-image" style="position: relative;">
-        <img src="/assets/lady-justice.png" alt="تمثال العدالة" style="width: 100%; max-width: 400px; height: auto; object-fit: contain; filter: drop-shadow(0 20px 30px rgba(217, 119, 6, 0.2)); animation: float 6s ease-in-out infinite;" onerror="this.style.display='none'; document.getElementById('svg-fallback').style.display='block';">
+        <img src="/assets/lady-justice.png" alt="تمثال العدالة" style="width: 100%; max-width: 400px; height: auto; object-fit: contain; filter: drop-shadow(0 20px 30px rgba(212, 175, 55, 0.2)); animation: float 6s ease-in-out infinite;" onerror="this.style.display='none'; document.getElementById('svg-fallback').style.display='block';">
         
-        <svg id="svg-fallback" viewBox="0 0 200 250" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none; width: 100%; max-width: 350px; height: auto; filter: drop-shadow(0 20px 30px rgba(217, 119, 6, 0.2)); animation: float 6s ease-in-out infinite;">
-          <path d="M100 20V230" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
-          <path d="M60 50L140 50" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+        <svg id="svg-fallback" viewBox="0 0 200 250" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none; width: 100%; max-width: 350px; height: auto; filter: drop-shadow(0 20px 30px rgba(212, 175, 55, 0.2)); animation: float 6s ease-in-out infinite;">
+          <path d="M100 20V230" stroke="#D4AF37" stroke-width="6" stroke-linecap="round"/>
+          <path d="M60 50L140 50" stroke="#D4AF37" stroke-width="6" stroke-linecap="round"/>
           <path d="M60 50L40 100H80L60 50Z" fill="#0F172A"/>
           <path d="M140 50L120 100H160L140 50Z" fill="#0F172A"/>
           <path d="M40 100C40 120 80 120 80 100" stroke="#0F172A" stroke-width="4"/>
           <path d="M120 100C120 120 160 120 160 100" stroke="#0F172A" stroke-width="4"/>
-          <path d="M60 230H140" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
-          <circle cx="100" cy="20" r="10" fill="#D97706"/>
+          <path d="M60 230H140" stroke="#D4AF37" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="100" cy="20" r="10" fill="#D4AF37"/>
         </svg>
       </div>
     </div>
@@ -237,7 +242,7 @@
       <input id="lg-email" class="input" type="text" placeholder="admin@nagdi.com أو 01xxxxxxxxx" autocomplete="username">
       <label class="label">كلمة المرور</label>
       <input id="lg-pass" class="input" type="password" autocomplete="current-password">
-      <button class="btn btn-primary btn-lg btn-block" data-action="login" style="margin-top:20px;background:#0F172A">تسجيل الدخول</button>
+      <button class="btn btn-primary btn-lg btn-block" data-action="login" style="margin-top:20px">تسجيل الدخول</button>
       <div id="lg-status" class="status"></div>
 
       <div style="margin-top:20px;text-align:center">
@@ -255,14 +260,14 @@
     </div>
 
     <div class="gate-card-login" id="sa-gate" hidden>
-      <div class="gate-icon" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">👑</div>
+      <div class="gate-icon" style="background: transparent;">👑</div>
       <h1>مسؤول المنصة</h1>
       <p class="gate-subtitle">دخول لوحة تحكم مُوكِّل</p>
       <label class="label">البريد الإلكتروني</label>
       <input id="sa-email" class="input" type="email" autocomplete="username" placeholder="admin@mohamed.com">
       <label class="label">كلمة المرور</label>
       <input id="sa-pass" class="input" type="password" autocomplete="current-password">
-      <button class="btn btn-primary btn-lg btn-block" data-action="sa-login" style="margin-top:20px;background:#0F172A">دخول</button>
+      <button class="btn btn-primary btn-lg btn-block" data-action="sa-login" style="margin-top:20px">دخول</button>
       <div id="sa-status" class="status"></div>
       <button class="btn btn-ghost btn-block" data-action="toggle-sa" style="margin-top:16px">← رجوع</button>
       <div class="gate-footer">لوحة التحكم الكاملة — مكاتب، اشتراكات، مدفوعات</div>

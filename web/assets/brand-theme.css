@@ -1,0 +1,457 @@
+/* ==========================================================
+   مُوكِّل — BRAND THEME v2.2 (Final Clean + Force Overrides)
+   الهوية البصرية الموحدة (Royal Navy & Metallic Gold)
+   ========================================================== */
+
+/* ==========================================================
+   1. متغيرات الهوية (Single Source of Truth)
+   ========================================================== */
+:root {
+  --brand-navy: #0F172A;
+  --brand-navy-light: #1E293B;
+  --brand-gold: #D4AF37;
+  --brand-gold-hover: #B8860B;
+  --brand-gold-light: #FDE047;
+  
+  --bg-body: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-hover: #F1F5F9;
+  
+  --text-primary: #0F172A;
+  --text-soft: #475569;
+  --text-muted: #94A3B8;
+  --text-inverse: #FFFFFF;
+  
+  --border-light: #E2E8F0;
+  --status-success: #10B981;
+  --status-danger: #EF4444;
+  --status-warning: #F59E0B;
+  
+  --font-sans: 'IBM Plex Sans Arabic', 'Tajawal', system-ui, sans-serif;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-gold: 0 4px 14px rgba(212, 175, 55, 0.25);
+}
+
+/* ==========================================================
+   2. الأساسيات (Base)
+   ========================================================== */
+body {
+  font-family: var(--font-sans) !important;
+  background: var(--bg-body) !important;
+  color: var(--text-soft) !important;
+  font-size: 15px !important;
+  line-height: 1.7 !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  color: var(--text-primary) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* ==========================================================
+   3. الهيدر (Topbar) والأيقونات
+   ========================================================== */
+.topbar {
+  background: var(--brand-navy) !important;
+  border-bottom: 2px solid var(--brand-gold) !important;
+  padding: 10px 24px !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.15) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* ترتيب مجموعة الأيقونات */
+.topbar-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important; /* مسافة موحدة بين الأيقونات */
+  margin: 0 !important;
+}
+
+/* ضبط شكل كل الأيقونات (عشان تبقى متساوية) */
+.topbar .icon-btn, 
+.topbar .menu-btn {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s ease !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.topbar .icon-btn:hover, 
+.topbar .menu-btn:hover {
+  background: rgba(212, 175, 55, 0.15) !important;
+  color: var(--brand-gold) !important;
+}
+
+.topbar .icon-btn svg, 
+.topbar .menu-btn svg {
+  width: 20px !important;
+  height: 20px !important;
+  stroke: currentColor !important;
+}
+
+/* لوجو الهيدر */
+.topbar .brand {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.topbar .brand h1 {
+  color: #FFFFFF !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  margin: 0 !important;
+}
+
+/* ==========================================================
+   4. زرار البحث (Search Button Fix)
+   ========================================================== */
+.topbar .search-trigger {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: var(--brand-navy-light) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #E2E8F0 !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  height: 40px !important;
+  max-width: 280px !important;
+  transition: all 0.2s ease !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+
+.topbar .search-trigger:hover {
+  background: #334155 !important;
+  border-color: var(--brand-gold) !important;
+  color: #FFFFFF !important;
+}
+
+.topbar .search-trigger span, 
+.topbar .search-trigger-kbd {
+  color: #E2E8F0 !important;
+  display: inline-block !important;
+}
+
+.topbar .search-trigger-kbd {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: var(--brand-gold) !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+}
+
+.topbar .search-trigger svg {
+  width: 18px !important;
+  height: 18px !important;
+  stroke: var(--brand-gold) !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+}
+
+/* ==========================================================
+   5. القائمة الجانبية (Drawer)
+   ========================================================== */
+.drawer {
+  background: var(--brand-navy) !important;
+}
+
+.drawer, .drawer * {
+  color: #E2E8F0 !important;
+}
+
+.drawer-header {
+  background: var(--brand-navy-light) !important;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2) !important;
+}
+
+.drawer-title {
+  color: var(--brand-gold) !important;
+  font-weight: 800 !important;
+}
+
+.drawer-item {
+  border-radius: var(--radius-md) !important;
+  padding: 12px 16px !important;
+  margin-bottom: 4px !important;
+  color: #94A3B8 !important;
+}
+
+.drawer-item:hover, 
+.drawer-item.active {
+  background: rgba(212, 175, 55, 0.15) !important;
+  color: var(--brand-gold) !important;
+}
+
+.drawer-item.active {
+  border-right: 3px solid var(--brand-gold) !important;
+  font-weight: 700 !important;
+}
+
+.drawer-item svg, 
+.drawer-item .icon svg {
+  stroke: currentColor !important;
+}
+
+.drawer-footer {
+  background: var(--brand-navy-light) !important;
+  border-top: 1px solid rgba(212, 175, 55, 0.2) !important;
+}
+
+/* زر أسفل القائمة الجانبية */
+.drawer-footer .btn, 
+.drawer-footer [class*="btn"] {
+  background: var(--brand-gold) !important;
+  color: var(--brand-navy) !important;
+  border: none !important;
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, var(--brand-gold-light) 0%, var(--brand-gold) 100%) !important;
+  color: var(--brand-navy) !important;
+}
+
+.user-name { color: #FFFFFF !important; }
+.user-role { color: #94A3B8 !important; }
+
+/* ==========================================================
+   6. الكروت (Cards, Stats, Charts, Items)
+   ========================================================== */
+.card, 
+.stat, 
+.chart-card, 
+.item, 
+.more-item {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-light) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-sm) !important;
+  padding: 24px !important;
+  transition: all 0.2s ease !important;
+}
+
+.card:hover, 
+.stat:hover, 
+.chart-card:hover, 
+.item:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.stat .l {
+  color: var(--text-soft) !important;
+  font-weight: 600 !important;
+  margin-bottom: 8px !important;
+}
+
+.stat .n {
+  color: var(--text-primary) !important;
+  font-weight: 800 !important;
+}
+
+/* ==========================================================
+   7. الأزرار (Buttons) - إصلاح البنفسجي
+   ========================================================== */
+.btn {
+  border-radius: var(--radius-md) !important;
+  font-weight: 700 !important;
+  padding: 10px 24px !important;
+  transition: all 0.2s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 44px !important;
+}
+
+/* الأزرار الأساسية (كحلي) */
+.btn-primary, 
+button.primary,
+[id*="btn"] {
+  background: var(--brand-navy) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--brand-gold) !important;
+}
+
+.btn-primary:hover {
+  background: var(--brand-navy-light) !important;
+  box-shadow: var(--shadow-gold) !important;
+}
+
+/* الأزرار الذهبية */
+.btn-accent, 
+.btn-gold,
+.landing-cta-primary {
+  background: linear-gradient(135deg, var(--brand-gold-light) 0%, var(--brand-gold) 100%) !important;
+  color: var(--brand-navy) !important;
+  border: none !important;
+  font-weight: 800 !important;
+}
+
+.btn-accent:hover, 
+.btn-gold:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-gold) !important;
+}
+
+/* الأزرار الشفافة */
+.btn-ghost {
+  background: transparent !important;
+  color: var(--text-soft) !important;
+  border: 1px solid var(--border-light) !important;
+}
+
+/* إخفاء أي لون بنفسجي قديم متبقي */
+[style*="#6366F1"], 
+[style*="#4F46E5"], 
+[style*="#8B5CF6"] {
+  background-color: var(--brand-gold) !important;
+  color: var(--brand-navy) !important;
+}
+
+/* ==========================================================
+   8. حقول الإدخال (Inputs)
+   ========================================================== */
+.input, 
+input, 
+select, 
+textarea {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-light) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 12px 16px !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-sans) !important;
+  transition: all 0.2s ease !important;
+}
+
+.input:focus, 
+input:focus, 
+select:focus, 
+textarea:focus {
+  border-color: var(--brand-gold) !important;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15) !important;
+  outline: none !important;
+}
+
+/* ==========================================================
+   9. شاشة الدخول (Gate)
+   ========================================================== */
+.gate-card-login {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-light) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-md) !important;
+  padding: 40px !important;
+}
+
+.gate-card-login h1 {
+  color: var(--brand-navy) !important;
+  font-weight: 900 !important;
+}
+
+/* ==========================================================
+   10. صفحة الباقات (Pricing)
+   ========================================================== */
+.plan-card-lg.popular {
+  border-color: var(--brand-gold) !important;
+}
+
+.plan-badge-lg {
+  background: var(--brand-navy) !important;
+  color: var(--brand-gold) !important;
+  border: 1px solid var(--brand-gold) !important;
+}
+
+.plan-cta-lg.primary {
+  background: var(--brand-navy) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--brand-gold) !important;
+}
+
+.pricing-hero-badge {
+  background: linear-gradient(135deg, var(--brand-gold-light), var(--brand-gold)) !important;
+  color: var(--brand-navy) !important;
+}
+
+/* ==========================================================
+   11. البادجات (Badges)
+   ========================================================== */
+.badge.active { background: rgba(16, 185, 129, 0.1) !important; color: var(--status-success) !important; }
+.badge.suspended { background: rgba(239, 68, 68, 0.1) !important; color: var(--status-danger) !important; }
+.badge.trial { background: rgba(245, 158, 11, 0.1) !important; color: var(--status-warning) !important; }
+
+/* ==========================================================
+   12. التجاوب (Responsive) - موبايل وتابلت وديسكتوب
+   ========================================================== */
+
+/* --- موبايل (أقل من 768px) --- */
+@media (max-width: 768px) {
+  #app { padding: 16px 12px 90px !important; }
+  
+  .topbar { padding: 10px 12px !important; }
+  .brand h1 { font-size: 16px !important; }
+  .topbar-actions { gap: 4px !important; }
+  .topbar .icon-btn, .topbar .menu-btn { width: 36px !important; height: 36px !important; }
+  
+  /* البحث أيقونة بس */
+  .topbar .search-trigger {
+    padding: 0 !important;
+    width: 36px !important;
+    height: 36px !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .topbar .search-trigger span, 
+  .topbar .search-trigger-kbd { display: none !important; }
+  .topbar .search-trigger svg { width: 20px !important; height: 20px !important; stroke: #E2E8F0 !important; }
+  
+  .stats { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+  .stat { padding: 16px !important; }
+  
+  .welcome-hero { padding: 24px 16px !important; text-align: center !important; flex-direction: column !important; }
+  
+  .settings-sidebar {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    padding: 8px !important;
+    gap: 8px !important;
+  }
+  .settings-sidebar::-webkit-scrollbar { display: none; }
+  .settings-tab { flex-shrink: 0 !important; width: auto !important; }
+  
+  /* إخفاء زرار الخروج من الهيدر على الموبايل */
+  .topbar .icon-btn.danger#logout-btn { display: none !important; }
+}
+
+/* --- تابلت (769px لـ 1024px) --- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  #app { padding: 24px 20px 80px !important; }
+  .stats { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* --- ديسكتوب (أكبر من 1024px) --- */
+@media (min-width: 1025px) {
+  #app { padding: 40px 32px 80px !important; max-width: 1280px !important; }
+  .stats { grid-template-columns: repeat(4, 1fr) !important; }
+}
