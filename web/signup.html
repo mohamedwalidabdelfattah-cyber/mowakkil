@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F172A">
+  <title>إنشاء حساب مكتب جديد — مُوكِّل</title>
+
+  <link rel="stylesheet" href="/assets/fonts.css">
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+
+<div class="signup-wrapper">
+  <div class="signup-card">
+    <div class="signup-header">
+      <a href="/" class="signup-brand">
+        <span class="signup-logo">
+          <img src="/assets/logos/logo-md.png" alt="مُوكِّل">
+        </span>
+        <span class="signup-brand-name">مُوكِّل</span>
+      </a>
+      <h1 class="signup-title">ابدأ رحلتك الرقمية الآن</h1>
+      <p class="signup-sub">🎁 15 يوم تجربة مجانية — بدون بطاقة بنكية</p>
+    </div>
+
+    <form id="signup-form" class="signup-form" autocomplete="on">
+      <div class="form-row">
+        <label class="label" for="office_name">اسم المكتب أو المؤسسة القانونية *</label>
+        <input id="office_name" class="input" type="text" placeholder="مثال: مكتب النجد للمحاماة والاستشارات" required autocomplete="organization">
+      </div>
+      <div class="form-row">
+        <label class="label" for="full_name">الاسم بالكامل *</label>
+        <input id="full_name" class="input" type="text" placeholder="أحمد محمد" required autocomplete="name">
+      </div>
+      <div class="form-row">
+        <label class="label" for="phone">رقم الهاتف المحمول *</label>
+        <input id="phone" class="input" type="tel" placeholder="01012345678" required autocomplete="tel" inputmode="numeric">
+        <div class="field-hint">يُستخدم كرقم دخول رئيسي للنظام</div>
+      </div>
+      <div class="form-row">
+        <label class="label" for="email">البريد الإلكتروني <span style="color:var(--text-soft);font-weight:400">(اختياري)</span></label>
+        <input id="email" class="input" type="email" placeholder="ahmed@example.com" autocomplete="email">
+        <div class="field-hint">لاستقبال التنبيهات الرسمية واستعادة الحساب</div>
+      </div>
+      <div class="form-row">
+        <label class="label" for="password">كلمة المرور *</label>
+        <input id="password" class="input" type="password" placeholder="8 خانات على الأقل" required autocomplete="new-password" minlength="8">
+      </div>
+      <div class="form-row">
+        <label class="label" for="password2">تأكيد كلمة المرور *</label>
+        <input id="password2" class="input" type="password" placeholder="أعد كتابة كلمة المرور" required autocomplete="new-password" minlength="8">
+      </div>
+      <div class="signup-terms">
+        <label class="checkbox-label" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="terms" required style="width:auto;">
+          <span>أوافق على <a href="/terms" target="_blank" style="color:var(--accent);">الشروط والأحكام</a> و <a href="/privacy" target="_blank" style="color:var(--accent);">سياسة الخصوصية</a></span>
+        </label>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg btn-block" id="signup-btn" style="margin-top:16px;">🚀 إنشاء الحساب وبدء التجربة</button>
+      <div id="signup-status" class="status"></div>
+      <div class="signup-footer" style="text-align:center;margin-top:16px;font-size:14px;color:var(--text-soft);">
+        لديك حساب بالفعل؟ <a href="/" style="color:var(--primary);font-weight:700;text-decoration:none;">تسجيل الدخول</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="signup-side">
+    <h2>لماذا يفضل المحامون منصة مُوكِّل؟</h2>
+    <ul class="signup-features">
+      <li><span>✓</span> إدارة متكاملة ومؤتمتة لملفات القضايا والموكلين.</li>
+      <li><span>✓</span> أجندة ورول جلسات إلكتروني مع تنبيهات استباقية.</li>
+      <li><span>✓</span> نظام محاسبي وفواتير مصمم لخصوصية أعمال المحاماة.</li>
+      <li><span>✓</span> مساعد قانوني ذكي بصياغة وتلخيص المستندات (AI).</li>
+      <li><span>✓</span> بوابة خاصة لموكليك لمتابعة قضاياهم والحد من اتصالاتهم.</li>
+      <li><span>✓</span> يعمل بكفاءة على الموبايل والتابلت والكمبيوتر.</li>
+    </ul>
+    <div class="signup-testimonial">
+      "وفرت المنصة لفريقنا ما يقارب 3 ساعات يومياً من المهام الإدارية والورقية"
+      <div class="signup-testimonial-author">— أحد مكاتب المحاماة الرائدة بالقاهرة</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-host" class="toast-host" aria-live="polite"></div>
+<script type="module" src="/js/signup.js"></script>
+</body>
+</html>

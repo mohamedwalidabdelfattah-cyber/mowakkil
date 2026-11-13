@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F172A">
+  <title>إتمام الدفع وتأكيد الاشتراك — مُوكِّل</title>
+
+  <link rel="stylesheet" href="/assets/fonts.css">
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/pricing.css">
+</head>
+<body class="pricing-page">
+
+<header class="topbar pricing-topbar">
+  <a href="/" class="brand" style="text-decoration:none;color:inherit">
+    <span class="brand-logo"><img src="/assets/logos/logo-md.png" alt="مُوكِّل"></span>
+    <h1>مُوكِّل</h1>
+  </a>
+</header>
+
+<main class="pricing-main" style="max-width:720px">
+  <div class="pricing-hero" style="padding:20px 0 32px">
+    <div class="pricing-hero-badge">💳 تأكيد الاشتراك والتحويل</div>
+    <h1 class="pricing-hero-title" style="font-size:30px">حوّل المبلغ وسجّل بيانات العملية</h1>
+    <p class="pricing-hero-sub">بعد إتمام التحويل، يرجى كتابة البيانات بالأسفل لتفعيل حسابك فورياً</p>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <h3 style="margin:0 0 14px;font-size:16px">📋 خطوات إتمام الدفع</h3>
+    <ol style="padding-right:20px;line-height:1.9;font-size:14px;color:var(--text-soft);margin:0;">
+      <li>اختر الباقة المطلوبة وطريقة الدفع المفضلة لديك.</li>
+      <li>حوّل قيمة الاشتراك على الرقم الظاهر أمامك.</li>
+      <li>أدخل رقم الهاتف الذي تم التحويل منه ورقم العملية (المرجع).</li>
+      <li>انقر على "إرسال طلب التفعيل"، وسيقوم فريقنا بمراجعة الحساب وتأكيده.</li>
+    </ol>
+  </div>
+
+  <form id="pay-form" class="card" style="margin-bottom:20px">
+    <h3 style="margin:0 0 16px;font-size:16px">💰 1. اختيار الباقة</h3>
+    <div id="plan-options" class="pay-plan-options"></div>
+
+    <h3 style="margin:24px 0 16px;font-size:16px">💳 2. طريقة الدفع المتاحة</h3>
+    <div id="method-options" class="pay-method-options"></div>
+
+    <div id="payment-info-box" style="display:none;background:var(--gray-50);border:2px dashed var(--accent);border-radius:14px;padding:20px;margin:20px 0;text-align:center">
+      <div style="font-size:13px;color:var(--text-soft);margin-bottom:6px">يرجى تحويل المبلغ المطلوب إلى:</div>
+      <div id="pay-number" style="font-size:26px;font-weight:900;font-family:var(--font-mono);color:var(--brand-navy);letter-spacing:1px"></div>
+      <div id="pay-name" style="font-size:14px;color:var(--text-soft);margin-top:4px"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="copy-number" style="margin-top:12px">📋 نسخ الرقم</button>
+    </div>
+
+    <h3 style="margin:24px 0 16px;font-size:16px">📝 3. تفاصيل التحويل</h3>
+    <div class="form-row" style="margin-bottom:14px;">
+      <label class="label" for="sender_phone">رقم الهاتف المُحوِّل منه *</label>
+      <input id="sender_phone" class="input" type="tel" placeholder="01xxxxxxxxx" required>
+    </div>
+    <div class="form-row" style="margin-bottom:14px;">
+      <label class="label" for="sender_name">اسم صاحب الحساب أو المحفظة (اختياري)</label>
+      <input id="sender_name" class="input" type="text" placeholder="الاسم المسجل في المحفظة">
+    </div>
+    <div class="form-row" style="margin-bottom:14px;">
+      <label class="label" for="transfer_ref">رقم العملية المرجعي (اختياري)</label>
+      <input id="transfer_ref" class="input" type="text" placeholder="الرقم التعريفي من رسالة التحويل">
+    </div>
+    <div class="form-row" style="margin-bottom:14px;">
+      <label class="label" for="notes">ملاحظات إضافية</label>
+      <textarea id="notes" class="input" rows="2" placeholder="أي تفاصيل تود إضافتها لفريق العمل"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg btn-block" id="submit-btn" style="margin-top:20px">📤 إرسال طلب التفعيل</button>
+    <div id="pay-status" class="status"></div>
+  </form>
+
+  <div class="card" id="success-box" style="display:none;text-align:center">
+    <div style="font-size:56px;margin-bottom:12px">✅</div>
+    <h3 style="margin:0 0 8px;font-size:20px">تم استلام طلب التفعيل بنجاح!</h3>
+    <p style="color:var(--text-soft);font-size:14px;margin:0 0 20px">
+      يقوم فريق العمل الآن بمراجعة العملية وتفعيل الاشتراك في أسرع وقت. يمكنك متابعة حالة الطلب من صفحة اشتراك المكتب.
+    </p>
+    <a href="/" class="btn btn-primary">العودة للوحة الإدارة</a>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <h3 style="margin:0 0 16px;font-size:16px">📜 سجل الطلبات السابقة</h3>
+    <div id="my-requests">
+      <div class="empty">جاري تحميل السجل...</div>
+    </div>
+  </div>
+</main>
+
+<div id="toast-host" class="toast-host" aria-live="polite"></div>
+<script type="module" src="/js/pay.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "expense_date": "2026-10-05",
+  "description": "إيجار المكتب - أكتوبر",
+  "account_id": 41,
+  "amount": 5000,
+  "payment_method": "تحويل بنكي",
+  "vendor": "مالك العقار",
+  "is_recurring": true,
+  "recurring_frequency": "monthly"
+}

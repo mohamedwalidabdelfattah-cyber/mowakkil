@@ -1,0 +1,11 @@
+{
+  "issue_date": "2026-10-06",
+  "due_date": "2026-11-06",
+  "tax_rate": 14,
+  "notes": "فاتورة أتعاب قضية",
+  "terms": "السداد خلال 30 يوم",
+  "lines": [
+    { "description": "أتعاب قضية 1234 لسنة 2026", "quantity": 1, "rate": 10000, "amount": 10000 },
+    { "description": "رسوم قضائية", "quantity": 1, "rate": 500, "amount": 500 }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "entry_date": "2026-10-05",
+  "description": "قيد افتتاحي - إيداع رأس المال",
+  "lines": [
+    { "account_id": 3, "debit": 50000, "credit": 0, "description": "النقدية بالصندوق" },
+    { "account_id": 24, "debit": 0, "credit": 50000, "description": "رأس المال" }
+  ]
+}

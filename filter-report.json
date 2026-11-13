@@ -1,0 +1,93 @@
+[
+  {
+    "page": "القضايا",
+    "file": "cases.js",
+    "api": "cases.js",
+    "hasUiFilter": false,
+    "hasApiFilter": true,
+    "status": "الباك جاهز بس محتاج UI",
+    "requiredFilters": [
+      "الحالة (status)",
+      "النوع (type)",
+      "المحامي (lawyer_id)",
+      "المحكمة (court)",
+      "البحث (search)"
+    ]
+  },
+  {
+    "page": "الموكلين",
+    "file": "clients.js",
+    "api": "clients.js",
+    "hasUiFilter": false,
+    "hasApiFilter": false,
+    "status": "محتاج فلاتر كاملة",
+    "requiredFilters": [
+      "النوع (individual/company)",
+      "البحث بالاسم/الهاتف",
+      "تاريخ الإضافة"
+    ]
+  },
+  {
+    "page": "الفواتير",
+    "file": "money.js",
+    "api": "invoices.js",
+    "hasUiFilter": true,
+    "hasApiFilter": true,
+    "status": "فلاتر شغالة بالكامل",
+    "requiredFilters": [
+      "الحالة (draft/sent/paid/late)",
+      "الموكل (client_id)",
+      "الفترة الزمنية (from/to)",
+      "البحث (search)"
+    ]
+  },
+  {
+    "page": "المهام",
+    "file": "tasks.js",
+    "api": "tasks.js",
+    "hasUiFilter": false,
+    "hasApiFilter": false,
+    "status": "محتاج فلاتر كاملة",
+    "requiredFilters": [
+      "الحالة (open/done)",
+      "الأولوية (high/normal)",
+      "تاريخ الاستحقاق (due)"
+    ]
+  },
+  {
+    "page": "الأتعاب",
+    "file": "fees.js",
+    "api": "fees.js",
+    "hasUiFilter": true,
+    "hasApiFilter": false,
+    "status": "فلاتر UI موجودة بس الباك مش بيدعمها",
+    "requiredFilters": [
+      "الحالة (paid/due/late)",
+      "الفترة الزمنية"
+    ]
+  },
+  {
+    "page": "المحامين",
+    "file": "lawyers.js",
+    "api": "lawyers.js",
+    "hasUiFilter": false,
+    "hasApiFilter": false,
+    "status": "محتاج فلاتر كاملة",
+    "requiredFilters": [
+      "الحالة (active/inactive)",
+      "البحث بالاسم"
+    ]
+  },
+  {
+    "page": "الأجندة",
+    "file": "agenda.js",
+    "api": "sessions.js",
+    "hasUiFilter": false,
+    "hasApiFilter": false,
+    "status": "محتاج فلاتر كاملة",
+    "requiredFilters": [
+      "الفترة الزمنية",
+      "النوع (session/task/fee)"
+    ]
+  }
+]

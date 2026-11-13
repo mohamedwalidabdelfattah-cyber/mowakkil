@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" id="html-root">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F172A">
+  <title>الباقات والأسعار — مُوكِّل</title>
+
+  <link rel="stylesheet" href="/assets/fonts.css">
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/pricing.css">
+</head>
+<body class="pricing-page">
+
+<header class="topbar pricing-topbar">
+  <a href="/" class="brand" style="text-decoration:none;color:inherit">
+    <span class="brand-logo"><img src="/assets/logos/logo-md.png" alt="مُوكِّل"></span>
+    <h1>مُوكِّل</h1>
+  </a>
+
+  <div class="topbar-actions">
+    <a href="/" class="btn btn-ghost btn-sm" id="login-link">تسجيل الدخول</a>
+    <a href="/signup" class="btn btn-primary btn-sm">🚀 ابدأ مجاناً</a>
+  </div>
+</header>
+
+<main class="pricing-main">
+  <section class="pricing-hero">
+    <div class="pricing-hero-badge" id="hero-badge">🎁 15 يوم تجربة مجانية شاملة</div>
+    <h1 class="pricing-hero-title" id="hero-title">باقات مرنة تناسب طموح كل مكتب محاماة</h1>
+    <p class="pricing-hero-sub" id="hero-sub">
+      اختر الباقة المثالية لحجم قضاياك وفريق عملك. ابدأ التجربة المجانية اليوم، ورقِّ في أي وقت.
+    </p>
+  </section>
+
+  <section class="pricing-grid" id="plans-grid">
+    <div class="pricing-loading">جاري تحميل الباقات والأسعار المتاحة...</div>
+  </section>
+
+  <section class="pricing-section">
+    <h2 class="pricing-section-title" id="comparison-title">مقارنة مميزات الباقات</h2>
+    <div class="comparison-table-wrapper">
+      <table class="comparison-table" id="comparison-table">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="pricing-section">
+    <h2 class="pricing-section-title" id="faq-title">الأسئلة الشائعة</h2>
+    <div class="faq-grid" id="faq-grid"></div>
+  </section>
+
+  <section class="pricing-cta">
+    <h2 id="cta-title">جاهز للبدء وتطوير مكتبك؟</h2>
+    <p id="cta-sub">استمتع بتجربة كاملة لنظام مُوكِّل لمدة 15 يوماً دون أي التزام بنكي.</p>
+    <a href="/signup" class="btn btn-primary btn-lg" id="cta-btn">
+      🚀 ابدأ مجاناً لمدة 15 يوم
+    </a>
+    <div style="margin-top:16px">
+      <a href="https://wa.me/201013917789?text=مرحباً،%20أود%20الاستفسار%20عن%20باقات%20منصة%20مُوكِّل" 
+         target="_blank" rel="noopener" 
+         style="color:rgba(255,255,255,0.85);font-size:14px;text-decoration:none;font-weight:600">
+        أو تواصل مع فريق المبيعات عبر واتساب 💬
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer class="pricing-footer">
+  <div id="footer-text">© 2026 مُوكِّل · جميع الحقوق محفوظة</div>
+  <div class="pricing-footer-links">
+    <a href="/" id="footer-home">الرئيسية</a>
+    <a href="/signup">إنشاء حساب جديد</a>
+    <a href="https://wa.me/201013917789" target="_blank" rel="noopener" id="footer-wa">الدعم الفني</a>
+  </div>
+</footer>
+
+<script type="module" src="/js/pricing.js"></script>
+</body>
+</html>

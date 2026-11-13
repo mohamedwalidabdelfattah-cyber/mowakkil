@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F172A">
+  <title>مُوكِّل — المنصة الذكية لإدارة مكاتب المحاماة</title>
+
+  <link rel="stylesheet" href="/assets/fonts.css">
+
+  <!-- PWA -->
+  <link rel="manifest" href="/assets/site.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="مُوكِّل">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+  <link rel="shortcut icon" href="/assets/favicon.ico">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/landing.css">
+
+  <style>
+    @media (max-width: 768px) {
+      .bottom-nav:not([hidden]) { display: block !important; }
+    }
+    /* تنسيقات اللوجو */
+    .brand-logo img, .gate-icon img, .signup-logo img { width: 100%; height: 100%; object-fit: contain; }
+    .landing-logo img { height: 44px; width: auto; object-fit: contain; border-radius: 8px; }
+  </style>
+</head>
+<body>
+
+<script>
+  // إدارة الـ PWA والـ Install Prompt
+  window.__deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    window.__deferredInstallPrompt = e;
+  });
+  window.addEventListener('appinstalled', () => {
+    window.__deferredInstallPrompt = null;
+    try { localStorage.setItem('pwa-installed', '1'); } catch(e) {}
+  });
+
+  // تسجيل الـ Service Worker (هو المسؤول عن التحديثات التلقائية دلوقتي)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(reg => {
+          console.log('SW registered');
+          // فحص التحديثات كل دقيقة
+          setInterval(() => {
+            reg.update().catch(() => {});
+          }, 60 * 1000);
+
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker?.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorker.postMessage('SKIP_WAITING');
+              }
+            });
+          });
+        })
+        .catch(err => console.log('SW failed', err));
+    });
+
+    // لو الـ SW اتحدث، نعمل Reload عشان نضمن أحدث نسخة
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+  }
+</script>
+
+<!-- ========================================== -->
+<!-- LANDING PAGE (Premium) -->
+<!-- ========================================== -->
+<div id="landing-view">
+  <header class="landing-topbar">
+    <a href="/" class="landing-brand">
+      <span class="landing-logo"><img src="/assets/logo.png" alt="مُوكِّل"></span>
+      <span class="landing-brand-name">مُوكِّل</span>
+    </a>
+    <nav class="landing-nav">
+      <a href="#features">المميزات</a>
+      <a href="/pricing">الباقات</a>
+      <a href="#faq">الأسئلة</a>
+    </nav>
+    <div class="landing-actions">
+      <button class="landing-btn-ghost" data-action="show-login">دخول</button>
+      <a href="/signup" class="landing-btn-primary">🚀 ابدأ مجانًا</a>
+    </div>
+  </header>
+
+  <section class="landing-hero">
+    <div class="landing-hero-grid">
+      <div class="landing-hero-text">
+        <div class="landing-hero-badge">🎁 15 يوم تجربة مجانية — بدون بطاقة بنكية</div>
+        <h1 class="landing-hero-title">
+          أدر مكتبك القانوني<br>
+          <span class="landing-hero-highlight">باحترافية وسهولة</span>
+        </h1>
+        <p class="landing-hero-sub">
+          مُوكِّل هي المنصة الذكية اللي بتجمع كل حاجة مكتب المحاماة محتاجها في مكان واحد:
+          القضايا، الموكلين، الأجندة، المحاسبة، الفواتير، وبوابة خاصة لكل موكل.
+        </p>
+        <div class="landing-hero-actions">
+          <a href="/signup" class="landing-cta-primary">🚀 ابدأ مجانًا 15 يوم</a>
+          <a href="/pricing" class="landing-cta-secondary">💎 شوف الباقات</a>
+        </div>
+        <div class="landing-hero-note">
+          ✓ مش محتاج بطاقة بنكية &nbsp;·&nbsp; ✓ تقدر تلغي في أي وقت &nbsp;·&nbsp; ✓ دعم فني مجاني
+        </div>
+      </div>
+      <div class="landing-hero-image" style="position: relative;">
+        <!-- الصورة الحقيقية -->
+        <img src="/assets/lady-justice.png" alt="تمثال العدالة" style="width: 100%; max-width: 400px; height: auto; object-fit: contain; filter: drop-shadow(0 20px 30px rgba(217, 119, 6, 0.2)); animation: float 6s ease-in-out infinite;" onerror="this.style.display='none'; document.getElementById('svg-fallback').style.display='block';">
+        
+        <!-- رسمة SVG كبديل -->
+        <svg id="svg-fallback" viewBox="0 0 200 250" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none; width: 100%; max-width: 350px; height: auto; filter: drop-shadow(0 20px 30px rgba(217, 119, 6, 0.2)); animation: float 6s ease-in-out infinite;">
+          <path d="M100 20V230" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+          <path d="M60 50L140 50" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+          <path d="M60 50L40 100H80L60 50Z" fill="#0F172A"/>
+          <path d="M140 50L120 100H160L140 50Z" fill="#0F172A"/>
+          <path d="M40 100C40 120 80 120 80 100" stroke="#0F172A" stroke-width="4"/>
+          <path d="M120 100C120 120 160 120 160 100" stroke="#0F172A" stroke-width="4"/>
+          <path d="M60 230H140" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="100" cy="20" r="10" fill="#D97706"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="landing-features" id="features">
+    <h2 class="landing-section-title">كل اللي مكتبك محتاجه في مكان واحد</h2>
+    <p class="landing-section-sub">مش محتاج 5 برامج مختلفة — مُوكِّل فيه كل حاجة</p>
+    <div class="landing-features-grid">
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">📁</div>
+        <h3>إدارة القضايا</h3>
+        <p>تابع كل قضية من أول جلسة لحد الحكم. مواعيد، مستندات، وملاحظات في مكان واحد.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">👥</div>
+        <h3>إدارة الموكلين</h3>
+        <p>بيانات كاملة لكل موكل، تاريخ التعامل، وكل قضاياه في مكان واحد.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">📅</div>
+        <h3>أجندة ذكية</h3>
+        <p>مواعيد الجلسات، التأجيلات، والتنبيهات. متضيعش جلسة تاني.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">💰</div>
+        <h3>محاسبة احترافية</h3>
+        <p>أتعاب، مصاريف، فواتير، وتقارير مالية. اعرف مكتبك ربحان ولا خسران.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">🤖</div>
+        <h3>ذكاء اصطناعي</h3>
+        <p>بحث قانوني ذكي، توليد مستندات، وتحليل عقود بمساعدة AI.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">👤</div>
+        <h3>بوابة الموكل</h3>
+        <p>لكل موكل حساب خاص يشوف فيه قضاياه وجلساته وفواتيره.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="landing-stats">
+    <div class="landing-stat"><div class="landing-stat-num">+100</div><div class="landing-stat-label">مكتب محاماة</div></div>
+    <div class="landing-stat"><div class="landing-stat-num">+5000</div><div class="landing-stat-label">قضية</div></div>
+    <div class="landing-stat"><div class="landing-stat-num">+200</div><div class="landing-stat-label">موكل</div></div>
+    <div class="landing-stat"><div class="landing-stat-num">24/7</div><div class="landing-stat-label">دعم فني</div></div>
+  </section>
+
+  <section class="landing-faq" id="faq">
+    <h2 class="landing-section-title">أسئلة شائعة</h2>
+    <div class="landing-faq-grid">
+      <div class="landing-faq-item">
+        <h3>هل فيه تجربة مجانية؟</h3>
+        <p>أيوه، 15 يوم تجربة مجانية كاملة على الباقة الاحترافية بكل الميزات — بدون بطاقة بنكية.</p>
+      </div>
+      <div class="landing-faq-item">
+        <h3>إيه طرق الدفع المتاحة؟</h3>
+        <p>بنقبل فودافون كاش وإنستاباي. تواصل معانا وبنساعدك في الدفع.</p>
+      </div>
+      <div class="landing-faq-item">
+        <h3>البيانات آمنة؟</h3>
+        <p>أيوه، كل البيانات مشفّرة ومحفوظة على Cloudflare. ومفيش حد يقدر يوصل لبيانات مكتبك.</p>
+      </div>
+      <div class="landing-faq-item">
+        <h3>أقدر ألغي في أي وقت؟</h3>
+        <p>أيوه، الاشتراك شهري وتقدر تلغيه في أي وقت. هتفضل تستخدم لحد نهاية الشهر المدفوع.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="landing-cta-section">
+    <h2>جاهز تبدأ؟</h2>
+    <p>جرّب مُوكِّل مجانًا لمدة 15 يوم — بدون بطاقة بنكية.</p>
+    <a href="/signup" class="landing-cta-primary landing-cta-large">🚀 ابدأ مجانًا الآن</a>
+    <div class="landing-cta-note">مش محتاج بطاقة بنكية</div>
+  </section>
+
+  <footer class="landing-footer">
+    <div>© 2026 مُوكِّل · كل الحقوق محفوظة</div>
+    <div class="landing-footer-links">
+      <a href="/pricing">الباقات</a>
+      <a href="/signup">إنشاء حساب</a>
+      <a href="/login">دخول</a>
+      <a href="https://wa.me/201013917789" target="_blank">تواصل</a>
+    </div>
+  </footer>
+</div>
+
+<!-- ========================================== -->
+<!-- LOGIN & GATE -->
+<!-- ========================================== -->
+<div id="login-gate-view" hidden>
+  <div class="gate-wrapper">
+    <div class="gate-card-login" id="lawyer-login-card">
+      <div class="gate-icon">
+        <img src="/assets/app-icon.png" alt="مُوكِّل">
+      </div>
+      <h1>مُوكِّل</h1>
+      <p class="gate-subtitle">سجّل دخول لمكتبك</p>
+
+      <label class="label">البريد الإلكتروني أو رقم الهاتف</label>
+      <input id="lg-email" class="input" type="text" placeholder="admin@nagdi.com أو 01xxxxxxxxx" autocomplete="username">
+      <label class="label">كلمة المرور</label>
+      <input id="lg-pass" class="input" type="password" autocomplete="current-password">
+      <button class="btn btn-primary btn-lg btn-block" data-action="login" style="margin-top:20px;background:#0F172A">تسجيل الدخول</button>
+      <div id="lg-status" class="status"></div>
+
+      <div style="margin-top:20px;text-align:center">
+        <div style="font-size:13px;color:var(--text-soft)">معندكش حساب؟</div>
+        <a href="/signup" class="btn btn-ghost btn-block" style="margin-top:8px;text-decoration:none;display:block;text-align:center">
+          🚀 ابدأ مجانًا 15 يوم
+        </a>
+      </div>
+
+      <button class="btn btn-ghost btn-block" id="pwa-install-btn" style="margin-top:8px">📲 ثبّت التطبيق على جهازك</button>
+      <button class="btn btn-ghost btn-block" data-action="toggle-sa" style="margin-top:8px">👑 دخول مسؤول المنصة</button>
+      <button class="btn btn-ghost btn-block" data-action="show-landing" style="margin-top:8px">← رجوع للرئيسية</button>
+
+      <div class="gate-footer">منصة SaaS متكاملة — قضايا، موكلين، محاسبة، وفواتير</div>
+    </div>
+
+    <div class="gate-card-login" id="sa-gate" hidden>
+      <div class="gate-icon" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">👑</div>
+      <h1>مسؤول المنصة</h1>
+      <p class="gate-subtitle">دخول لوحة تحكم مُوكِّل</p>
+      <label class="label">البريد الإلكتروني</label>
+      <input id="sa-email" class="input" type="email" autocomplete="username" placeholder="admin@mohamed.com">
+      <label class="label">كلمة المرور</label>
+      <input id="sa-pass" class="input" type="password" autocomplete="current-password">
+      <button class="btn btn-primary btn-lg btn-block" data-action="sa-login" style="margin-top:20px;background:#0F172A">دخول</button>
+      <div id="sa-status" class="status"></div>
+      <button class="btn btn-ghost btn-block" data-action="toggle-sa" style="margin-top:16px">← رجوع</button>
+      <div class="gate-footer">لوحة التحكم الكاملة — مكاتب، اشتراكات، مدفوعات</div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- APP BODY (Dashboard) -->
+<!-- ========================================== -->
+<div id="app-body" hidden>
+  <header class="topbar">
+    <button class="menu-btn" id="menu-btn" aria-label="القائمة">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <div class="brand">
+      <span class="brand-logo"><img src="/assets/app-icon.png" alt="مُوكِّل"></span>
+      <h1 id="topbar-title">مُوكِّل</h1>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="icon-btn" id="pwa-install-btn" title="ثبّت التطبيق">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+
+      <button class="search-trigger" id="search-btn" title="البحث (Ctrl+K)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span class="search-trigger-text">ابحث في كل حاجة...</span>
+        <kbd class="search-trigger-kbd">Ctrl+K</kbd>
+      </button>
+
+      <a href="/pricing" class="icon-btn" title="الباقات والأسعار" style="text-decoration:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3h12l4 6-10 12L2 9z"/><path d="M11 3 8 9l4 12 4-12-3-6"/><path d="M2 9h20"/></svg>
+      </a>
+      <button class="icon-btn" id="notif-btn" title="الإشعارات">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      </button>
+      <button class="icon-btn" id="cfg-btn" title="الإعدادات">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="icon-btn danger" id="logout-btn" title="خروج">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-header">
+      <img id="drawer-logo" class="drawer-logo" alt="">
+      <div>
+        <div class="drawer-title" id="drawer-office-name">مُوكِّل</div>
+        <div class="drawer-subtitle" id="drawer-trial">🎁 15 يوم تجربة</div>
+      </div>
+    </div>
+    <nav class="drawer-nav" id="drawer-nav"></nav>
+    <div class="drawer-footer">
+      <div class="drawer-user" id="drawer-user">
+        <div class="user-avatar" id="drawer-avatar">م</div>
+        <div class="user-info">
+          <div class="user-name" id="drawer-user-name">—</div>
+          <div class="user-role" id="drawer-user-role">—</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main id="app">
+    <div id="sa-body" hidden></div>
+    <div id="view-host"></div>
+  </main>
+
+  <footer>
+    <div>مُوكِّل · نسخة تجريبية · 15 يوم مجاناً</div>
+    <div style="margin-top:12px;display:flex;justify-content:center;gap:20px;font-size:13px">
+      <a href="/pricing" style="color:var(--text-soft);text-decoration:none;font-weight:600">💎 الباقات</a>
+      <a href="https://wa.me/201013917789" target="_blank" style="color:var(--text-soft);text-decoration:none;font-weight:600">💬 تواصل</a>
+    </div>
+  </footer>
+</div>
+
+<div id="toast-host" class="toast-host" aria-live="polite"></div>
+
+<div id="trial-blocker" class="trial-blocker">
+  <div class="trial-blocker-card">
+    <div class="trial-blocker-icon">⏳</div>
+    <h2>انتهت فترة التجربة</h2>
+    <p>عشان تكمّل استخدام مُوكِّل، اختار الباقة اللي تناسبك</p>
+    <a href="/pricing" class="btn btn-primary btn-block" style="text-decoration:none;display:block;text-align:center">💎 عرض الباقات</a>
+    <a href="https://wa.me/201013917789" target="_blank" class="btn btn-ghost btn-block">تواصل واتساب</a>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" hidden>
+  <div class="bottom-nav-inner">
+    <button class="bottom-nav-item active" data-nav="dashboard">
+      <div class="bottom-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+      <span>الرئيسية</span>
+    </button>
+    <button class="bottom-nav-item" data-nav="cases">
+      <div class="bottom-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <span>القضايا</span>
+    </button>
+    <button class="bottom-nav-item" data-nav="agenda">
+      <div class="bottom-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+      <span>التقويم</span>
+    </button>
+    <button class="bottom-nav-item" data-nav="clients">
+      <div class="bottom-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></div>
+      <span>الموكلين</span>
+    </button>
+    <button class="bottom-nav-item" data-nav="menu">
+      <div class="bottom-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></div>
+      <span>المزيد</span>
+    </button>
+  </div>
+</nav>
+
+<!-- سكريبت PWA Install Logic -->
+<script>
+  function isAppInstalled() {
+    if (localStorage.getItem('pwa-installed') === '1') return true;
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+  function getEnvironment() {
+    const ua = navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(ua)) return { os: 'ios', browser: 'safari', canDirect: false };
+    if (/android/.test(ua)) {
+      if (/miuibrowser|xiaomi|mibrowser/.test(ua)) return { os: 'android', browser: 'mi', canDirect: false, needsChrome: true };
+      if (/samsungbrowser/.test(ua)) return { os: 'android', browser: 'samsung', canDirect: true };
+      if (/firefox/.test(ua)) return { os: 'android', browser: 'firefox', canDirect: false, needsChrome: true };
+      if (/opr|opera/.test(ua)) return { os: 'android', browser: 'opera', canDirect: false, needsChrome: true };
+      if (/chrome/.test(ua)) return { os: 'android', browser: 'chrome', canDirect: true };
+      return { os: 'android', browser: 'other', canDirect: false, needsChrome: true };
+    }
+    if (/edg/.test(ua)) return { os: 'desktop', browser: 'edge', canDirect: true };
+    if (/chrome/.test(ua)) return { os: 'desktop', browser: 'chrome', canDirect: true };
+    return { os: 'desktop', browser: 'other', canDirect: false };
+  }
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#pwa-install-btn');
+    if (!btn) return;
+    const env = getEnvironment();
+    if (isAppInstalled()) { alert('✅ التطبيق مثبّت عندك بالفعل'); return; }
+    if (window.__deferredInstallPrompt) {
+      try {
+        window.__deferredInstallPrompt.prompt();
+        const { outcome } = await window.__deferredInstallPrompt.userChoice;
+        window.__deferredInstallPrompt = null;
+        if (outcome === 'accepted') document.querySelectorAll('#pwa-install-btn').forEach(b => b.hidden = true);
+        return;
+      } catch (err) { console.error('Prompt failed:', err); }
+    }
+    showInstallSheet(env);
+  });
+  function showInstallSheet(env) {
+    document.querySelectorAll('.install-sheet, .install-sheet-backdrop').forEach(el => el.remove());
+    let title = '', sub = '', steps = '', showChromeBtn = false;
+    if (env.os === 'ios') {
+      title = '📲 تثبيت على iPhone'; sub = 'اتبع الخطوات دي في Safari';
+      steps = `<li class="install-step"><span class="install-step-num">1</span><div class="install-step-body">افتح الموقع في متصفح <strong>Safari</strong></div></li><li class="install-step"><span class="install-step-num">2</span><div class="install-step-body">دوس على زر المشاركة <span class="install-step-icon">⤴️</span></div></li><li class="install-step"><span class="install-step-num">3</span><div class="install-step-body">اختر <strong>"إضافة إلى الشاشة الرئيسية"</strong> ➕</div></li><li class="install-step"><span class="install-step-num">4</span><div class="install-step-body">دوس <strong>"إضافة"</strong></div></li>`;
+    } else if (env.os === 'android' && env.needsChrome) {
+      title = '📲 تثبيت على Android'; sub = 'متصفحك الحالي مش بيدعم التثبيت'; showChromeBtn = true;
+      steps = `<li class="install-step"><span class="install-step-num">1</span><div class="install-step-body">افتح الموقع في <strong>Google Chrome</strong><br><small style="color:var(--text-muted);font-size:12px">لو مش عندك، نزّله من Play Store (مجاني)</small></div></li><li class="install-step"><span class="install-step-num">2</span><div class="install-step-body">دوس على قائمة Chrome <strong>⋮</strong> في أعلى يمين الشاشة</div></li><li class="install-step"><span class="install-step-num">3</span><div class="install-step-body">اختر <strong>"تثبيت التطبيق"</strong></div></li><li class="install-step"><span class="install-step-num">4</span><div class="install-step-body">دوس <strong>"تثبيت"</strong></div></li>`;
+    } else if (env.os === 'android' && env.browser === 'samsung') {
+      title = '📲 تثبيت على Samsung'; sub = 'من قائمة Samsung Internet';
+      steps = `<li class="install-step"><span class="install-step-num">1</span><div class="install-step-body">دوس على قائمة Samsung Internet <strong>☰</strong></div></li><li class="install-step"><span class="install-step-num">2</span><div class="install-step-body">اختر <strong>"إضافة صفحة إلى"</strong></div></li><li class="install-step"><span class="install-step-num">3</span><div class="install-step-body">اختر <strong>"الشاشة الرئيسية"</strong></div></li>`;
+    } else if (env.os === 'android' && env.browser === 'chrome') {
+      title = '📲 تثبيت على Android'; sub = 'من قائمة Chrome';
+      steps = `<li class="install-step"><span class="install-step-num">1</span><div class="install-step-body">دوس على قائمة Chrome <strong>⋮</strong><br><small style="color:var(--text-muted);font-size:12px">في أعلى يمين الشاشة</small></div></li><li class="install-step"><span class="install-step-num">2</span><div class="install-step-body">اختر <strong>"تثبيت التطبيق"</strong> أو <strong>"إضافة إلى الشاشة الرئيسية"</strong></div></li><li class="install-step"><span class="install-step-num">3</span><div class="install-step-body">دوس <strong>"تثبيت"</strong></div></li>`;
+    } else {
+      title = '📲 تثبيت التطبيق'; sub = 'من المتصفح';
+      steps = `<li class="install-step"><span class="install-step-num">1</span><div class="install-step-body">دوس على أيقونة التنزيل <strong>📥</strong> في شريط العنوان</div></li>`;
+    }
+    const chromeIntent = `intent://${location.host}${location.pathname}${location.search}#Intent;scheme=https;package=com.android.chrome;end`;
+    const html = `<div class="install-sheet-backdrop" id="install-sheet-backdrop"></div><div class="install-sheet" id="install-sheet"><div class="install-sheet-handle"></div><h3 class="install-sheet-title">${title}</h3><p class="install-sheet-sub">${sub}</p><ul class="install-steps">${steps}</ul><div class="install-sheet-actions">${showChromeBtn ? `<a href="${chromeIntent}" class="btn btn-primary btn-block" style="text-decoration:none;text-align:center">🌐 افتح في Chrome</a>` : ''}<button class="btn ${showChromeBtn ? 'btn-ghost' : 'btn-primary'} btn-block" id="install-sheet-close">${showChromeBtn ? 'مش عايز، شكرًا' : '✅ تمام، فهمت'}</button></div></div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const sheet = document.getElementById('install-sheet');
+    const backdrop = document.getElementById('install-sheet-backdrop');
+    const closeBtn = document.getElementById('install-sheet-close');
+    requestAnimationFrame(() => { sheet.classList.add('show'); backdrop.classList.add('show'); });
+    function close() { sheet.classList.remove('show'); backdrop.classList.remove('show'); setTimeout(() => { sheet.remove(); backdrop.remove(); }, 300); }
+    closeBtn?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+  }
+</script>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html> 
+ 

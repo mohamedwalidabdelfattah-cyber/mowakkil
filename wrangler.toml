@@ -1,0 +1,26 @@
+name = "mowakkil-api"
+main = "worker/index.js"
+compatibility_date = "2024-10-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mowakkil-db-v2"
+database_id = "22344b60-cf0c-40b1-9783-13ea9db6916a"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "79adf975838542bcafe32e45e8a241b6"
+
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "law-articles-m3"
+
+[triggers]
+crons = ["0 3 * * *"]
+
+[vars]
+ALLOWED_ORIGINS = "*"
+GOOGLE_DRIVE_FOLDER_ID = "176icUx16KeOkstl-of39Vtoszo8R_h_o"
