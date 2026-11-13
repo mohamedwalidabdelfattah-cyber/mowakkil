@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0F172A">
   <title>بوابة الموكل — مُوكِّل</title>
+  
   <link rel="stylesheet" href="/assets/fonts.css">
   <link rel="stylesheet" href="/assets/design-system.css">
+  <!-- ✅ الهوية البصرية الجديدة -->
+  <link rel="stylesheet" href="/assets/brand-theme.css">
   <link rel="stylesheet" href="/client/assets/styles.css">
 </head>
 <body>
@@ -84,6 +87,8 @@
 </div>
 
 <div id="toast-host" class="toast-host"></div>
-<script type="module" src="./js/main.js?v=8"></script>
+
+<!-- ✅ مسار مطلق عشان نضمن إنه بيقرأ من client/js/main.js مش js/main.js -->
+<script type="module" src="/client/js/main.js?v=7"></script>
 </body>
 </html>

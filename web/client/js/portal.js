@@ -515,25 +515,32 @@ async function doAcceptInvite() {
 async function quickLoginDirect(code) {
   try {
     console.log('quickLoginDirect: trying code', code);
-    
+
     const data = await api('/api/client-portal/quick-login', {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
-    
+
     console.log('quickLoginDirect: response', data);
-    
+
     if (!data.token) {
       throw new Error('الـ API مرجعش token — جرب تاني أو كلم المكتب');
     }
 
+    // ✅ نحفظ التوكن والاسم
     localStorage.setItem('mowakkil_client_token', data.token);
     localStorage.setItem('mowakkil_client_name', data.name || '');
     localStorage.setItem('mowakkil_client_invite_code', code);
-    
+
+    // ✅ نشيل الكود من الرابط عشان ميتنفذش تاني
     window.history.replaceState({}, '', window.location.pathname);
+
     toast('أهلاً ' + (data.name || '') + ' 👋', 'ok');
-    
+
+    // ✅ ننتظر شوية عشان الصفحة تحمل بالكامل
+    await new Promise(r => setTimeout(r, 100));
+
+    // ✅ نعرض الداشبورد
     await showDashboard();
   } catch (err) {
     console.error('quickLoginDirect failed:', err);
@@ -727,4 +734,4 @@ export const initPortal = {
   tryShowDashboard,
   bindEvents,
   quickLoginDirect,
-}; 
+};
