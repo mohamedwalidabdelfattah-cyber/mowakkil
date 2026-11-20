@@ -26,10 +26,23 @@ export async function render(host) {
     const list = await apiJson(`/api/clients${query}`);
     setClients(list);
 
-    // فلترة بالحساب (client-side filter) - بنستخدم البيانات اللي جاية من السيرفر مباشرة
+    // تحسين: نجيب حالة كل الحسابات مرة واحدة (بالتوازي، مش واحد ورا التاني)
+    const statusMap = {};
+    if (list.length > 0) {
+      const statusPromises = list.map(c => 
+        apiJson(`/api/clients/account-status?client_id=${c.id}`)
+          .then(s => ({ id: c.id, status: s }))
+          .catch(() => ({ id: c.id, status: { has_account: false } }))
+      );
+      
+      const results = await Promise.all(statusPromises);
+      results.forEach(r => { statusMap[r.id] = r.status; });
+    }
+
+    // فلترة بالحساب (client-side filter)
     const filtered = list.filter(c => {
       if (currentFilters.has_account === '') return true;
-      const has = c.account_status?.has_account;
+      const has = statusMap[c.id]?.has_account;
       if (currentFilters.has_account === 'yes') return has;
       if (currentFilters.has_account === 'no') return !has;
       return true;
@@ -67,7 +80,7 @@ export async function render(host) {
 
       <div id="clients-list">
         ${filtered.length 
-          ? filtered.map(c => clientItem(c, c.account_status)).join('') 
+          ? filtered.map(c => clientItem(c, statusMap[c.id])).join('') 
           : empty(
               currentFilters.search || currentFilters.has_account
                 ? 'مفيش نتايج مطابقة للفلاتر'

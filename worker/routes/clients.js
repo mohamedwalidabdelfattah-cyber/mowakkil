@@ -32,48 +32,20 @@ async function list({ env, officeId, url }) {
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
 
-  // تحسين: جلب حالة الحساب مع القائمة في استعلام واحد بدل استعلامات منفصلة
-  let query = `
-    SELECT c.*, 
-           cu.id as account_id, 
-           cu.password_hash, 
-           cu.active, 
-           cu.invite_token, 
-           cu.invite_expires_at
-    FROM clients c
-    LEFT JOIN client_users cu ON cu.client_id = c.id AND cu.office_id = c.office_id
-    WHERE c.office_id = ? AND c.deleted_at IS NULL
-  `;
+  let query = `SELECT * FROM clients WHERE office_id = ? AND deleted_at IS NULL`;
   const binds = [officeId];
 
   if (search) {
-    query += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.national_id LIKE ?)';
+    query += ' AND (name LIKE ? OR phone LIKE ? OR national_id LIKE ?)';
     binds.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
-  if (from) { query += ' AND c.created_at >= ?'; binds.push(from); }
-  if (to)   { query += ' AND c.created_at <= ?'; binds.push(to); }
+  if (from) { query += ' AND created_at >= ?'; binds.push(from); }
+  if (to)   { query += ' AND created_at <= ?'; binds.push(to); }
 
-  query += ' ORDER BY c.created_at DESC';
+  query += ' ORDER BY created_at DESC';
 
   const { results } = await env.DB.prepare(query).bind(...binds).all();
-  
-  // إعادة تنسيق البيانات عشان تبقى متوافقة مع الواجهة
-  const formatted = results.map(r => ({
-    id: r.id,
-    name: r.name,
-    phone: r.phone,
-    national_id: r.national_id,
-    created_at: r.created_at,
-    account_status: r.account_id ? {
-      has_account: true,
-      active: !!r.active,
-      has_password: !!r.password_hash,
-      invite_pending: !!r.invite_token && r.invite_expires_at && new Date(r.invite_expires_at) > new Date(),
-      invite_expired: !!r.invite_token && r.invite_expires_at && new Date(r.invite_expires_at) <= new Date(),
-    } : { has_account: false }
-  }));
-
-  return ok(env, formatted);
+  return ok(env, results || []);
 }
 
 async function create({ request, env, authUser, officeId }) {
