@@ -5,3 +5,10 @@ dist/
 .env
 web-before-restore-*/
 mowakkil-backup*/
+.aider*
+
+# Python & Aider
+.venv-aider/
+__pycache__/
+*.pyc
+.aider*
