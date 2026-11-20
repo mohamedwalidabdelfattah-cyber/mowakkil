@@ -26,21 +26,10 @@ export async function render(host) {
     const list = await apiJson(`/api/clients${query}`);
     setClients(list);
 
-    // نجيب حالات الحسابات
-    const statuses = {};
-    for (const c of list) {
-      try {
-        const s = await apiJson(`/api/clients/account-status?client_id=${c.id}`);
-        statuses[c.id] = s;
-      } catch {
-        statuses[c.id] = { has_account: false };
-      }
-    }
-
-    // فلترة بالحساب (client-side filter)
+    // فلترة بالحساب (client-side filter) - بنستخدم البيانات اللي جاية من السيرفر مباشرة
     const filtered = list.filter(c => {
       if (currentFilters.has_account === '') return true;
-      const has = statuses[c.id]?.has_account;
+      const has = c.account_status?.has_account;
       if (currentFilters.has_account === 'yes') return has;
       if (currentFilters.has_account === 'no') return !has;
       return true;
@@ -78,7 +67,7 @@ export async function render(host) {
 
       <div id="clients-list">
         ${filtered.length 
-          ? filtered.map(c => clientItem(c, statuses[c.id])).join('') 
+          ? filtered.map(c => clientItem(c, c.account_status)).join('') 
           : empty(
               currentFilters.search || currentFilters.has_account
                 ? 'مفيش نتايج مطابقة للفلاتر'
@@ -585,4 +574,4 @@ async function showProfile(id) {
   } catch (e) {
     document.getElementById('client-profile-content').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
-} 
+}
