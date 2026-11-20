@@ -12,3 +12,7 @@ mowakkil-backup*/
 __pycache__/
 *.pyc
 .aider*
+
+# Backups
+*.bak
+web-backup-*/
