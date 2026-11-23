@@ -1,0 +1,941 @@
+# مُوكِّل — المرجع الشامل (نسخة مفصلة)
+**آخر تحديث:** 2026-11-22
+**الغرض:** مرجع كامل لاستكمال العمل لو المحادثة قفلت
+
+---
+
+## 📌 ملخص سريع
+
+- **المنصة:** SaaS لإدارة مكاتب المحاماة (قضايا، موكلين، محاسبة، فواتير، بوابة موكل، AI).
+- **الوضع الحالي:** ✅ مستقر تماماً، مطابق 100% لـ Production على Cloudflare.
+- **الرابط الحي:** https://mowakkil-2026.pages.dev
+- **الـ Repo:** `C:\Users\hi\mowakkil` (Git initialized, clean working tree).
+- **آخر Deploy شغال:** `00851759-da3b-4201-8a33-f5d5bcf91387`
+- **المشروع:** HTML/CSS/JS عادي (Vanilla) + Cloudflare Worker (API) + D1 + KV + Vectorize.
+- **الخطوة القادمة:** إضافة تحسينات (لوجو جديد، ألوان ذهبية، إصلاحات موبايل، إشعارات).
+
+---
+
+## 🔑 بيانات الدخول
+
+> 🔐 الإيميلات والباسوردات و SETUP_KEY وحسابات الموكلين اتنقلت لملف `PROGRESS.secrets.md` (محلي فقط، في `.gitignore`).
+
+### بوابة الموكل
+- **الرابط:** `https://mowakkil-2026.pages.dev/client`
+- **الدخول:** رقم هاتف + باسورد (أو Quick Login)
+- ✅ Quick Login من الرابط (`?code=XXX&quick=1`) شغال (اتجرب 2026-11-23)
+
+
+---
+
+## 🌐 البنية التحتية الكاملة
+
+### Cloudflare Account
+- **Account ID:** `d3f7ae78663e16e3c1544a67ae48ebd8`
+
+### Cloudflare D1 (قاعدة البيانات)
+- **الاسم:** `mowakkil-db-v2`
+- **ID:** `22344b60-cf0c-40b1-9783-13ea9db6916a`
+
+### Cloudflare KV
+- **الاسم:** `RATE_LIMIT_KV`
+- **ID:** `79adf975838542bcafe32e45e8a241b6`
+- **الغرض:** Rate limiting + Cache
+
+### Cloudflare Vectorize
+- **الحالي:** `law-articles-m3` (1024 dimension, cosine)
+- **القديم (مهجور):** `law-articles-index` (768 dimension)
+- **الغرض:** البحث القانوني الدلالي (RAG)
+
+### Cloudflare Pages
+- **المشروع:** `mowakkil-2026`
+- **Project ID:** `8051c6b9-1b6f-4105-b7cf-260ff8236516`
+- **Production Branch:** `production` ⚠️ (مهم جداً - لازم يكون production)
+- **الرابط:** `https://mowakkil-2026.pages.dev`
+
+### Cloudflare Worker (API)
+- **الرابط:** `https://mowakkil-api.mohamed-walid-abdelfattah.workers.dev`
+- **الغرض:** كل عمليات الـ API (Auth, CRUD, AI, إلخ)
+
+### Secrets على Cloudflare
+| الاسم | الغرض |
+|-------|-------|
+| `JWT_SECRET` | توقيع JWT (ثابت — متغيّروش) |
+| `SETUP_KEY` | (القيمة في `PROGRESS.secrets.md`) |
+| `GEMINI_API_KEY` | Google Gemini (AI) |
+| `ANTHROPIC_API_KEY` | Anthropic Claude (AI) |
+| `OPENROUTER_API_KEY` | OpenRouter (AI fallback) |
+| `GROQ_API_KEY` | Groq (Chat Agent أساسي) |
+| `TAVILY_API_KEY` | Tavily (بحث ويب) |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Google Service Account |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Google Service Account |
+| `CLOUDINARY_CLOUD_NAME` | `n6ngaje6` |
+| `CLOUDINARY_API_KEY` | Cloudinary |
+| `CLOUDINARY_API_SECRET` | Cloudinary |
+| `CLOUDINARY_UPLOAD_PRESET` | `mowakkil_docs` |
+| `B2_ENDPOINT` | عنوان Backblaze S3 بالشكل `s3.<region>.backblazeb2.com` (من غير https://، ولازم يطابق region الباكت) |
+| `B2_KEY_ID` | Application Key ID لباكت `mowakkil` (صلاحية Read and Write) |
+| `B2_APP_KEY` | Application Key (سر، متتبعتش في أي محادثة) |
+| `B2_BUCKET` | اختياري، الافتراضي في الكود `mowakkil` |
+
+### الدفع اليدوي
+- **الرقم:** `01155288607`
+- **الاسم:** power media
+- **الطرق:** فودافون كاش + إنستاباي
+
+---
+
+## 📂 هيكل المشروع الكامل
+
+### الجذر: `C:\Users\hi\mowakkil\`
+
+mowakkil/
+├── .git/                              # Git repository
+├── .gitignore                         # يستبعد node_modules, .wrangler, إلخ
+├── PROGRESS.md                        # سجل التقدم الأصلي (من 4 نوفمبر)
+├── PROGRESS-COMPLETE.md               # هذا الملف
+├── wrangler.toml                      # إعدادات Cloudflare
+├── package.json                       # dependencies
+├── package-lock.json
+├── audit.cjs                          # سكريبت فحص شامل
+├── filter-audit.cjs                   # سكريبت فحص الفلاتر
+├── filter-report.json                 # نتائج الفحص
+├── office.json                        # بيانات مكتب تجريبي
+├── setup.json                         # إعدادات
+├── schema.sql                         # Schema كامل
+├── token.txt                          # Token للاختبار
+├── test-entry.json, test-expense.json, test-invoice.json, test-payment.json
+├── vectors.ndjson, vectors-m3.ndjson  # Vector embeddings
+├── seed-law-expanded.sql, seed-law-more.sql, seed-test-data.sql
+├── seed-vectorize.mjs
+├── scan-laws.mjs, scan-laws-core.mjs
+│
+├── node_modules/                      # (مش في Git)
+│
+├── web/                               # ⭐ الواجهة (Frontend)
+│   ├── index.html                     # 29,550 بايت (نسخة السيرفر)
+│   ├── pricing.html                   # صفحة التسعير
+│   ├── signup.html                    # صفحة التسجيل
+│   ├── pay.html                       # صفحة الدفع
+│   ├── service-worker.js              # 2,400 بايت (PWA + Cache)
+│   ├── logo-original.png              # صورة اللوجو الأصلية
+│   ├── generate-logos.py              # سكريبت توليد اللوجو
+│   │
+│   ├── assets/                        # CSS, Fonts, Images
+│   │   ├── styles.css                 # 106,890 بايت ⭐ (نسخة السيرفر)
+│   │   ├── design-system.css          # 18,247 بايت
+│   │   ├── landing.css                # 8,642 بايت
+│   │   ├── pricing.css                # 10,157 بايت
+│   │   ├── fonts.css                  # @font-face definitions
+│   │   ├── site.webmanifest           # PWA manifest
+│   │   ├── styles.css.old             # نسخة قديمة (احتياطي)
+│   │   ├── logo.png                   # اللوجو القديم
+│   │   ├── logo-ai.png, logo-ai-dark.png
+│   │   ├── logo-original1.png
+│   │   ├── app-icon.png
+│   │   ├── apple-touch-icon.png
+│   │   ├── favicon.ico, favicon.svg, favicon-96x96.png
+│   │   ├── web-app-manifest-192x192.png
+│   │   ├── web-app-manifest-512x512.png
+│   │   ├── lady-justice.png           # صورة تمثال العدالة
+│   │   │
+│   │   ├── fonts/                     # خطوط محلية
+│   │   │   ├── ibm-plex-sans-arabic-v15-arabic_latin-regular.woff2
+│   │   │   ├── ibm-plex-sans-arabic-v15-arabic_latin-500.woff2
+│   │   │   ├── ibm-plex-sans-arabic-v15-arabic_latin-600.woff2
+│   │   │   ├── ibm-plex-sans-arabic-v15-arabic_latin-700.woff2
+│   │   │   ├── ibm-plex-mono-v20-latin-regular.woff2
+│   │   │   ├── ibm-plex-mono-v20-latin-500.woff2
+│   │   │   └── ibm-plex-mono-v20-latin-600.woff2
+│   │   │
+│   │   └── logos/                     # ⭐ اللوجو الجديد (الذهبي)
+│   │       ├── logo-transparent.png   # النسخة الشفافة الكاملة
+│   │       ├── logo-xs.png            # 32x32
+│   │       ├── logo-sm.png            # 48x48
+│   │       ├── logo-md.png            # 64x64
+│   │       ├── logo-lg.png            # 128x128
+│   │       ├── logo-xl.png            # 256x256
+│   │       ├── icon-192.png           # PWA 192x192
+│   │       ├── icon-512.png           # PWA 512x512
+│   │       └── favicon.ico            # Favicon
+│   │
+│   ├── js/                            # JavaScript
+│   │   ├── main.js                    # 8,712 بايت ⭐ نقطة البداية
+│   │   ├── config.js                  # إعدادات
+│   │   ├── api.js                     # 6,457 بايت ⭐ API client
+│   │   ├── state.js                   # Global state
+│   │   ├── ui.js                      # 10,422 بايت ⭐ UI helpers
+│   │   ├── router.js                  # 2,065 بايت ⭐ View router
+│   │   ├── drawer.js                  # 10,915 بايت ⭐ القائمة الجانبية
+│   │   ├── modal.js                   # Modal helpers
+│   │   ├── notifications.js           # 7,415 بايت ⭐ الإشعارات
+│   │   ├── search.js                  # 15,095 بايت ⭐ البحث الذكي
+│   │   ├── pricing.js                 # منطق صفحة التسعير
+│   │   ├── signup.js                  # منطق صفحة التسجيل
+│   │   ├── pay.js                     # منطق صفحة الدفع
+│   │   ├── case-detail.js             # منطق تفاصيل القضية
+│   │   │
+│   │   └── views/                     # صفحات التطبيق
+│   │       ├── login.js               # صفحة الدخول
+│   │       ├── dashboard.js           # 20,287 بايت ⭐ الداشبورد
+│   │       ├── agenda.js              # 14,532 بايت (الأجندة)
+│   │       ├── cases.js               # 19,175 بايت (القضايا)
+│   │       ├── clients.js             # 26,394 بايت (الموكلين)
+│   │       ├── lawyers.js             # 5,955 بايت (المحامين)
+│   │       ├── fees.js                # 29,015 بايت (الأتعاب)
+│   │       ├── tasks.js               # 25,531 بايت (المهام)
+│   │       ├── reports.js             # 6,097 بايت (التقارير)
+│   │       ├── calc.js                # 1,840 بايت (الحاسبة)
+│   │       ├── search.js              # 35,315 بايت (البحث القانوني)
+│   │       ├── account.js             # 6,421 بايت (الحساب)
+│   │       ├── superadmin.js          # 27,108 بايت (Superadmin)
+│   │       ├── money.js               # 39,965 بايت (الإدارة المالية)
+│   │       ├── accounting.js          # 16,933 بايت (المحاسبة)
+│   │       ├── invoice-detail.js      # 15,359 بايت (تفاصيل الفاتورة)
+│   │       ├── subscription.js        # 7,146 بايت (الاشتراك)
+│   │       └── settings.js            # 27,226 بايت (الإعدادات)
+│   │
+│   └── client/                        # ⭐ بوابة الموكل
+│       ├── index.html                 # صفحة البوابة
+│       ├── js/
+│       │   ├── main.js                # منطق البوابة
+│       │   └── portal.js              # مكونات البوابة
+│       └── assets/
+│           └── styles.css             # تنسيقات البوابة
+│
+├── worker/                            # ⭐ Cloudflare Worker (API)
+│   ├── index.js                       # نقطة البداية (Routes)
+│   ├── lib/
+│   │   ├── auth.js                    # JWT verification
+│   │   ├── response.js                # JSON responses
+│   │   ├── router.js                  # Router
+│   │   ├── validation.js              # Input validation
+│   │   ├── audit.js                   # Audit log
+│   │   ├── crypto.js                  # Crypto helpers
+│   │   ├── jwt.js                     # JWT sign/verify
+│   │   └── rate-limit.js              # Rate limiting
+│   ├── middleware/
+│   │   ├── feature-gate.js            # Subscription gating
+│   │   └── subscription.js            # Subscription check
+│   ├── services/
+│   │   ├── dashboard.js               # Dashboard stats
+│   │   ├── notification-jobs.js       # Cron jobs للإشعارات
+│   │   ├── legal-search.js            # RAG (Vectorize)
+│   │   ├── agent.js                   # ⭐ AI Chat Agent
+│   │   ├── chat.js                    # Chat logic
+│   │   ├── accounting.js              # Accounting logic
+│   │   ├── chart-of-accounts.js       # Chart of accounts
+│   │   └── fee-calc.js                # Fee calculations
+│   └── routes/                        # 27 ملف API
+│       ├── auth.js                    # Login/Register
+│       ├── superadmin.js              # Superadmin APIs
+│       ├── office.js                  # Office settings
+│       ├── clients.js                 # Clients CRUD
+│       ├── cases.js                   # Cases CRUD
+│       ├── lawyers.js                 # Lawyers CRUD
+│       ├── fees.js                    # Fees CRUD
+│       ├── payments.js                # Payments CRUD
+│       ├── sessions.js                # Sessions (جلسات)
+│       ├── tasks.js                   # Tasks CRUD
+│       ├── documents.js               # Documents upload
+│       ├── reports.js                 # Reports
+│       ├── tools.js                   # Utility tools
+│       ├── accounts.js                # Accounts
+│       ├── journal.js                 # Journal entries
+│       ├── expenses.js                # Expenses
+│       ├── invoices.js                # Invoices
+│       ├── client-portal.js           # Client portal APIs
+│       ├── subscription.js            # Subscriptions
+│       ├── signup.js                  # Signup
+│       ├── payment-requests.js        # Manual payments
+│       ├── notifications.js           # Notifications
+│       ├── calendar.js                # Calendar events
+│       ├── settings.js                # Settings
+│       ├── analyze.js                 # AI analysis
+│       └── chat.js                    # ⭐ Chat APIs
+│
+├── migrations/                        # SQL migrations (22 ملف)
+│   ├── 001_initial.sql                # الجداول الأساسية
+│   ├── ...
+│   ├── 014_subscriptions.sql          # الاشتراكات
+│   ├── 015_signup_phone.sql           # رقم الهاتف
+│   ├── 016_payment_requests.sql       # الدفع اليدوي
+│   ├── 017_documents_d1.sql           # المستندات
+│   ├── 018_task_expenses.sql          # مصاريف المهام
+│   ├── 019_notifications.sql          # الإشعارات
+│   ├── 020_office_settings.sql        # إعدادات المكتب
+│   ├── 021_analyses.sql               # التحليلات
+│   └── 022_chat.sql                   # ⭐ Chat tables
+│
+├── scripts/
+│   └── migrate.mjs                    # Migration runner
+│
+├── cron/
+│   └── trial-expiry.js                # Cron (تجربة منتهية)
+│
+└── tests/
+    ├── auth.test.js
+    ├── documents.test.js
+    ├── setup.js
+    └── tenancy.test.js
+
+---
+
+## 🗄️ قاعدة البيانات (D1) — الجداول
+
+### المجموعة الأساسية
+| الجدول | الغرض |
+|--------|-------|
+| `offices` | المكاتب (multi-tenant) |
+| `users` | المستخدمين (محامين + admin) |
+| `super_admins` | مسؤولو المنصة |
+
+### البيانات الأساسية
+| الجدول | الغرض |
+|--------|-------|
+| `clients` | الموكلين |
+| `cases` | القضايا |
+| `sessions` | الجلسات |
+| `lawyers` | المحامين |
+| `tasks` | المهام |
+| `documents` | المستندات |
+
+### المجموعة المالية
+| الجدول | الغرض |
+|--------|-------|
+| `fees` | الأتعاب |
+| `payments` | المدفوعات |
+| `session_expenses` | مصاريف الجلسات |
+| `expenses` | المصاريف العامة |
+| `task_expenses` | مصاريف المهام |
+
+### المحاسبة
+| الجدول | الغرض |
+|--------|-------|
+| `accounts` | شجرة الحسابات |
+| `journal_entries` | القيود اليومية |
+| `journal_lines` | سطور القيود |
+| `accounting_settings` | إعدادات المحاسبة |
+
+### الفواتير
+| الجدول | الغرض |
+|--------|-------|
+| `invoices` | الفواتير |
+| `invoice_lines` | سطور الفواتير |
+
+### الاشتراكات
+| الجدول | الغرض |
+|--------|-------|
+| `subscriptions` | اشتراكات المكاتب |
+| `plan_features` | ميزات كل باقة |
+| `subscription_history` | تاريخ التغييرات |
+
+### الدفع
+| الجدول | الغرض |
+|--------|-------|
+| `payment_requests` | طلبات الدفع اليدوي |
+
+### الإشعارات
+| الجدول | الغرض |
+|--------|-------|
+| `notifications` | الإشعارات |
+
+### الإعدادات
+| الجدول | الغرض |
+|--------|-------|
+| `office_settings` | إعدادات المكتب |
+
+### النظام
+| الجدول | الغرض |
+|--------|-------|
+| `law_articles` | 5,828 مادة قانونية |
+| `audit_log` | Audit trail |
+| `schema_migrations` | Migrations applied |
+| `cron_runs` | Cron job logs |
+
+### بوابة الموكل
+| الجدول | الغرض |
+|--------|-------|
+| `client_users` | حسابات العملاء |
+
+### الشات (AI)
+| الجدول | الغرض |
+|--------|-------|
+| `chat_sessions` | محادثات الشات |
+| `chat_messages` | رسائل الشات |
+
+### التحليل
+| الجدول | الغرض |
+|--------|-------|
+| `analyses` | نتائج التحليل الذكي |
+
+---
+
+## ✅ اللي شغال (على Production)
+
+### 1. التصميم (UI/UX Premium)
+- Landing Page كاملة (Hero + Features + Stats + FAQ + CTA)
+- تصميم Navy + Gold
+- صفحة تسجيل بنفس الهوية
+- Mobile responsive (No horizontal scroll)
+
+### 2. الفلاتر المتقدمة (7 صفحات)
+- **الفواتير:** status, client_id, from, to, search
+- **القضايا:** search, type, court, archived
+- **الموكلين:** search, from, to
+- **المهام:** search, status, due (overdue/today/week), lawyer_id
+- **الأتعاب:** search, status (paid/pending/late), from, to
+- **المحامين:** search, include_inactive
+- **الأجندة:** from, to, type (session/task/fee)
+
+### 3. Dashboard Premium
+- Welcome Hero (Navy + Gold)
+- فلاتر فترة (7 أيام / 30 / شهر / 3 شهور / سنة)
+- 4 Stats Cards
+- Charts (Line + Doughnut + Bar)
+- Quick Actions (4 أزرار)
+
+### 4. Skeletons + Empty States
+- `skeleton()`: text/card/chart/list
+- `empty()`: icon + message + action
+- Shimmer effect
+
+### 5. AI Chat Agent (⭐ جديد)
+- Chat UI كامل
+- Tools: `search_legal_db` (5,828 مادة) + `search_web` (Tavily)
+- 3 levels fallback: Groq → Cloudflare → OpenRouter
+- حفظ محادثات في D1
+- رفع ملفات (PDF/Word/TXT/صور)
+- System Prompt محسّن (عربي 100%)
+- Endpoints: POST /api/chat, GET /api/chat/sessions, DELETE /api/chat/sessions/:id
+
+### 6. AI RAG (البحث القانوني)
+- 5,828 مادة في D1
+- Vectorize Index: `law-articles-m3` (1024 dims)
+- Embeddings: `@cf/baai/bge-m3` (يدعم العربي)
+
+### 7. Client Portal
+- /client (تسجيل دخول + عرض)
+- دعوة + تعطيل + إعادة + حذف
+- Quick Login (⚠️ مش شغال من الرابط)
+- WhatsApp Integration
+
+### 8. الاشتراكات
+- 4 باقات: Free (0) / Starter (199) / Pro (399) / Plus (799)
+- Feature Gates (finance → starter, invoices → starter, ai → pro)
+- API: /api/subscription/plans, /me, /change
+- صفحة "اشتراكي" + Modal الترقية
+
+### 9. صفحة التسعير (/pricing)
+- 4 كروت + جدول مقارنة + FAQ + تبديل لغة
+
+### 10. صفحة التسجيل الذاتي (/signup)
+- POST /api/signup
+- بيعمل: office + user + subscription (Pro trial 15 يوم) + chart of accounts
+- دخل تلقائي (JWT)
+
+### 11. Superadmin Dashboard
+- 6 إحصائيات: offices, users, active, trial, MRR, ARR
+- جدول مكاتب + بحث + فلترة + Modal + طلبات دفع
+
+### 12. الدفع اليدوي
+- صفحة /pay
+- Superadmin يوافق → تفعيل تلقائي
+
+### 13. تسجيل دخول بإيميل أو رقم هاتف
+- /api/auth/login يقبل الاتنين
+
+### 14. المستندات (Backblaze B2 — اتحدّث 2026-11-22)
+- التخزين الفعلي على Backblaze B2 عن طريق الـ Worker (مكتبة `aws4fetch`) والبيانات الوصفية في D1
+- الحد الأقصى للملف 10 ميجا (كان base64 في D1 لحد 1.5 ميجا)
+- رفع + تحميل + حذف
+- مرفقات في المهام
+
+### 15. الإشعارات
+- Badge + Dropdown + Polling 30s
+- API: GET /api/notifications, /count, PATCH /:id/read, POST /mark-all-read
+- Cron jobs للتذكيرات
+
+### 16. التقويم
+- Toast UI Calendar (CDN)
+- عرض شهري/أسبوعي/يومي
+- 3 أنواع أحداث
+- Drag & Drop
+
+### 17. PWA + Mobile
+- Bottom Navigation (5 أزرار)
+- صفحة "المزيد" (13 قسم)
+- manifest + service-worker
+- نظام تثبيت ذكي (Chrome/Safari/Samsung/Mi)
+
+### 18. تحسينات الأداء
+- CORS preflight caching (24h)
+- Monthly-trend endpoint (1 req بدل 12)
+- خطوط محلية (لا Google Fonts)
+- API response caching (10s)
+- 3.82s → 2.58s
+
+### 19. الإصلاحات السابقة
+- كسر الكاش (Build Version + SW unregister)
+- `view-host` layout
+- إصلاح "المزيد"
+- إصلاح `getRoleFromToken`
+- إصلاح `autoEntryInvoice`
+- إصلاح `getInvite` في client-portal
+- JWT_SECRET ثابت
+- إصلاح Cloudinary
+- إصلاح التخزين (Google Drive → D1)
+- إصلاح حذف المحامي
+- إصلاح مصاريف المهام
+- إضافة `DELETE /api/tasks/:id`
+- إضافة `DELETE /api/fees/:id`
+- إضافة `PATCH /api/tasks/:id`
+- تحويل `showTaskModal` لـ Modal
+- إصلاح صفحة المهام
+- إصلاح الأتعاب
+
+---
+
+## 🛠️ اللي اتعمل في هذه المحادثة (2026-11-13)
+
+### 1. التشخيص
+- اكتشفنا إن ملفات جهازك **متعدلة وبايظة** (styles.css كان 9,718 بدل 106,890).
+- النسخة على Cloudflare Pages شغالة 100%.
+- لا يمكن تحميل الكود المصدري من Cloudflare Pages (قيد المنصة).
+
+### 2. سحب المرجع من السيرفر
+- أنشأنا `C:\Users\hi\mowakkil-live-reference\live-ref\`.
+- استخدمنا `Invoke-WebRequest` (PowerShell) لسحب 13 ملف.
+- اتحملوا: `index.html`, `styles.css`, `design-system.css`, `landing.css`, `pricing.css`, `notifications.js`, `main.js`, `api.js`, `ui.js`, `drawer.js`, `router.js`, `search.js`, `service-worker.js`.
+
+### 3. المقارنة
+File                      Server    Local    Status
+index.html                29550     28699    DIFF
+assets\styles.css         106890    9718     DIFF (كارثي!)
+assets\design-system.css  18247     5604     DIFF
+assets\landing.css        8642      8437     DIFF
+assets\pricing.css        10157     4325     DIFF
+js\main.js                8712      8712     SAME
+js\notifications.js       7415      5493     DIFF
+js\api.js                 6457      6457     SAME
+js\ui.js                  10422     10422    SAME
+js\drawer.js              10915     10915    SAME
+js\router.js              2065      2065     SAME
+js\search.js              15095     15095    SAME
+service-worker.js         2400      2424     DIFF
+
+### 4. الرجوع من السيرفر
+**اترجع 6 ملفات:**
+- `assets/styles.css` (106,890)
+- `assets/design-system.css` (18,247)
+- `assets/landing.css` (8,642)
+- `assets/pricing.css` (10,157)
+- `index.html` (29,550)
+- `js/notifications.js` (7,415)
+
+**النتيجة:** الموقع شغال محلياً 100% مطابق للسيرفر.
+
+### 5. إعداد Git
+- سطّبنا Git: `winget install --id Git.Git`
+- `git init` + `git add .` + `git commit -m "Stable version - matching production"`
+- أضفنا `.gitignore` (يستبعد node_modules, .wrangler, dist, *.log, .env, web-before-restore-*, mowakkil-backup*)
+- `git rm -r --cached node_modules` + commit
+- مسحنا الملفات الغريبة: `web/({{}}))`, `web/\``, `web/el.remove()`, `web/modal.remove())`, `web/showInstallSheet())`, `web/{`
+- `git commit -m "Clean up: remove stray files from web/"`
+
+### 6. الباك أبس الموجودة
+- `C:\Users\hi\mowakkil\web-before-restore-2026-11-13_09-52-16` (قبل الرجوع)
+- `C:\Users\hi\mowakkil-backup-2026-10-30` (27 أكتوبر)
+- `C:\Users\hi\mowakkil-live-reference\live-ref` (نسخة السيرفر)
+- `C:\Users\hi\mowakkil-backup` (23 أكتوبر - قديم)
+- `C:\Users\hi\mowakkil-backup-2026-10-26-ai` (26 أكتوبر)
+- `C:\Users\hi\mowakkil-backup-final` (23 أكتوبر)
+- `C:\Users\hi\mowakkil-backup-v2` (14 أكتوبر)
+- `C:\Users\hi\mowakkil-backup-2026-11-06` (فاضي ❌)
+
+---
+
+## 🎯 الخطوات اللي لسه (التحسينات)
+
+### 1. اللوجو الجديد في `index.html` (5 دقائق) 🔴 عاجل
+**الملفات:** موجودة في `C:\Users\hi\mowakkil\web\assets\logos\`
+
+**التعديلات المطلوبة في `index.html`:**
+
+في `<head>`:
+استبدل:
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+<link rel="shortcut icon" href="/assets/favicon.ico">
+
+بـ:
+<link rel="apple-touch-icon" href="/assets/logos/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/logos/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/assets/logos/icon-512.png">
+<link rel="shortcut icon" href="/assets/logos/favicon.ico">
+
+في الجسم:
+استبدل:
+<img src="/assets/logo.png">           <!-- اللاندينج + الهيدر -->
+<img src="/assets/app-icon.png">       <!-- صفحة الدخول -->
+
+بـ:
+<img src="/assets/logos/logo-md.png">  <!-- الهيدر -->
+<img src="/assets/logos/logo-lg.png">  <!-- صفحة الدخول -->
+
+**بعد التعديل:**
+- اختبر الموقع
+- `git add . && git commit -m "Add new gold logo"`
+
+### 2. الألوان الذهبية في `design-system.css` (2 دقائق) 🟡 مهم
+**التعديل في `:root`:**
+استبدل:
+--brand-gold: #D97706;
+--brand-gold-hover: #B45309;
+--brand-gold-light: #FEF3C7;
+
+بـ:
+--brand-gold: #D4AF37;
+--brand-gold-hover: #B8860B;
+--brand-gold-light: #FDE047;
+
+**بعد التعديل:**
+- اختبر
+- `git add . && git commit -m "Update gold color to match logo"`
+
+### 3. إصلاحات الموبايل في `styles.css` (10 دقائق) 🟡 مهم
+**إضافة في آخر `styles.css`:**
+
+/* ==========================================================
+   FIX PACK — Mobile Fixes
+   ========================================================== */
+
+@media (max-width: 768px) {
+  /* إظهار زر القائمة */
+  .menu-btn {
+    display: flex !important;
+    width: 40px;
+    height: 40px;
+  }
+  
+  /* البحث كأيقونة */
+  .search-trigger {
+    display: inline-flex !important;
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    justify-content: center;
+    align-items: center;
+    flex: 0 0 auto !important;
+    max-width: none !important;
+  }
+  .search-trigger span,
+  .search-trigger-kbd {
+    display: none !important;
+  }
+  
+  /* تابات الإعدادات أفقية */
+  .settings-layout { display: block !important; }
+  .settings-sidebar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    position: static !important;
+    padding: 8px !important;
+    gap: 6px !important;
+  }
+  .settings-sidebar::-webkit-scrollbar { display: none; }
+  .settings-tab {
+    flex-shrink: 0 !important;
+    white-space: nowrap;
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+  }
+}
+
+**بعد التعديل:**
+- اختبر على الموبايل (F12 → Device Toolbar)
+- `git add . && git commit -m "Add mobile fixes"`
+
+### 4. تحسينات الإشعارات (15 دقيقة) 🟢 تحسين
+- تحسين Dropdown (شكل احترافي + إغلاق عند الضغط برة)
+- تحديث `notifications.js` + `styles.css`
+- اختبار
+- commit
+
+### 5. النشر على Cloudflare
+**بعد ما كل حاجة تمام:**
+cd C:\Users\hi\mowakkil\web
+npx wrangler pages deploy . --project-name=mowakkil-2026 --branch=production --commit-dirty=true
+
+---
+
+## 🚀 الأوامر المهمة
+
+### تشغيل محلي
+cd C:\Users\hi\mowakkil\web
+npx serve .
+# → http://localhost:3000
+
+### Git
+cd C:\Users\hi\mowakkil
+git status                      # حالة المشروع
+git add .                       # إضافة التعديلات
+git commit -m "وصف التعديل"     # حفظ
+git reset --hard HEAD           # رجوع لآخر commit
+git log --oneline               # سجل commits
+
+### النشر (بعد التأكد)
+cd C:\Users\hi\mowakkil\web
+npx wrangler pages deploy . --project-name=mowakkil-2026 --branch=production --commit-dirty=true
+
+### سحب ملفات من السيرفر (لو احتجت)
+$baseUrl = "https://mowakkil-2026.pages.dev"
+Invoke-WebRequest -Uri "$baseUrl/index.html" -OutFile ".\live-ref\index.html" -UseBasicParsing
+
+### عرض Deployments على Cloudflare
+cd C:\Users\hi\mowakkil
+npx wrangler pages deployment list --project-name=mowakkil-2026
+
+### معرفة حجم الملفات (مقارنة)
+$local = "C:\Users\hi\mowakkil\web"
+$live = "C:\Users\hi\mowakkil-live-reference\live-ref"
+$files = @("index.html", "assets\styles.css", "assets\design-system.css", "js\notifications.js")
+foreach ($f in $files) {
+    $s = if (Test-Path "$live\$f") { (Get-Item "$live\$f").Length } else { 0 }
+    $l = if (Test-Path "$local\$f") { (Get-Item "$local\$f").Length } else { 0 }
+    Write-Host ("{0,-30} {1,10} {2,10}" -f $f, $s, $l)
+}
+
+---
+
+## ⚠️ ملاحظات حرجة
+
+### Service Worker Cache (اتحل 2026-11-23 — مفيش تغيير يدوي تاني)
+- ~~كل تعديل يحتاج تغيير `CACHE_NAME`~~ → الكود (html/js/css) دايماً من الشبكة الأول، والكاش للأوفلاين بس. التعديلات بتوصل أول ما تنشر.
+- مدد الكاش لكل نوع ملف في `web/_headers`.
+
+### Git Safety
+- أي تعديل: عدل → اختبر → `git commit` → لو تمام كمل.
+- لو مشكلة: `git reset --hard HEAD` يرجع لآخر حالة مستقرة.
+- **دايماً اختبر محلياً قبل النشر.**
+
+### Production
+- **النسخة الحالية على Cloudflare شغالة 100% ومطابقة لجهازك.**
+- أي deploy جديد هيلغي الـ Rollback — لازم تتأكد قبل النشر.
+
+### الملفات الكبيرة في Git
+- `node_modules` مش في Git (بسبب `.gitignore`).
+- `web-before-restore-*` و `mowakkil-backup*` مش في Git.
+
+### بيئة التشغيل
+- Windows 10 (19045.6466)
+- PowerShell 5.1
+- Node.js (عبر npx)
+- Git (متسطب حديثاً)
+- Python 3.14 (لـ rembg/generate-logos.py)
+- Wrangler 4.152.0
+
+---
+
+## 🎯 نقطة الاستكمال (لو المحادثة اتقفلت)
+
+**ابعت الجملة دي في محادثة جديدة:**
+
+> "أنا بكمّل تحسينات مشروع مُوكِّل. المشروع في `C:\Users\hi\mowakkil`. اقرأ الملف `C:\Users\hi\mowakkil\PROGRESS-COMPLETE.md` عشان تفهم كل حاجة. عايز أبدأ بالخطوة [اللوجو/الألوان/الموبايل/الإشعارات]."
+
+**وبعد ما تقرأ الملف، هنكمل من حيث وقفنا.**
+
+---
+---
+
+## 🔄 تحديثات جلسة 2026-11-13 (ما بعد السجل الأول)
+
+### ✅ اللي اتعمل في الجلسة دي
+1. **تنضيف CSS**: عملنا `styles.clean.css` (من 106 كيلو لـ 74 كيلو) وشلنا الملفات الغريبة.
+2. **اللوجو الجديد**: اتحط في كل الصفحات (`logos/logo-md.png` و `logo-lg.png`).
+3. **الهوية البصرية الجديدة**: عملنا `brand-theme.css` (كحلي `#0F172A` + ذهبي `#D4AF37`) وطبقناه في كل الصفحات.
+4. **القضاء على البنفسجي**: استبدلنا كل أكواد `#6366F1`, `#4F46E5`, `#8B5CF6` بالذهبي/الكحلي.
+5. **إصلاح الأزرار**: بقت كحلي مع حدود ذهبية، والنصوص أبيض واضحة (زي أزرار الإجراءات السريعة والتفاصيل).
+6. **إصلاح الاسم العربي**: عدلنا `getCurrentUser` في `api.js` عشان يستخدم `TextDecoder` (UTF-8) بدل `atob` العادي. الاسم "محمد نجدي" ظهر صح.
+7. **إصلاح القائمة الجانبية**: المربعات اللي كانت فوق "مسؤول المكتب" اختفت.
+8. **Git**: كل التعديلات دي معمولها commit.
+
+### 📂 الملفات المهمة اللي اتعدلت
+- `web/assets/brand-theme.css` ⭐ (جديد - الهوية الكاملة).
+- `web/assets/styles.clean.css` (جديد - نسخة نظيفة).
+- `web/js/api.js` (معدل - `getCurrentUser` لـ UTF-8).
+- `web/index.html` (معدل - اللوجو الجديد + `brand-theme.css`).
+- `web/pricing.html`, `signup.html`, `pay.html`, `client/index.html` (كلهم محدثين).
+
+### ⏳ المهام القادمة (اللي لسه)
+1. **اختبار شامل**: `/pricing`, `/signup`, `/pay`, `/client`.
+2. **النشر على Cloudflare**:
+   ```powershell
+   cd C:\Users\hi\mowakkil\web
+   npx wrangler pages deploy . --project-name=mowakkil-2026 --branch=production --commit-dirty=true
+## 🔄 تحديثات جلسة 2026-11-22 — إصلاح التخزين الخارجي (Backblaze B2)
+
+### المشكلة
+- الرفع كان بيفشل (500) لأن `@aws-sdk/client-s3` مش مناسب لـ Worker + B2.
+- رابط التحميل في القضايا والمهام كان نسبي (`/api/documents/ID/download`) وبدون Authorization، فكان بيفشل حتى لو الملف اترفع.
+
+### الحل (اتنفذ واشتغل: الرفع والتحميل من القضايا)
+- استبدلنا AWS SDK بـ `aws4fetch` (توقيع SigV4 + fetch عادي).
+- الـ Worker وسيط مصادقة: يتحقق من JWT والمكتب والحجم والنوع، يرفع/يجيب/يمسح من B2، ويكتب الصف في D1.
+
+### الملفات اللي اتعدلت
+| الملف | التعديل |
+|-------|---------|
+| `worker/lib/b2.js` | جديد: `b2Put` / `b2Get` / `b2Delete` (بيتحقق من شكل `B2_ENDPOINT`، والـ bucket من `B2_BUCKET` أو `mowakkil`) |
+| `worker/routes/documents.js` | اتعاد كتابته بالدوال دي، ولو فشل INSERT في D1 بيتمسح الملف من B2، والتحميل بـ `filename*=UTF-8''` |
+| `web/js/api.js` | إضافة `downloadDocument(id, name)` (fetch على `API_BASE` مع Bearer ثم blob) |
+| `web/js/views/cases.js` | استيراد `downloadDocument` + زر `data-dl` بدل الرابط + handler |
+| `web/js/views/tasks.js` | نفس تعديل cases.js |
+| `package.json` | إزالة `@aws-sdk/client-s3` و `@aws-sdk/s3-request-presigner` و `@aws-sdk/xml-builder` و `sigv4-lite` (و `aws4fetch` فضلت) |
+| `wrangler.toml` | حذف بلوك `[alias]` الخاص بـ xml-builder |
+
+### عقد الـ API
+- `POST /api/documents?case_id=&task_id=&doc_type=&file_name=` بجسم الملف خام (مش FormData) و `Content-Type` للملف.
+- الامتدادات المسموحة: pdf, doc, docx, jpg, jpeg, png, txt. الحد 10 ميجا.
+- `GET /api/documents/:id/download` يحتاج Bearer ويتحقق من `office_id`.
+- `DELETE /api/documents/:id` يمسح من B2 ويعمل soft delete (`deleted_at`) في D1.
+- عمود `r2_key` في جدول `documents` هو مفتاح الملف في B2 (الاسم مضلل بس مش لازم يتغير).
+
+### الأسرار (Secrets)
+- لازم `B2_ENDPOINT` + `B2_KEY_ID` + `B2_APP_KEY` (والـ `B2_BUCKET` اختياري).
+- خطأ `InvalidAccessKeyId` ظهر لما الـ endpoint كان على region غلط، مش بسبب المفتاح. الـ endpoint لازم يطابق صفحة الباكت في Backblaze بالظبط.
+- حفظ سر من PowerShell (من فولدر المشروع):
+  ```powershell
+  cd C:\Users\hi\mowakkil
+  "القيمة" | npx wrangler secret put B2_ENDPOINT
+  ```
+- حفظ الأسرار بيتطبق فوراً من غير deploy، لكن تغيير الكود محتاج `npm run deploy` (للـ Worker) و`npm run deploy:web` (للواجهة).
+
+### أوامر فحص الأخطاء
+```powershell
+cd C:\Users\hi\mowakkil
+npx wrangler tail mowakkil-api --format pretty
+```
+- لازم تتشغل من فولدر المشروع، وإلا تطلع `Required Worker name missing`.
+- في PowerShell مفيش `grep`؛ البديل:
+  ```powershell
+  Get-ChildItem worker,scripts,tests -Recurse -File | Select-String -Pattern "كلمة"
+  ```
+
+### الاختبارات
+- `tests/documents.test.js` شغال (رفض أكبر من 10 ميجا، ورفض الامتدادات غير المسموحة).
+- اقتراح لسه ما اتضافش: اختبارات لرفض الطلب من غير توكن (401)، الملف الفاضي (400)، وقضية مش تابعة للمكتب (400).
+- اختبار الرفع الفعلي على B2 محتاج mock لـ `fetch`، واتأجل.
+
+### ⚠️ أمان (مهم)
+- مفتاح B2 اتكتب في محادثة قبل كده، لازم يتمسح من Backblaze (Application Keys) ويتعمل مفتاح جديد ويتحفظ بالأمر اللي فوق.
+- ملف PROGRESS ده فيه بيانات دخول وأسرار نصية (باسوردات + SETUP_KEY). لا ترفعه على Repo عام ولا تبعته في محادثات، والأفضل تشيل البيانات الحساسة منه.
+
+### ✅ حد المساحة لكل مكتب حسب الباقة (اتنفذ 2026-11-22، محتاج deploy واختبار)
+- حدود التخزين كانت موجودة أصلاً في `LIMITS` داخل `worker/middleware/feature-gate.js` (`max_storage_mb`): free 100 / starter 1024 / pro 10240 / plus 51200 / lifetime_basic 500 / lifetime_pro 5000 (و`-1` = غير محدود).
+- أضفنا `requireStorage(env, officeId, incomingBytes)` في نفس الملف: بتحسب `SUM(file_size)` للمستندات غير المحذوفة + حجم الملف الجديد بالبايت، ولو عدّت الحد بترجع 403 بكود `LIMIT_REACHED` و`limit_type: max_storage_mb`.
+- `worker/routes/documents.js`: استدعاء `requireStorage` في `upload()` بعد فحص حجم الملف وقبل الرفع على B2.
+- `web/js/api.js`: `uploadDocument` بيعرض `showLimitModal(err)` لما الرد 403 + `LIMIT_REACHED`.
+- عرض الاستهلاك موجود أصلاً: `GET /api/subscription/usage` وصفحة "اشتراكي".
+- ملاحظة: الحدود الفعلية (للتنفيذ) في الكود (`LIMITS`)، وجدول `plan_features` في D1 للعرض في صفحة التسعير فقط. أي تغيير في أرقام المساحة لازم يتعمل في الاتنين.
+- لسه: deploy (`npm run deploy` و`npm run deploy:web`) وتجربة رفع على مكتب قريب من حده.
+
+### ✅ إزالة الباقة المجانية + توزيع المساحة على 10 جيجا (2026-11-22)
+- المساحة المتاحة حالياً: 10 جيجا مجانية على Backblaze (لحد ما يتم شراء مساحة أكتر).
+- حدود المساحة الجديدة (ميجا): تجربة 15 يوم = 200 (بغض النظر عن الباقة)، starter 500، pro 2000، plus 5000، lifetime_basic 500، lifetime_pro 2000.
+- سقف المنصة كلها `PLATFORM_STORAGE_CAP_MB` = 9500 (في feature-gate.js، ويتغير بمتغير بيئة بنفس الاسم في `[vars]` في wrangler.toml). لما تشتري مساحة أكتر ارفع الرقم ده والحدود.
+- `requireStorage` بتفحص سقف المنصة أولاً (503 كود `PLATFORM_STORAGE_FULL`) ثم حد المكتب (403 كود `LIMIT_REACHED`).
+- الباقة المجانية: اتشالت من `FEATURES`/`LIMITS`/`PLAN_NAMES`، وبقى فيه `FALLBACK_*` داخلي لأي اشتراك قديم باسم `free`. و`changePlan` بقت تحوّل كل التغييرات لصفحة الدفع.
+- `plan_features`: الباقة free تتخفى (`is_active = 0`) والأرقام تتحدّث بـ `migrations/023_storage_limits_remove_free.sql`.
+- صفحة التسعير و"اشتراكي": بقت بتعرض التخزين (كارت الباقة + جدول المقارنة + شريط الاستهلاك).
+- ⚠️ لسه: فحص أي مكتب لسه `plan = 'free'` في `subscriptions` وتحديد مصيره، وفحص `signup.js` و`cron/trial-expiry.js` و`superadmin.js` و`payment-requests.js` من أي استخدام لكلمة `'free'`.
+- ⚠️ أرقام الحدود موجودة في 3 أماكن (`LIMITS` في الكود، جدول `plan_features`، و`MOCK_PLANS` في pricing.js). لازم تتزامن، والأفضل مستقبلاً إن التنفيذ يقرأ من الجدول.
+
+### 🎯 جملة الاستكمال (لو المحادثة اتقفلت)
+> "أنا بكمّل مشروع مُوكِّل في `C:\Users\hi\mowakkil`. التخزين على Backblaze B2 شغال بـ aws4fetch. اقرأ ملف PROGRESS.md (آخر قسم: تحديثات 2026-11-22). عايز أختبر حد المساحة لكل باقة وأكمل التحسينات."
+
+---
+
+## 🔄 تحديثات 2026-11-23 — (اتنشر) — commit `6b4e13c`
+**المشروع دلوقتي في:** `D:\Mohamed Walid\mowakkil` (Git بقى متسطب، ومفيش remote لسه).
+**Worker version:** `9d93852c-06ea-4a12-92cf-a384c91d1de4` (الرجوع للسابقة: `ba0b2d65-7b3c-4ba0-9f1c-6513ad904dab` بـ `npx wrangler rollback`).
+
+### الذكاء الاصطناعي (مجاني بالكامل)
+- `worker/services/llm.js`: Groq gpt-oss-120b → Gemini 2.5 Flash → Groq Llama 3.3 → Workers AI. اتشال Claude (كان موديل متوقف + محتاج رصيد).
+- `worker/services/legal-skills.js`: 22 مهارة قانونية لـ 32 نوع قضية (بتتحقن في التحليل). ⚠️ محتاجة مراجعة محامي للمواعيد المكتوب جنبها "(يُراجع)".
+- تحليل القضية: `POST /api/cases/:id/analyze` بيقرا مرفقات القضية تلقائياً (`worker/services/doc-text.js` بـ AI.toMarkdown) + المهارة + المواد. زرار "🤖 تحليل ذكي" في القضايا.
+- الشات بيحفظ المحادثات (`routes/chat.js` اتصلح)، حد يومي 150 طلب/مكتب (`AI_DAILY_LIMIT`).
+- ⚠️ Vectorize `law-articles-m3` كان فاضي (0 vectors) → زرار "📚 فهرسة المواد القانونية" في لوحة السوبر أدمن. لازم يتداس مرة. وزرار "🩺 فحص النماذج" للتأكد من مفاتيح Groq/Gemini.
+- ثغرات اتقفلت: generate-doc كان بيقرا قضية مكتب تاني، والشات كان بيسمح بإضافة رسايل لمحادثة مكتب تاني.
+
+### المستندات
+- 14 تصنيف (توكيل، صحيفة دعوى، حكم...) + تعديل + حذف (للأدمن أو اللي رفع) — `web/js/attachments.js`.
+- التخزين في B2 مترتب: `office_X/cases/<id>/<نوع>/...`. تحميل الملفات القديمة المحفوظة في D1 اتصلح.
+
+### التصدير
+- اتشالت الأزرار العشوائية من كل الصفحات. `web/js/exporter.js` (Excel/Word/PDF بالعربي RTL) في: القضايا، الموكلين، المهام، الأتعاب، التقرير الشهري، التحليل الذكي، توليد المستندات.
+
+### التصميم
+- `web/assets/theme.css` بدل `brand-theme.css`. أيقونات خطية `web/js/icons.js` بتحوّل الإيموجي تلقائياً. `web/js/chart-theme.js` للرسوم. لوحة التحكم اتعملت من جديد. Sidebar ثابت على الكمبيوتر.
+
+### تطبيق أندرويد (APK)
+- `web/downloads/mowakkil.apk` (TWA, `com.mowakkil.app`, v1.0.0) + `web/.well-known/assetlinks.json`.
+- زرار التثبيت: تثبيت أصلي → APK على أندرويد → خطوات آيفون.
+- نسخة جديدة: `powershell -ExecutionPolicy Bypass -File android\build-apk.ps1 -Version 1.0.1`
+- 🔐 `android/mowakkil-release.keystore` + `android/KEYSTORE-SECRETS.txt` مش في Git — **لازم نسخة احتياطية**.
+
+### Migrations
+- 023 كانت متطبقة. 024 (analyses.case_id) و025 (documents.extracted_text) و026 (documents.notes) اتطبقوا.
+
+### النشر
+- Worker: `npx wrangler deploy` — الويب: `npm run deploy:web` (اتصلح يروح لـ mowakkil-2026 / production).
+
+---
+
+## 🔄 تحديثات 2026-11-23 (الجزء التاني) — اتنشر — commits `195715c` → `73bf52c` → `fb72442` → (التثبيت)
+
+### السرعة
+- الشاشات بتتحمل عند الفتح بس (`registerView(name, () => import(...))` في `web/js/main.js` + `prefetchViews` في `router.js`).
+- صورة تمثال العدالة: 856KB → 30KB (`web/assets/img/lady-justice.webp` + png احتياطي).
+- Chart.js بقى `defer`، والخط الأساسي `preload`.
+- اللاندنج: 100 طلب / 1.4MB → 33 طلب / 539KB، ومفيش إعادة تحميل.
+- `GET /api/clients` بيرجع `account_status` لكل موكل (استعلام واحد بدل طلب لكل موكل).
+- كاش 20 ثانية داخل الـ Worker لاستعلام المستخدم (`worker/lib/auth.js`) والاشتراك (`worker/middleware/subscription.js`). ⚠️ يعني تعطيل مستخدم/مكتب بياخد لحد 20 ثانية.
+
+### الكاش التلقائي
+- `web/service-worker.js` اتعاد كتابته: network-first للكود، stale-while-revalidate للصور والخطوط، مفيش `CACHE_NAME` يدوي ولا reload إجباري.
+- `web/_headers`: no-cache للكود، كاش طويل للخطوط والصور.
+
+### اللاندنج / الدخول / التسجيل
+- `web/assets/landing.css` اتعاد بالكامل على توكنز `theme.css` (كحلي + ذهبي). `signup.html` بقى على `theme.css` + `landing.css`.
+- تداخل اللاندنج والدخول اتحل: سكريبت في `<head>` بيحدد الشاشة قبل الرسم (`html[data-boot]`)، و`main.js` بيشيله أول ما يشتغل. `/#login` بيفتح الدخول مباشرة.
+
+### الموكلين + بوابة الموكل
+- `web/js/api.js`: أي POST/PUT/PATCH/DELETE ناجح بيمسح كاش القراءة (قبل كده القوايم كانت بتفضل قديمة 10 ثواني في النظام كله).
+- زرار "تعطيل الحساب" لأي موكل عنده حساب (حتى اللي داخل بالرابط بس)، والدعوة الملغية ليها حالة + زرار دعوة جديدة.
+- البوابة بنفس هوية التطبيق (`web/client/assets/styles.css`)، أيقونات التطبيق، أرقام لاتينية، ومبقتش بتستخدم `brand-theme.css`.
+- اتشال `/api/client-portal/test-hash` واللوجز اللي كانت بتكتب جزء من بصمة الباسورد.
+- اتمسحت ملفات زيادة من `web/client` (txt فاضية + نسخة قديمة من portal.js).
+
+### تثبيت بوابة الموكل كتطبيق
+- `web/client/manifest.webmanifest` جديد (اسم "بوابة الموكل"، `start_url` و`scope` = `/client/`) → بيتثبت تطبيق مستقل مش اختصار، ومش بيفتح تطبيق المحامي.
+- زرار "تثبيت التطبيق" بأيقونة تنزيل: نافذة التثبيت الأصلية (Chrome/Edge/Samsung) وإلا خطوات حسب الجهاز.
+- آيفون: التطبيق المتثبت ليه تخزين منفصل عن Safari → لو الموكل داخل بالرابط بس، بتظهر له ملاحظة يعمل باسورد الأول.
+- اتأكدنا بـ Chrome: مفيش installability errors.
+
+### الاختبار المحلي (من غير ما نلمس البيانات الحقيقية)
+- قاعدة محلية بهيكل الإنتاج بس: `npx wrangler d1 export mowakkil-db-v2 --remote --no-data --output schema.sql` ثم `npx wrangler d1 execute mowakkil-db-v2 --local --file schema.sql`.
+- تشغيل: `npx wrangler dev --local --port 8787 --var JWT_SECRET:<أي قيمة>` + `npx serve web -l 3000`. الواجهة والبوابة بيكلموا `localhost:8787` تلقائياً على localhost.
+
+### ⚠️ لسه مفتوح
+- مفيش Git remote — لازم repo **خاص** قبل الرفع (الملف ده فيه باسوردات).
+- رابط دعوة الموكل = دخول دائم من غير باسورد (الكود ملوش انتهاء). التعطيل بقى بيقفله.
+- `styles.css` و`styles.clean.css` متكررين (لسه الاتنين محملين).
+
+---
+
+**نهاية السجل الشامل.**
