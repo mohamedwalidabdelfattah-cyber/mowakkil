@@ -2,8 +2,12 @@
 // بوابة الموكل — نقطة الدخول
 
 import { initPortal } from './portal.js?v=7';
+import { startIconify } from '/js/icons.js';
 
 async function boot() {
+  // نفس أيقونات التطبيق بدل الإيموجي
+  startIconify(['.topbar-actions', '#login-gate', '#invite-gate', '#dashboard', '#toast-host']);
+
   // 1. نربط الأحداث الأول (عشان الصفحة تكون جاهزة لأي حاجة)
   initPortal.bindEvents();
 

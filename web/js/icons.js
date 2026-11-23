@@ -44,6 +44,7 @@ const P = {
   phone: '<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>',
   mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
   rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>',
@@ -87,7 +88,7 @@ const EMOJI = {
   '📚': 'book', '🧠': 'brain', '🎯': 'target', '🥊': 'shield', '➡️': 'arrowLeft', '❓': 'help', '💪': 'thumbsUp',
   '🪪': 'idCard', '📷': 'camera', '🩺': 'activity', '🤝': 'users', '🏠️': 'home', '📭': 'inbox', '💬': 'message', '🔗': 'link', '🌐': 'globe',
   '🌳': 'folder', '📖': 'book', '💹': 'trendUp', '🏦': 'landmark', '🏢': 'landmark', '🎛️': 'settings',
-  '📲': 'download', '👑': 'shield',
+  '📲': 'download', '👑': 'shield', '🔐': 'lock', '🔑': 'lock', '🚪': 'logout',
 };
 const DROP = ['👋', '🎉', '🙌'];  // زخرفة بنشيلها
 
@@ -122,7 +123,7 @@ const SKIP_SEL = '.no-icons, .chat-ai-text, .chat-bubble-user, .doc-output, [con
 function convertTextNode(node) {
   const text = node.nodeValue;
   RE.lastIndex = 0;
-  if (!text || !RE.test(text)) return;
+  if (!node.parentNode || !text || !RE.test(text)) return;
   RE.lastIndex = 0;
   const frag = document.createDocumentFragment();
   let last = 0;
@@ -157,10 +158,12 @@ export function iconify(root) {
 }
 
 let started = false;
-export function startIconify() {
+const DEFAULT_TARGETS = ['#view-host', '#sa-body', '#drawer', '#toast-host', '#landing-view', '#login-gate-view', '.signup-wrapper'];
+// selectors: لصفحات تانية (زي بوابة الموكل) — لازم تكون عناصر مش متداخلة في بعض
+export function startIconify(selectors = DEFAULT_TARGETS) {
   if (started) return;
   started = true;
-  const targets = ['#view-host', '#sa-body', '#drawer', '#toast-host', '#landing-view', '#login-gate-view', '.signup-wrapper'].map(s => document.querySelector(s)).filter(Boolean);
+  const targets = selectors.flatMap(s => [...document.querySelectorAll(s)]);
   const obs = new MutationObserver(muts => {
     for (const m of muts) {
       m.addedNodes.forEach(n => {
@@ -173,7 +176,7 @@ export function startIconify() {
   // النوافذ المنبثقة (modals) بتتضاف على body مباشرة
   const bodyObs = new MutationObserver(muts => {
     for (const m of muts) m.addedNodes.forEach(n => {
-      if (n.nodeType === 1 && (n.matches?.('.modal-overlay, .modal, [id$="-modal"]'))) {
+      if (n.nodeType === 1 && (n.matches?.('.modal-overlay, .modal, [id$="-modal"], .settings-modal-backdrop, .install-sheet'))) {
         iconify(n);
         obs.observe(n, { childList: true, subtree: true });
       }

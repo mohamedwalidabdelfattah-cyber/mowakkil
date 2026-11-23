@@ -15,7 +15,6 @@ export const publicRoutes = [
   { method: 'POST', path: '/api/client-portal/login',          handler: clientLogin },
   { method: 'POST', path: '/api/client-portal/accept-invite',  handler: acceptInvite },
   { method: 'POST', path: '/api/client-portal/quick-login',    handler: quickLogin },
-  { method: 'POST', path: '/api/client-portal/test-hash',      handler: testHash },
   { method: 'GET',  path: /^\/api\/client-portal\/invite\/([\w-]+)$/, handler: getInvite },
 ];
 
@@ -65,25 +64,6 @@ function generateInviteCode() {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
-}
-
-// ============================================================
-// Test Hash
-// ============================================================
-async function testHash({ request, env }) {
-  const b = await safeJson(request);
-  if (!b || !b.password) return fail(env, 'password مطلوب', 400);
-
-  const { hash, salt } = await hashPassword(b.password);
-  const verified = await verifyPassword(b.password, hash, salt);
-  const wrongVerified = await verifyPassword('wrong_password', hash, salt);
-
-  return ok(env, {
-    hash: hash.substring(0, 20) + '...',
-    salt: salt.substring(0, 20) + '...',
-    verified_correct: verified,
-    verified_wrong: wrongVerified,
-  });
 }
 
 // ============================================================
@@ -142,15 +122,7 @@ async function clientLogin({ request, env }) {
     return fail(env, 'بيانات الدخول غلط', 401);
   }
 
-  console.log('Login: user found', JSON.stringify({
-    user_id: user.id,
-    client_id: user.client_id,
-    stored_hash_prefix: user.password_hash?.substring(0, 20),
-    password_length: password.length,
-  }));
-
   const verifyResult = await verifyPassword(password, user.password_hash, user.salt);
-  console.log('Login: verify result =', verifyResult);
 
   if (!verifyResult) {
     await audit(env, { action: 'client_login_failed', entity: 'client_user', request, metadata: { email: cleanEmail } });
@@ -323,25 +295,9 @@ async function setPassword({ request, env }) {
 
   const { hash, salt } = await hashPassword(password);
 
-  console.log('setPassword:', JSON.stringify({
-    user_id: user.id,
-    hash_prefix: hash.substring(0, 20),
-    salt_prefix: salt.substring(0, 20),
-  }));
-
   await env.DB.prepare(
     `UPDATE client_users SET password_hash = ?, salt = ? WHERE id = ?`
   ).bind(hash, salt, user.id).run();
-
-  const check = await env.DB.prepare(
-    `SELECT password_hash, salt FROM client_users WHERE id = ?`
-  ).bind(user.id).first();
-
-  console.log('setPassword: after save =', JSON.stringify({
-    stored_hash_prefix: check?.password_hash?.substring(0, 20),
-    stored_salt_prefix: check?.salt?.substring(0, 20),
-    match: check?.password_hash === hash,
-  }));
 
   await audit(env, {
     office_id: user.office_id, user_id: user.id,

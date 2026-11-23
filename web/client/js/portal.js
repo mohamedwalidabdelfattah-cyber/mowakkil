@@ -62,7 +62,8 @@ function esc(s) {
 }
 
 function fmtMoney(n) {
-  return Number(n || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
+  // نفس شكل الأرقام في التطبيق (أرقام لاتينية بفواصل)
+  return Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 function skeleton(n = 3) {
