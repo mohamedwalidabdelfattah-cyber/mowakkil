@@ -99,6 +99,15 @@ async function handle(res) {
   if (res.status === 401) { onAuthExpired(); throw new Error('انتهت الجلسة'); }
   if (res.status === 402) { onTrialExpired(); throw new Error('انتهت التجربة'); }
 
+  // أول استخدام للذكاء الاصطناعي على بيانات موكلين → نافذة اختيار الخصوصية والموافقة
+  if (res.status === 412) {
+    const body = await res.clone().json().catch(() => ({}));
+    if (body?.code === 'AI_CONSENT_REQUIRED') {
+      import('./ai-privacy.js').then(m => m.showAiConsentModal()).catch(() => {});
+      throw new Error(body.error || 'محتاج موافقة على خصوصية الذكاء الاصطناعي');
+    }
+  }
+
   if (res.status === 403) {
     const cloned = res.clone();
     try {

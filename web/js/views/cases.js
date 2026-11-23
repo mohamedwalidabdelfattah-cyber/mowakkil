@@ -648,6 +648,28 @@ function mountAnalysisExport(out, r = {}, c = {}) {
   }), { formats: ['word', 'pdf'], filename: `تحليل_قضية_${c.case_number || ''}` });
 }
 
+// مراجعة الأسانيد آلياً (من السيرفر: verified / not_found / law_unknown)
+function citeBadge(status) {
+  if (status === 'verified') return '<span class="cite-badge ok">✓ متحقق</span>';
+  if (status === 'not_found') return '<span class="cite-badge warn">⚠️ غير متحقق</span>';
+  if (status === 'law_unknown') return '<span class="cite-badge info">ℹ️ يُراجع يدوياً</span>';
+  return '';
+}
+
+function citationsSection(c) {
+  if (!c || !c.checked) return '';
+  const items = (c.items || []).map(i => `<li>${esc(i.citation)} ${citeBadge(i.status)}</li>`).join('');
+  return `
+    <div class="card cite-check" style="margin-bottom:10px">
+      <h4 style="margin:0 0 6px;font-size:14px">🔎 مراجعة الأسانيد آلياً</h4>
+      <div><span class="cite-ok">${esc(c.verified || 0)} متحقق</span> من ${esc(c.checked)} استشهاد في قاعدة المواد
+        ${c.not_found ? ` · <span class="cite-warn">${esc(c.not_found)} غير متحقق</span>` : ''}
+        ${c.law_unknown ? ` · ${esc(c.law_unknown)} بقوانين مش في القاعدة` : ''}</div>
+      ${items ? `<ul style="margin:8px 0 0;padding-inline-start:20px">${items}</ul>` : ''}
+      <div class="meta" style="font-size:12px;margin-top:6px">«غير متحقق» معناها إن المادة مش موجودة في قاعدة المواد عندنا — ممكن تكون غلط أو القاعدة ناقصة. راجعها على النص الرسمي قبل التقديم.</div>
+    </div>`;
+}
+
 function renderCaseAnalysis(r = {}, provider = '') {
   if (r._raw) {
     return `<div class="card"><h4>📝 التحليل</h4><div style="white-space:pre-wrap">${esc(r.summary || '')}</div></div>`;
@@ -671,7 +693,8 @@ function renderCaseAnalysis(r = {}, provider = '') {
       ${prob ? section('🎯', 'تقييم فرص النجاح', `<strong style="color:${probColor}">${esc(prob)}</strong>
         <div class="meta" style="margin-top:4px">${esc(r.success_reasoning || '')}</div>`) : ''}
       ${section('📚', 'القوانين والمواد المنطبقة', list(r.applicable_laws, x => typeof x === 'string' ? esc(x)
-        : `<strong>${esc(x.law || '')}</strong>${x.articles ? ` — ${esc(x.articles)}` : ''}<div class="meta">${esc(x.relevance || '')}</div>`))}
+        : `<strong>${esc(x.law || '')}</strong>${x.articles ? ` — ${esc(x.articles)}` : ''}${citeBadge(x.verification)}<div class="meta">${esc(x.relevance || '')}</div>`))}
+      ${citationsSection(meta.citations)}
       ${section('💪', 'نقاط القوة', list(r.strengths))}
       ${section('⚠️', 'نقاط الضعف', list(r.weaknesses))}
       ${section('📋', 'الدفوع الشكلية', list(r.formal_defenses, x => typeof x === 'string' ? esc(x)
@@ -695,6 +718,7 @@ function renderCaseAnalysis(r = {}, provider = '') {
       <div class="meta" style="font-size:12px;margin-top:6px">
         ${meta.skill ? `🧠 المهارة المستخدمة: ${esc(meta.skill)} · ` : ''}📚 مواد من الداتابيز: ${esc(meta.articles_found ?? 0)}
         ${provider ? ` · 🤖 ${esc(provider)}` : ''}
+        ${meta.privacy ? ` · 🔒 ${esc({ strict: 'وضع سري', balanced: 'وضع متوازن', off: 'موقوف' }[meta.privacy.mode] || meta.privacy.mode)}${meta.privacy.masked ? ` (اتخفى ${esc(meta.privacy.masked)} بيان شخصي)` : ''}` : ''}
         <br>⚠️ تحليل مساعد بالذكاء الاصطناعي — لازم مراجعته من محامٍ قبل الاعتماد عليه، وأي ميعاد أو رقم مادة يُراجع على النص الرسمي.
       </div>
     </div>`;

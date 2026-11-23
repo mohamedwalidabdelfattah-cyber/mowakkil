@@ -83,9 +83,12 @@ async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temper
   return cleanMessage({ ...msg, role: 'assistant' });
 }
 
-async function callWorkersAI(env, { messages, maxTokens, temperature }) {
+// الوضع السري: نماذج Cloudflare بس. Llama 4 Scout سياقه طويل (مناسب لمستندات القضية) وأرخص في الحصة.
+const STRICT_MODELS = ['@cf/meta/llama-4-scout-17b-16e-instruct', WORKERS_AI_MODEL];
+
+async function callWorkersAI(env, { messages, maxTokens, temperature, model = WORKERS_AI_MODEL }) {
   if (!env.AI) throw new Error('Workers AI binding مش موجود');
-  const r = await env.AI.run(WORKERS_AI_MODEL, {
+  const r = await env.AI.run(model, {
     messages: messages.map(m => {
       if (m.role === 'tool') return { role: 'user', content: `نتيجة البحث: ${m.content}` };
       return { role: m.role, content: m.content || '' };
@@ -109,43 +112,70 @@ export async function chatCompletion(env, {
   temperature = 0.2,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   skip = [],
+  // خصوصية بيانات الموكلين:
+  //   route: 'any' (أسئلة عامة) | 'balanced' (من غير OpenRouter) | 'strict' (Cloudflare بس)
+  //   masker: من lib/redact.js — بيخفي البيانات الشخصية قبل الإرسال ويرجّعها في الرد
+  route = 'any',
+  masker = null,
 } = {}) {
   const errors = [];
-  let attempts = [];
-  try { attempts = await buildAttempts(env); } catch (e) { errors.push(`discovery: ${e.message}`); }
+  const outMessages = masker
+    ? messages.map(m => (typeof m.content === 'string' ? { ...m, content: masker.mask(m.content) } : m))
+    : messages;
+  const finish = (message, provider, model) => {
+    // tool_calls بتفضل بالرموز (عشان البحث على النت ميطلعش فيه أسماء حقيقية)
+    if (masker && message.content) message = { ...message, content: masker.unmask(message.content) };
+    return { message, provider, model, errors };
+  };
 
-  for (const p of attempts) {
-    if (skip.includes(p.name)) continue;
-    try {
-      const message = await callOpenAICompatible(env, p, { messages, tools, maxTokens, temperature, timeoutMs });
-      return { message, provider: p.name, model: p.model, errors };
-    } catch (e) {
-      console.warn(`LLM provider failed: ${e.message}`);
-      errors.push(e.message);
-      // النموذج اتقفل/اتشال → نشيله من القايمة عشان الطلبات الجاية متضيعش وقت عليه
-      if (e.modelGone) await markModelGone(env, p.name, p.model);
+  if (route !== 'strict') {
+    let attempts = [];
+    try { attempts = await buildAttempts(env); } catch (e) { errors.push(`discovery: ${e.message}`); }
+    // OpenRouter المجاني ممكن يبعت لمزودين بيتدربوا على البيانات → مستبعد لأي بيانات موكلين
+    if (route === 'balanced') attempts = attempts.filter(p => p.name !== 'openrouter');
+
+    for (const p of attempts) {
+      if (skip.includes(p.name)) continue;
+      try {
+        const message = await callOpenAICompatible(env, p, { messages: outMessages, tools, maxTokens, temperature, timeoutMs });
+        return finish(message, p.name, p.model);
+      } catch (e) {
+        console.warn(`LLM provider failed: ${e.message}`);
+        errors.push(e.message);
+        // النموذج اتقفل/اتشال → نشيله من القايمة عشان الطلبات الجاية متضيعش وقت عليه
+        if (e.modelGone) await markModelGone(env, p.name, p.model);
+      }
     }
   }
 
   if (!skip.includes('workers-ai')) {
-    try {
-      const message = await callWorkersAI(env, { messages, maxTokens, temperature });
-      return { message, provider: 'workers-ai', errors };
-    } catch (e) {
-      console.warn(`LLM provider failed: workers-ai ${e.message}`);
-      errors.push(`workers-ai: ${e.message}`);
+    const models = route === 'strict' ? STRICT_MODELS : [WORKERS_AI_MODEL];
+    for (const model of models) {
+      try {
+        const message = await callWorkersAI(env, { messages: outMessages, maxTokens, temperature, model });
+        return finish(message, 'workers-ai', model);
+      } catch (e) {
+        console.warn(`LLM provider failed: workers-ai/${model} ${e.message}`);
+        errors.push(`workers-ai/${model}: ${e.message}`);
+      }
     }
   }
 
+  if (route === 'strict') {
+    const quota = errors.some(e => /4006|daily free allocation|neurons|quota/i.test(e));
+    throw new Error(quota
+      ? 'الحصة اليومية المجانية للوضع السري (Cloudflare) خلصت. جرب بكرة، أو حوّل المكتب للوضع "المتوازن" من الإعدادات.'
+      : 'نموذج الوضع السري (Cloudflare) مش متاح دلوقتي. جرب تاني بعد دقيقة.');
+  }
   throw new Error('كل نماذج الذكاء الاصطناعي المجانية مش متاحة دلوقتي. جرب تاني بعد دقيقة.');
 }
 
 /** نص بسيط: system + user → نص الرد */
-export async function completeText(env, { system, prompt, maxTokens = 1500, temperature = 0.2 }) {
+export async function completeText(env, { system, prompt, maxTokens = 1500, temperature = 0.2, route = 'any', masker = null }) {
   const messages = [];
   if (system) messages.push({ role: 'system', content: system });
   messages.push({ role: 'user', content: prompt });
-  const { message, provider } = await chatCompletion(env, { messages, maxTokens, temperature });
+  const { message, provider } = await chatCompletion(env, { messages, maxTokens, temperature, route, masker });
   return { text: message.content || '', provider };
 }
 

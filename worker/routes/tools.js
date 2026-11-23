@@ -2,6 +2,7 @@
 import { ok, fail } from '../lib/response.js';
 import { calcFee } from '../services/fee-calc.js';
 import { legalSearch, generateDocument } from '../services/legal-search.js';
+import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { isStr, safeJson } from '../lib/validation.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 
@@ -35,7 +36,11 @@ async function generateDoc({ request, env, officeId }) {
   const b = await safeJson(request);
   if (!b || !isStr(b.doc_type, 100)) return fail(env, 'اختار نوع المستند', 400);
   if (!isStr(b.facts, 3000)) return fail(env, 'اكتب الوقائع', 400);
+  // الوقائع والأطراف بيانات موكلين → موافقة المكتب + توجيه حسب وضع الخصوصية
+  const privacy = await requireClientDataAi(env, officeId);
+  if (privacy.block) return privacy.block;
   return ok(env, await generateDocument(env, {
+    route: routeFor(privacy.mode),
     doc_type: b.doc_type,
     facts: b.facts,
     parties: b.parties || '',

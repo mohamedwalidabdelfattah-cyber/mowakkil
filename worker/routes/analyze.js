@@ -8,6 +8,9 @@ import { findRelevantArticles } from '../services/legal-search.js';
 import { getSkill, formatSkill, GENERAL_METHOD } from '../services/legal-skills.js';
 import { getCaseDocumentsText } from '../services/doc-text.js';
 import { toInt } from '../lib/validation.js';
+import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
+import { createMasker } from '../lib/redact.js';
+import { verifyResult } from '../lib/citations.js';
 
 export const routes = [
   { method: 'POST', path: '/api/analyze/contract', handler: analyzeContract },
@@ -20,8 +23,10 @@ export const routes = [
   { method: 'GET',  path: /^\/api\/cases\/(\d+)\/analyses$/, handler: listCaseAnalyses },
 ];
 
-async function runJsonPrompt(env, system, prompt, maxTokens = 3000) {
+async function runJsonPrompt(env, system, prompt, maxTokens = 3000, { route = 'any', masker = null } = {}) {
   const { message, provider } = await chatCompletion(env, {
+    route,
+    masker,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: prompt },
@@ -182,6 +187,9 @@ async function runAnalysis(env, officeId, userId, type, request) {
   if (gate) return cors(gate, env, request);
   const quota = await checkAiQuota(env, officeId);
   if (quota) return cors(quota, env, request);
+  // النص الملصوق ده مستند موكل → موافقة + خصوصية حسب إعداد المكتب
+  const privacy = await requireClientDataAi(env, officeId);
+  if (privacy.block) return cors(privacy.block, env, request);
 
   let b;
   try {
@@ -204,7 +212,13 @@ async function runAnalysis(env, officeId, userId, type, request) {
 
   let result, provider;
   try {
-    ({ result, provider } = await runJsonPrompt(env, SYSTEM_PROMPT, `${PROMPTS[type]}\n\nالنص:\n${text}`));
+    const masker = createMasker({ names: String(b.party_names || '').split(/[,،\n]/) });
+    ({ result, provider } = await runJsonPrompt(env, SYSTEM_PROMPT, `${PROMPTS[type]}\n\nالنص:\n${text}`, 3000,
+      { route: routeFor(privacy.mode), masker }));
+    const checked = await verifyResult(env, result);
+    result = checked.result;
+    result._citations = checked.summary;
+    result._privacy = { mode: privacy.mode, masked: masker.count };
   } catch (e) {
     console.error('analysis failed:', e.message);
     return cors(fail(env, 'فشل التحليل: ' + e.message, 503), env, request);
@@ -256,6 +270,8 @@ async function analyzeSavedCase({ request, env, officeId, userId, params }) {
   if (gate) return gate;
   const quota = await checkAiQuota(env, officeId);
   if (quota) return quota;
+  const privacy = await requireClientDataAi(env, officeId);
+  if (privacy.block) return privacy.block;
 
   const caseId = toInt(params[0]);
   const c = await env.DB.prepare(
@@ -329,15 +345,23 @@ ${docText ? `نص مستند لصقه المحامي:\n${docText}\n` : ''}`;
   const system = `${SYSTEM_PROMPT}\n\n${GENERAL_METHOD}\n\n${formatSkill(skill)}`;
   const prompt = `${CASE_ANALYSIS_PROMPT}\n\n${caseBlock}\n\nالمواد القانونية من قاعدة البيانات:\n${articlesBlock}`;
 
+  // أسماء الأطراف اللي بنعرفها بتتخفي قبل ما النص يطلع لأي نموذج
+  const masker = createMasker({ names: [c.client_name, ...opponent.split(/[,،\n]/)] });
+
   let result, provider;
   try {
-    ({ result, provider } = await runJsonPrompt(env, system, prompt, 4000));
+    ({ result, provider } = await runJsonPrompt(env, system, prompt, 4000, { route: routeFor(privacy.mode), masker }));
   } catch (e) {
     console.error('case analysis failed:', e.message);
     return fail(env, 'فشل التحليل: ' + e.message, 503);
   }
 
+  const checked = await verifyResult(env, result);
+  result = checked.result;
+
   result._meta = {
+    citations: checked.summary,
+    privacy: { mode: privacy.mode, masked: masker.count },
     skill: skill.title,
     articles_found: articles.length,
     search_method: method,

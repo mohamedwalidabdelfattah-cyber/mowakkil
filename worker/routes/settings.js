@@ -4,12 +4,48 @@
 import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { safeJson } from '../lib/validation.js';
+import { getAiPrivacy, clearAiPrivacyCache, AI_PRIVACY_MODES } from '../lib/ai-privacy.js';
 
 export const routes = [
   { method: 'GET',   path: '/api/settings', handler: get },
   { method: 'PATCH', path: '/api/settings', handler: update, adminOnly: true },
   { method: 'GET',   path: '/api/settings/search', handler: search },
+  { method: 'GET',   path: '/api/settings/ai-privacy', handler: getAiPrivacySetting },
+  { method: 'POST',  path: '/api/settings/ai-privacy', handler: setAiPrivacySetting, adminOnly: true },
 ];
+
+// ============================================================
+// خصوصية الذكاء الاصطناعي (مسؤول المكتب بس يغيّرها، والموافقة بتتسجل)
+// ============================================================
+async function getAiPrivacySetting({ env, officeId }) {
+  const p = await getAiPrivacy(env, officeId);
+  return ok(env, { mode: p.mode, accepted: p.accepted, accepted_at: p.accepted_at, modes: AI_PRIVACY_MODES });
+}
+
+async function setAiPrivacySetting({ request, env, authUser, officeId }) {
+  const b = await safeJson(request);
+  if (!b || !AI_PRIVACY_MODES.includes(b.mode)) return fail(env, 'اختار مستوى خصوصية صحيح', 400);
+  if (b.accept !== true) return fail(env, 'لازم توافق على شروط المعالجة الأول', 400);
+
+  await env.DB.prepare(`INSERT OR IGNORE INTO office_settings (office_id) VALUES (?)`).bind(officeId).run();
+  try {
+    await env.DB.prepare(
+      `UPDATE office_settings
+       SET ai_privacy = ?, ai_privacy_accepted_at = datetime('now'), ai_privacy_accepted_by = ?, updated_at = datetime('now')
+       WHERE office_id = ?`
+    ).bind(b.mode, authUser.user_id, officeId).run();
+  } catch (e) {
+    return fail(env, 'الإعداد ده محتاج تحديث قاعدة البيانات (migration 027) — كلّم الدعم الفني', 500);
+  }
+  clearAiPrivacyCache(officeId);
+
+  await audit(env, {
+    office_id: officeId, user_id: authUser.user_id,
+    action: 'ai_privacy_consent', entity: 'settings', entity_id: officeId, request,
+    metadata: { mode: b.mode },
+  });
+  return ok(env, { mode: b.mode, accepted: true });
+}
 
 // ============================================================
 // جلب الإعدادات (أو إنشاء افتراضية)

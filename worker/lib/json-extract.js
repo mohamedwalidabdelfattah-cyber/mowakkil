@@ -19,8 +19,33 @@ export function extractJson(raw) {
   try {
     return JSON.parse(s);
   } catch {
-    return JSON.parse(completeJson(s));
+    try {
+      return JSON.parse(completeJson(s));
+    } catch {
+      // نماذج بتكتب فاصلة عربية «،» أو فاصلة زيادة قبل القوس بين حقول JSON
+      return JSON.parse(completeJson(repairJson(s)));
+    }
   }
+}
+
+// تصليح أخطاء شائعة برّه النصوص بس: «،»/«؛» بدل «,» — وفاصلة زيادة قبل } أو ]
+function repairJson(s) {
+  let out = '';
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      out += c;
+      if (escape) { escape = false; continue; }
+      if (c === '\\') { escape = true; continue; }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') { inString = true; out += c; continue; }
+    out += (c === '،' || c === '؛') ? ',' : c;
+  }
+  return out.replace(/,\s*([}\]])/g, '$1');
 }
 
 function completeJson(s) {

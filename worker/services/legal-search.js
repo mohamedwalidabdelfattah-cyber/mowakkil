@@ -1,6 +1,19 @@
 // worker/services/legal-search.js
 // بحث قانوني + توليد مستندات — Vectorize (RAG) + bge-m3 + نماذج مجانية (Groq/Gemini/Workers AI)
 import { completeText } from './llm.js';
+import { createMasker } from '../lib/redact.js';
+import { verifyText, annotate, summarize, summaryText } from '../lib/citations.js';
+
+// مراجعة الأسانيد في أي نص طالع من الذكاء الاصطناعي
+async function withCitationCheck(env, text) {
+  try {
+    const checks = await verifyText(env, text);
+    return checks.length ? annotate(text, checks) + summaryText(summarize(checks)) : text;
+  } catch (e) {
+    console.warn('citation check failed:', e.message);
+    return text;
+  }
+}
 
 const DEFAULT_SYSTEM = `أنت مستشار قانوني مصري خبير، بتفكر زي محامٍ شاطر مش زي روبوت.
 - بتحلل النصوص القانونية وتستنتج منها إجابات عملية.
@@ -10,11 +23,15 @@ const DEFAULT_SYSTEM = `أنت مستشار قانوني مصري خبير، ب�
 - لا تخترع مواد قانونية غير موجودة في النصوص المرفقة.
 - لو النصوص مش كافية، قول "النصوص المتاحة مش كافية" واشرح إيه اللي ناقص.`;
 
-async function callAI(env, prompt, maxTokens = 1500, systemPrompt = null) {
+// route/masker: خصوصية بيانات الموكلين (شوف lib/ai-privacy.js). الأسئلة العامة بتتخفي فيها
+// الأرقام القومية والتليفونات برضه احتياطياً.
+async function callAI(env, prompt, maxTokens = 1500, systemPrompt = null, { route = 'any', masker = createMasker() } = {}) {
   const { text } = await completeText(env, {
     system: systemPrompt || DEFAULT_SYSTEM,
     prompt,
     maxTokens,
+    route,
+    masker,
   });
   return text;
 }
@@ -175,7 +192,7 @@ ${context}
 
   try {
     const answer = await callAI(env, prompt, 1200);
-    return { answer: answer || buildFallbackAnswer(results), sources: results };
+    return { answer: answer ? await withCitationCheck(env, answer) : buildFallbackAnswer(results), sources: results };
   } catch (e) {
     console.error('AI failed:', e.message);
     return { answer: buildFallbackAnswer(results), sources: results };
@@ -197,7 +214,7 @@ async function fallbackSearch(env, query) {
   const prompt = `أنت محامٍ مصري. حلل السؤال ده بناءً على النصوص دي:\n\n${context}\n\nالسؤال: ${query}\n\nجاوب بتحليل قانوني (مش مجرد سرد). لو النصوص مش متعلقة، قول "النصوص مش كافية".`;
   try {
     const answer = await callAI(env, prompt, 1000);
-    return { answer: answer || buildFallbackAnswer(results), sources: results };
+    return { answer: answer ? await withCitationCheck(env, answer) : buildFallbackAnswer(results), sources: results };
   } catch {
     return { answer: buildFallbackAnswer(results), sources: results };
   }
@@ -251,13 +268,14 @@ export async function searchLegalDb(env, query) {
 // ============================================================
 // توليد المستندات
 // ============================================================
-export async function generateDocument(env, { doc_type, facts, parties, extra, case_id, officeId }) {
+export async function generateDocument(env, { doc_type, facts, parties, extra, case_id, officeId, route = 'balanced' }) {
   const safeFacts = String(facts || '').trim().slice(0, 3000);
   const safeParties = String(parties || '').trim().slice(0, 500);
   const safeExtra = String(extra || '').trim().slice(0, 800);
   if (!safeFacts) return { error: 'اكتب الوقائع' };
 
   let caseContext = '';
+  const knownNames = String(parties || '').split(/[,،\n]|\s+ضد\s+/);
   if (case_id && officeId) {
     try {
       // ✅ لازم القضية تكون تبع نفس المكتب (منع تسريب بيانات بين المكاتب)
@@ -267,6 +285,7 @@ export async function generateDocument(env, { doc_type, facts, parties, extra, c
          WHERE c.id = ? AND c.office_id = ? AND c.deleted_at IS NULL`
       ).bind(case_id, officeId).first();
       if (c) {
+        knownNames.push(c.client_name);
         caseContext = `\n\nبيانات القضية:
 - رقم القضية: ${c.case_number || '—'}
 - المحكمة: ${c.court || '—'}
@@ -304,9 +323,11 @@ ${safeExtra ? 'تفاصيل إضافية:\n' + safeExtra : ''}
 هذه المسودة أولية ومحتاجة مراجعة محامٍ متخصص.`;
 
   try {
-    const document = await callAI(env, prompt, 1500);
+    // الوقائع والأطراف بيانات موكلين → إخفاء الأسماء/الأرقام + توجيه حسب خصوصية المكتب
+    const masker = createMasker({ names: knownNames });
+    const document = await callAI(env, prompt, 1500, null, { route, masker });
     return {
-      document: document || buildTemplateDocument(doc_type, safeFacts, safeParties, safeExtra),
+      document: document ? await withCitationCheck(env, document) : buildTemplateDocument(doc_type, safeFacts, safeParties, safeExtra),
       doc_type,
       generated_at: new Date().toISOString(),
     };

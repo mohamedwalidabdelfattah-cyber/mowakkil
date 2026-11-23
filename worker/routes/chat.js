@@ -3,6 +3,11 @@ import { ok, fail, cors } from '../lib/response.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 import { checkAiQuota } from '../lib/ai-quota.js';
 import { chatWithAgent } from '../services/agent.js';
+import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
+import { createMasker } from '../lib/redact.js';
+import { verifyText, annotate, summarize, summaryText } from '../lib/citations.js';
+
+const ATTACHMENT_MARK = '📎 **محتوى الملف المرفق';
 
 export const routes = [
   { method: 'POST',   path: '/api/chat',                          handler: chatHandler },
@@ -63,12 +68,31 @@ async function chatHandler({ request, env, officeId, userId }) {
     if (!s) sessionId = null;
   }
 
+  // ملف موكل مرفق → لازم موافقة المكتب، ويتعامل حسب وضع الخصوصية.
+  // من غير ملف (سؤال قانوني عام) → بنخفي البيانات الشخصية برضه ومن غير OpenRouter.
+  const hasClientDoc = !!attachmentText || validMessages.some(m => m.content.includes(ATTACHMENT_MARK));
+  let route = 'balanced';
+  if (hasClientDoc) {
+    const privacy = await requireClientDataAi(env, officeId);
+    if (privacy.block) return cors(privacy.block, env, request);
+    route = routeFor(privacy.mode);
+  }
+  const masker = createMasker({ names: Array.isArray(b.party_names) ? b.party_names : [] });
+
   let result;
   try {
-    result = await chatWithAgent(env, validMessages, officeId, attachmentText);
+    result = await chatWithAgent(env, validMessages, officeId, attachmentText, { route, masker });
   } catch (e) {
     console.error('chat error:', e.message);
     return cors(fail(env, e.message || 'فشل الشات', 503), env, request);
+  }
+
+  // مراجعة الأسانيد آلياً: أي "المادة X من قانون Y" بتتراجع على قاعدة المواد
+  try {
+    const checks = await verifyText(env, result.answer);
+    if (checks.length) result.answer = annotate(result.answer, checks) + summaryText(summarize(checks));
+  } catch (e) {
+    console.warn('citation check failed:', e.message);
   }
 
   try {

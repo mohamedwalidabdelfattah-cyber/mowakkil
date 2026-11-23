@@ -3,6 +3,7 @@
 
 import { apiJson, getRole } from '../api.js';
 import { toast } from '../ui.js';
+import { pickerHTML, bindPicker } from '../ai-privacy.js';
 
 let currentTab = 'office';
 
@@ -33,6 +34,9 @@ export async function render(host) {
         </button>
         <button class="settings-tab ${currentTab === 'plan' ? 'active' : ''}" data-tab="plan">
           <span>💎</span> الباقة
+        </button>
+        <button class="settings-tab ${currentTab === 'privacy' ? 'active' : ''}" data-tab="privacy">
+          <span>🔒</span> الخصوصية
         </button>
         <button class="settings-tab ${currentTab === 'advanced' ? 'active' : ''}" data-tab="advanced">
           <span>⚡</span> متقدم
@@ -74,6 +78,20 @@ async function loadTab(host, tab, isAdmin) {
     else if (tab === 'notifications') content.innerHTML = renderNotificationsTab(settings, isAdmin);
     else if (tab === 'appearance')    content.innerHTML = renderAppearanceTab(settings, isAdmin);
     else if (tab === 'plan')          content.innerHTML = await renderPlanTab();
+    else if (tab === 'privacy') {
+      const p = await apiJson('/api/settings/ai-privacy', { skipCache: true }).catch(() => ({ mode: 'balanced' }));
+      content.innerHTML = `
+        <div class="card">
+          <h3>🔒 خصوصية الذكاء الاصطناعي لبيانات الموكلين</h3>
+          <p class="meta" style="line-height:1.8;margin:0 0 14px">
+            ده بيحدد إزاي مستندات ووقائع الموكلين بتتعالج لما تستخدم التحليل الذكي أو الشات بملف أو توليد المستندات.
+            الأسئلة القانونية العامة مش بتتأثر. وفي كل الأحوال: أي مادة قانونية بيذكرها الذكاء الاصطناعي بتتراجع آلياً على قاعدة المواد.
+          </p>
+          ${pickerHTML(p.mode, { isAdmin, acceptedAt: p.accepted_at })}
+        </div>`;
+      bindPicker(content, { onSaved: () => loadTab(host, 'privacy', isAdmin) });
+      return;
+    }
     else if (tab === 'advanced')      content.innerHTML = renderAdvancedTab(isAdmin);
 
     bindTabEvents(host, tab, settings);

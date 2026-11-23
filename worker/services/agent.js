@@ -143,7 +143,9 @@ async function searchWeb(env, query) {
 const MAX_HISTORY = 12;         // آخر 12 رسالة بس عشان منعديش context الموديل
 const MAX_TOOL_RESULT = 9000;   // حد حجم نتيجة الأداة اللي بترجع للموديل
 
-export async function chatWithAgent(env, messages, officeId, attachmentText = null) {
+// privacy: { route: 'balanced'|'strict', masker } — الشات دايماً بيخفي البيانات الشخصية،
+// والملفات المرفقة بتتعامل حسب إعداد خصوصية المكتب (routes/chat.js)
+export async function chatWithAgent(env, messages, officeId, attachmentText = null, { route = 'balanced', masker = null } = {}) {
   let processedMessages = messages.slice(-MAX_HISTORY);
   if (processedMessages[0]?.role === 'assistant') processedMessages = processedMessages.slice(1);
 
@@ -173,6 +175,8 @@ export async function chatWithAgent(env, messages, officeId, attachmentText = nu
       tools: lastRound ? null : TOOLS,
       maxTokens: 2500,
       temperature: 0.2,
+      route,
+      masker,
     });
     provider = p;
 

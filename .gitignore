@@ -48,3 +48,9 @@ audit.js
 # نسخ احتياطية محلية (فيها مفتاح توقيع أندرويد)
 backups/
 schema-local.sql
+
+# أبحاث وتقارير محلية
+research_notes/
+reports/
+
+wrangler.e2e.toml
