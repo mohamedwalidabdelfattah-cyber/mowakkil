@@ -6,6 +6,30 @@
   <meta name="theme-color" content="#070C18">
   <title>بوابة الموكل — مُوكِّل</title>
   <link rel="icon" type="image/png" sizes="48x48" href="/assets/app/favicon-48.png">
+
+  <!-- تطبيق مستقل للموكل (مش اختصار): manifest خاص بيفتح على البوابة مباشرة -->
+  <link rel="manifest" href="/client/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="بوابة الموكل">
+  <script>
+    // لازم نمسك حدث التثبيت بدري قبل ما الموديولات تحمل
+    window.__installPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.__installPrompt = e;
+      document.dispatchEvent(new Event('portal:installable'));
+    });
+    window.addEventListener('appinstalled', function () {
+      window.__installPrompt = null;
+      document.dispatchEvent(new Event('portal:installed'));
+    });
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () { navigator.serviceWorker.register('/service-worker.js').catch(function () {}); });
+    }
+  </script>
   
   <link rel="stylesheet" href="/assets/fonts.css">
   <!-- نفس هوية التطبيق (توكنز theme.css) — ملف واحد خاص بالبوابة -->
@@ -19,7 +43,10 @@
     <span id="office-name" class="brand-name">بوابة الموكل</span>
   </div>
   <div class="topbar-actions">
-    <button class="install-btn" id="install-btn" hidden title="تثبيت التطبيق">📱 تثبيت</button>
+    <button class="install-btn" id="install-btn" hidden title="نزّل التطبيق على جهازك" aria-label="تثبيت التطبيق">
+      <svg class="mi" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span>تثبيت التطبيق</span>
+    </button>
     <button class="install-btn" id="settings-btn" hidden title="الإعدادات">⚙️</button>
     <button class="logout-btn" id="logout-btn" hidden>خروج</button>
   </div>

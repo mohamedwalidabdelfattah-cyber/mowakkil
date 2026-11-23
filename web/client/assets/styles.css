@@ -221,6 +221,10 @@ h1, h2, h3, h4 { color: var(--text); letter-spacing: 0; }
   background: var(--navy-gradient); color: var(--gold-400); font-weight: 700; font-size: 13px;
 }
 .install-steps strong { color: var(--navy-900); }
+.install-steps li.install-note {
+  display: block; padding: 10px 12px; margin-bottom: 6px; border: 1px solid var(--c-warning-bd) !important;
+  background: var(--c-warning-bg); color: var(--c-warning); border-radius: var(--r-md); font-size: 13px;
+}
 .install-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .install-btn-primary {
   display: block; text-align: center; padding: 12px; border-radius: var(--r-md); text-decoration: none; font-weight: 700;

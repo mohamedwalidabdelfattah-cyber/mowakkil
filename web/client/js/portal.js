@@ -95,12 +95,35 @@ function isAppInstalled() {
       || window.navigator.standalone === true;
 }
 
+let installBound = false;
 function setupInstallButton() {
   const btn = document.getElementById('install-btn');
   if (!btn) return;
   if (isAppInstalled()) { btn.hidden = true; return; }
   btn.hidden = false;
-  btn.addEventListener('click', () => showInstallSheet());
+  if (installBound) return;
+  installBound = true;
+  btn.addEventListener('click', installApp);
+  document.addEventListener('portal:installed', () => {
+    btn.hidden = true;
+    toast('تم تثبيت التطبيق — هتلاقيه على الشاشة الرئيسية', 'ok');
+  });
+}
+
+// التثبيت: لو المتصفح بيدعم نافذة التثبيت (Chrome/Edge/Samsung) → تطبيق حقيقي بضغطة واحدة
+// غير كده (iPhone / متصفحات تانية) → خطوات واضحة
+async function installApp() {
+  const prompt = window.__installPrompt;
+  if (prompt) {
+    try {
+      prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      window.__installPrompt = null;
+      if (outcome === 'accepted') document.getElementById('install-btn').hidden = true;
+      return;
+    } catch {}
+  }
+  showInstallSheet();
 }
 
 function showInstallSheet() {
@@ -118,6 +141,10 @@ function showInstallSheet() {
       <li><span class="num">3</span> اختر <strong>"إضافة إلى الشاشة الرئيسية"</strong> ➕</li>
       <li><span class="num">4</span> دوس <strong>"إضافة"</strong></li>
     `;
+    // على iPhone التطبيق المتثبت ليه تخزين منفصل عن Safari → الدخول بالرابط بس مش هيكمل جوه التطبيق
+    if (currentClient && !currentClient.has_password) {
+      steps = `<li class="install-note">🔐 قبل التثبيت: اعمل باسورد من ⚙️ الإعدادات عشان تقدر تدخل من التطبيق.</li>` + steps;
+    }
   } else if (env.os === 'android' && (env.browser === 'mi' || env.browser === 'firefox')) {
     title = '📲 تثبيت على Android';
     sub = 'متصفحك الحالي مش بيدعم التثبيت';
@@ -624,7 +651,7 @@ function showSettingsModal() {
   });
 
   modal.querySelector('#settings-close').addEventListener('click', () => modal.remove());
-  modal.querySelector('#settings-install-btn').addEventListener('click', () => { modal.remove(); showInstallSheet(); });
+  modal.querySelector('#settings-install-btn').addEventListener('click', () => { modal.remove(); installApp(); });
   modal.querySelector('#settings-logout-btn').addEventListener('click', () => { modal.remove(); logout(); });
 
   modal.querySelector('#setup-pass-btn').addEventListener('click', () => {
