@@ -41,3 +41,6 @@ setup.json
 all_code.txt
 audit.cjs
 audit.js
+
+# نسخة احتياطية من تاريخ Git
+*.bundle
