@@ -29,8 +29,25 @@ function Fail($msg) {
 $value = Get-Clipboard -Raw
 if ($null -eq $value) { $value = '' }
 $value = $value.Trim()
+
+# كل مزود مفاتيحه ليها بداية معروفة → لو اتنسخ كلام زيادة مع المفتاح، بنطلّع المفتاح لوحده
+$pattern = @{
+  groq       = 'gsk_[A-Za-z0-9]{20,}'
+  gemini     = 'AIza[0-9A-Za-z_\-]{30,}'
+  tavily     = 'tvly-[A-Za-z0-9_\-]{16,}'
+  openrouter = 'sk-or-v1-[A-Za-z0-9]{32,}'
+}[$Provider]
+$m = [regex]::Match($value, $pattern)
+if ($m.Success -and $m.Value -ne $value) {
+  Write-Host '   لقيت المفتاح وسط كلام زيادة في الحافظة — هستخدم المفتاح بس.'
+  $value = $m.Value
+}
+
 if ($value.Length -lt 20) { Fail "الحافظة مفيهاش مفتاح (طول اللي فيها $($value.Length) حرف)." }
-if ($value -match '\s') { Fail 'اللي في الحافظة فيه مسافات — غالباً اتنسخ كلام مع المفتاح.' }
+if ($value -match '\s') {
+  if ($value -match 'set-ai-key|powershell|cd ') { Fail 'اللي في الحافظة هو الأمر نفسه مش المفتاح. انسخ المفتاح آخر حاجة قبل ما تدوس Enter.' }
+  Fail 'اللي في الحافظة فيه مسافات ومش لاقي فيه مفتاح.'
+}
 
 # ---- تجربة المفتاح فعلياً ----
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
