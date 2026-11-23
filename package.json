@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev worker/index.js",
     "deploy": "wrangler deploy",
-    "deploy:web": "wrangler pages deploy web --project-name=mowakkil",
+    "deploy:web": "wrangler pages deploy web --project-name=mowakkil-2026 --branch=production --commit-dirty=true",
     "migrate": "node scripts/migrate.mjs",
     "seed": "node scripts/seed-legal.mjs",
     "test": "vitest run",
@@ -25,6 +25,7 @@
     "sharp@0.33.5": true
   },
   "dependencies": {
+    "aws4fetch": "^1.0.20",
     "google-auth-library": "^11.1.0",
     "sharp": "^0.35.5",
     "word-extractor": "^1.0.4"

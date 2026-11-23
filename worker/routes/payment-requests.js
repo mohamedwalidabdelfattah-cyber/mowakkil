@@ -26,7 +26,7 @@ export const superadminRoutes = [
 ];
 
 // ============================================================
-// إعدادات الدفع (ثابتة — هنحطها في الـ env لاحقًا)
+// إعدادات الدفع
 // ============================================================
 const PAYMENT_INFO = {
   vodafone_cash: {
@@ -40,9 +40,12 @@ const PAYMENT_INFO = {
     name: 'power media',
   },
   plans: {
-    starter: { name: 'الأساسية', price: 199 },
-    pro:     { name: 'الاحترافية', price: 399 },
-    plus:    { name: 'المتقدمة', price: 799 },
+    starter:        { name: 'الأساسية',                  price: 199,  type: 'monthly' },
+    pro:            { name: 'الاحترافية',                price: 399,  type: 'monthly' },
+    plus:           { name: 'المتقدمة',                  price: 799,  type: 'monthly' },
+    // ✅ باقات مدى الحياة
+    lifetime_basic: { name: 'التأسيس (مدى الحياة)',      price: 4999, type: 'lifetime' },
+    lifetime_pro:   { name: 'المكتب المتكامل (مدى الحياة)', price: 9999, type: 'lifetime' },
   },
 };
 
@@ -63,7 +66,8 @@ async function createRequest({ request, env, authUser, officeId }) {
   const plan = b.plan;
   const method = b.method;
 
-  if (!['starter', 'pro', 'plus'].includes(plan)) {
+  const validPlans = Object.keys(PAYMENT_INFO.plans);
+  if (!validPlans.includes(plan)) {
     return fail(env, 'الباقة غلط', 400);
   }
   if (!['vodafone_cash', 'instapay'].includes(method)) {
@@ -178,6 +182,10 @@ async function approveRequest({ request, env, params, superAdmin }) {
   const b = await safeJson(request).catch(() => ({}));
   const days = Number(b?.days) || 30;
 
+  // ✅ هل الباقة مدى الحياة؟
+  const planInfo = PAYMENT_INFO.plans[pr.plan];
+  const isLifetime = planInfo?.type === 'lifetime';
+
   // 1) نحدّث الطلب
   await env.DB.prepare(
     `UPDATE payment_requests
@@ -186,7 +194,8 @@ async function approveRequest({ request, env, params, superAdmin }) {
   ).bind(superAdmin.admin_id, id).run();
 
   // 2) نحدّث الاشتراك
-  const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
+  // للباقات مدى الحياة: expires_at = NULL، status = 'active'
+  const expiresAt = isLifetime ? null : new Date(Date.now() + days * 86400000).toISOString();
   const sub = await getSubscription(env, pr.office_id);
 
   if (sub) {
@@ -205,7 +214,7 @@ async function approveRequest({ request, env, params, superAdmin }) {
        VALUES (?,?,?,?,?,?,?)`
     ).bind(
       pr.office_id, sub.plan, pr.plan, sub.status, 'active',
-      superAdmin.admin_id, `دفع يدوي - طلب #${pr.id}`
+      superAdmin.admin_id, `دفع يدوي - طلب #${pr.id}${isLifetime ? ' (مدى الحياة)' : ''}`
     ).run();
   } else {
     await env.DB.prepare(
@@ -223,10 +232,10 @@ async function approveRequest({ request, env, params, superAdmin }) {
   await audit(env, {
     office_id: pr.office_id, action: 'approve_payment',
     entity: 'payment_request', entity_id: id, request,
-    metadata: { by: superAdmin.admin_id, plan: pr.plan, days },
+    metadata: { by: superAdmin.admin_id, plan: pr.plan, days: isLifetime ? 'lifetime' : days },
   });
 
-  return ok(env, { approved: true, expires_at: expiresAt });
+  return ok(env, { approved: true, expires_at: expiresAt, is_lifetime: isLifetime });
 }
 
 // ============================================================

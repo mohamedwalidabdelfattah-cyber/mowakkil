@@ -1,7 +1,7 @@
 // web/js/views/case-detail.js
 // صفحة تفاصيل القضية الكاملة
 
-import { apiJson, api } from '../api.js';
+import { apiJson, uploadDocument, downloadDocument } from './api.js';
 import { esc, toast, empty, skeleton, fmtMoney, waLink } from '../ui.js';
 import { openModal } from '../modal.js';
 
@@ -287,13 +287,8 @@ export async function renderCaseDetail(host, caseId) {
       const file = fileInput.files[0];
       if (!file) return;
       const docType = prompt('نوع المستند (توكيل / مذكرة / حكم / أخرى):') || 'أخرى';
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('case_id', caseId);
-      fd.append('doc_type', docType);
       try {
-        const r = await api('/api/documents', { method: 'POST', body: fd });
-        if (!r.ok) throw new Error((await r.json()).error || 'فشل الرفع');
+        await uploadDocument(file, { caseId, docType });
         toast('اترفع', 'ok');
         refresh();
       } catch (e) {
@@ -308,13 +303,9 @@ export async function renderCaseDetail(host, caseId) {
     const id = b.dataset.docDownload;
     const doc = data.documents.find(x => x.id == id);
     try {
-      const r = await api(`/api/documents/${id}/download`);
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = doc.file_name; a.click();
-      URL.revokeObjectURL(url);
+      await downloadDocument(id, doc?.file_name || 'download');
     } catch (e) {
-      toast('فشل التحميل', 'bad');
+      toast(e.message || 'فشل التحميل', 'bad');
     }
   }));
 

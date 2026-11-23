@@ -8,6 +8,70 @@ import { checkRateLimit } from '../lib/rate-limit.js';
 import { audit } from '../lib/audit.js';
 import { isValidEmail, isStr, toInt, safeJson } from '../lib/validation.js';
 import { getSubscription } from '../middleware/feature-gate.js';
+import { providersHealth } from '../services/llm.js';
+
+// ============================================================
+// AI: فحص المزودين + إعادة فهرسة المواد القانونية في Vectorize
+// ============================================================
+async function aiHealth({ env }) {
+  const providers = await providersHealth(env);
+  let vectorize = null;
+  try {
+    const d = await env.VECTORIZE.describe();
+    vectorize = { dimensions: d.dimensions ?? d.config?.dimensions, count: d.vectorCount ?? d.vectorsCount ?? null };
+  } catch (e) {
+    vectorize = { error: e.message };
+  }
+  const articles = await env.DB.prepare(`SELECT COUNT(*) AS c FROM law_articles`).first();
+  return ok(env, {
+    providers,
+    vectorize,
+    law_articles: articles?.c || 0,
+    tavily: Boolean(env.TAVILY_API_KEY),
+  });
+}
+
+// بيفهرس دفعة واحدة كل مرة (افتراضي 25 مادة) عشان يفضل جوه حدود الخطة المجانية للـ Worker.
+// الواجهة بتنادي الـ endpoint ده مرة ورا مرة لحد ما done = true.
+async function reindexLaws({ request, env }) {
+  const b = (await safeJson(request)) || {};
+  const after = Math.max(0, toInt(b.after_id) || 0);
+  const limit = Math.min(50, Math.max(5, toInt(b.limit) || 25));
+
+  const { results } = await env.DB.prepare(
+    `SELECT id, law_name, article_number, article_text FROM law_articles
+     WHERE id > ? ORDER BY id ASC LIMIT ?`
+  ).bind(after, limit).all();
+
+  if (!results?.length) return ok(env, { done: true, indexed: 0, last_id: after });
+
+  const texts = results.map(a => `${a.law_name} - ${a.article_number}: ${a.article_text}`.slice(0, 2000));
+  let emb;
+  try {
+    emb = await env.AI.run('@cf/baai/bge-m3', { text: texts });
+  } catch (e) {
+    return fail(env, 'فشل توليد الـ embeddings (ممكن الحصة المجانية اليومية خلصت — كمل بكرة): ' + e.message, 503);
+  }
+
+  const vectors = results.map((a, i) => ({
+    id: String(a.id),
+    values: emb.data[i],
+    metadata: { law_name: String(a.law_name || '').slice(0, 200), article_number: String(a.article_number || '').slice(0, 100) },
+  }));
+  await env.VECTORIZE.upsert(vectors);
+
+  const total = await env.DB.prepare(`SELECT COUNT(*) AS c FROM law_articles`).first();
+  const doneCount = await env.DB.prepare(`SELECT COUNT(*) AS c FROM law_articles WHERE id <= ?`)
+    .bind(results[results.length - 1].id).first();
+
+  return ok(env, {
+    done: results.length < limit,
+    indexed: results.length,
+    last_id: results[results.length - 1].id,
+    progress: doneCount?.c || 0,
+    total: total?.c || 0,
+  });
+}
 
 export const publicRoutes = [
   { method: 'POST', path: '/api/superadmin/setup', handler: setup },
@@ -23,6 +87,9 @@ export const protectedRoutes = [
   { method: 'POST',   path: /^\/api\/superadmin\/offices\/(\d+)\/change-plan$/,  handler: changePlan },
   { method: 'GET',    path: /^\/api\/superadmin\/offices\/(\d+)\/users$/,        handler: getOfficeUsers },
   { method: 'PATCH',  path: /^\/api\/superadmin\/users\/(\d+)\/reset-password$/, handler: resetUserPassword },
+  // ✅ أدوات الذكاء الاصطناعي
+  { method: 'GET',    path: '/api/superadmin/ai/health',                         handler: aiHealth },
+  { method: 'POST',   path: '/api/superadmin/ai/reindex-laws',                   handler: reindexLaws },
 ];
 
 // ============================================================
@@ -124,6 +191,9 @@ async function listOffices({ env, url }) {
   const status = url.searchParams.get('status');
 
   let q = `SELECT o.*,
+             (SELECT full_name FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_name,
+             (SELECT phone FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_phone,
+             (SELECT email FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_email,
              (SELECT COUNT(*) FROM users u WHERE u.office_id = o.id) as users_count,
              (SELECT COUNT(*) FROM cases c WHERE c.office_id = o.id AND c.deleted_at IS NULL) as cases_count,
              (SELECT COUNT(*) FROM clients cl WHERE cl.office_id = o.id AND cl.deleted_at IS NULL) as clients_count,
@@ -156,6 +226,9 @@ async function getOffice({ env, params }) {
 
   const office = await env.DB.prepare(
     `SELECT o.*,
+            (SELECT full_name FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_name,
+            (SELECT phone FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_phone,
+            (SELECT email FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_email,
             (SELECT COUNT(*) FROM users u WHERE u.office_id = o.id) as users_count,
             (SELECT COUNT(*) FROM cases c WHERE c.office_id = o.id AND c.deleted_at IS NULL) as cases_count,
             (SELECT COUNT(*) FROM clients cl WHERE cl.office_id = o.id AND cl.deleted_at IS NULL) as clients_count
@@ -218,7 +291,7 @@ async function updateOffice({ request, env, params, superAdmin }) {
 }
 
 // ============================================================
-// Delete office (كامل مع كل الجداول المرتبطة) — ✅ محدّث
+// Delete office (كامل مع كل الجداول المرتبطة)
 // ============================================================
 async function deleteOffice({ env, params, superAdmin, request }) {
   const id = toInt(params[0]);
@@ -230,81 +303,39 @@ async function deleteOffice({ env, params, superAdmin, request }) {
   if (!office) return fail(env, 'المكتب مش موجود', 404);
 
   try {
-    // ✅ حذف من كل الجداول المرتبطة (بالترتيب الصح)
-    
-    // 1. الإشعارات
     await env.DB.prepare(`DELETE FROM notifications WHERE office_id = ?`).bind(id).run();
-    
-    // 2. سجل الاشتراكات
     await env.DB.prepare(`DELETE FROM subscription_history WHERE office_id = ?`).bind(id).run();
-    
-    // 3. طلبات الدفع
     await env.DB.prepare(`DELETE FROM payment_requests WHERE office_id = ?`).bind(id).run();
-    
-    // 4. الاشتراكات
     await env.DB.prepare(`DELETE FROM subscriptions WHERE office_id = ?`).bind(id).run();
-    
-    // 5. القيود المحاسبية
     await env.DB.prepare(
       `DELETE FROM journal_lines WHERE entry_id IN (SELECT id FROM journal_entries WHERE office_id = ?)`
     ).bind(id).run();
     await env.DB.prepare(`DELETE FROM journal_entries WHERE office_id = ?`).bind(id).run();
-    
-    // 6. الحسابات
     await env.DB.prepare(`DELETE FROM accounts WHERE office_id = ?`).bind(id).run();
     await env.DB.prepare(`DELETE FROM accounting_settings WHERE office_id = ?`).bind(id).run();
-    
-    // 7. الفواتير
     await env.DB.prepare(
       `DELETE FROM invoice_lines WHERE invoice_id IN (SELECT id FROM invoices WHERE office_id = ?)`
     ).bind(id).run();
     await env.DB.prepare(`DELETE FROM invoices WHERE office_id = ?`).bind(id).run();
-    
-    // 8. المصاريف
     await env.DB.prepare(`DELETE FROM task_expenses WHERE office_id = ?`).bind(id).run();
     await env.DB.prepare(`DELETE FROM expenses WHERE office_id = ?`).bind(id).run();
     await env.DB.prepare(
       `DELETE FROM session_expenses WHERE session_id IN (SELECT s.id FROM sessions s JOIN cases c ON c.id = s.case_id WHERE c.office_id = ?)`
     ).bind(id).run();
-    
-    // 9. المدفوعات
     await env.DB.prepare(`DELETE FROM payments WHERE office_id = ?`).bind(id).run();
-    
-    // 10. الأتعاب
     await env.DB.prepare(`DELETE FROM fees WHERE office_id = ?`).bind(id).run();
-    
-    // 11. المستندات
     await env.DB.prepare(`DELETE FROM documents WHERE office_id = ?`).bind(id).run();
-    
-    // 12. المهام
     await env.DB.prepare(`DELETE FROM tasks WHERE office_id = ?`).bind(id).run();
-    
-    // 13. الجلسات (من خلال cases)
     await env.DB.prepare(
       `DELETE FROM sessions WHERE case_id IN (SELECT id FROM cases WHERE office_id = ?)`
     ).bind(id).run();
-    
-    // 14. القضايا
     await env.DB.prepare(`DELETE FROM cases WHERE office_id = ?`).bind(id).run();
-    
-    // 15. الموكلين
     await env.DB.prepare(`DELETE FROM clients WHERE office_id = ?`).bind(id).run();
-    
-    // 16. المحامين
     await env.DB.prepare(`DELETE FROM lawyers WHERE office_id = ?`).bind(id).run();
-    
-    // 17. بوابة الموكل
     await env.DB.prepare(`DELETE FROM client_users WHERE office_id = ?`).bind(id).run();
-    
-    // 18. المستخدمين
     await env.DB.prepare(`DELETE FROM users WHERE office_id = ?`).bind(id).run();
-    
-    // 19. إعدادات المكتب
     await env.DB.prepare(`DELETE FROM office_settings WHERE office_id = ?`).bind(id).run();
-    
-    // 20. أخيرًا المكتب نفسه
     await env.DB.prepare(`DELETE FROM offices WHERE id = ?`).bind(id).run();
-    
   } catch (e) {
     console.error('deleteOffice DB error:', e.message);
     return fail(env, 'فشل الحذف: ' + e.message, 500);
@@ -328,7 +359,7 @@ async function changePlan({ request, env, params, superAdmin }) {
   const b = await safeJson(request);
   if (!b || !b.plan) return fail(env, 'plan مطلوب', 400);
 
-  const validPlans = ['free', 'starter', 'pro', 'plus'];
+  const validPlans = ['free', 'starter', 'pro', 'plus', 'lifetime_basic', 'lifetime_pro'];
   if (!validPlans.includes(b.plan)) return fail(env, 'الباقة غلط', 400);
 
   const sub = await getSubscription(env, id);

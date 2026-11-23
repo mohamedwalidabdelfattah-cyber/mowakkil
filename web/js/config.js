@@ -10,7 +10,11 @@ export const STORAGE_KEYS = {
   SUBSCRIPTION: 'mowakkil_subscription',
 };
 
-export const API_BASE = 'https://mowakkil-api.mohamed-walid-abdelfattah.workers.dev';
+// على الجهاز (localhost) بيكلم الـ Worker المحلي (wrangler dev) للتجربة، وغير كده بيكلم الـ API الحي
+const IS_LOCAL = ['localhost', '127.0.0.1'].includes(globalThis.location?.hostname);
+export const API_BASE = IS_LOCAL
+  ? 'http://localhost:8787'
+  : 'https://mowakkil-api.mohamed-walid-abdelfattah.workers.dev';
 
 export const DEFAULT_TRIAL_DAYS = 15;
 

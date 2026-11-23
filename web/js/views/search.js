@@ -1,6 +1,7 @@
 // web/js/views/search.js
 import { apiJson } from '../api.js';
 import { esc, toast, skeleton } from '../ui.js';
+import { mountExportMenu } from '../exporter.js';
 
 const GOV_LINKS = [
   { name: 'منصة مصر الرقمية', desc: 'خدمات التوثيق والتقاضي الإلكتروني', url: 'https://digital.gov.eg', icon: '🇪🇬' },
@@ -337,7 +338,8 @@ export async function render(host) {
     // ✅ ندمج النص + الملف في رسالة واحدة
     let messageContent = text;
     if (attachmentText) {
-      messageContent += `\n\n---\n📎 **محتوى الملف المرفق (${attachmentName}):**\n${attachmentText.slice(0, 4000)}`;
+      if (attachmentText.length > 10000) toast('⚠️ الملف طويل — هيتحلل أول 10,000 حرف بس', 'bad');
+      messageContent += `\n\n---\n📎 **محتوى الملف المرفق (${attachmentName}):**\n${attachmentText.slice(0, 10000)}`;
     }
 
     // نعرض للمستخدم النص الأساسي بس
@@ -556,20 +558,21 @@ export async function render(host) {
       }
       box.innerHTML = `
         <div class="doc-output" style="white-space:pre-wrap">${esc(data.document)}</div>
-        <div style="margin-top:12px;display:flex;gap:8px">
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
           <button class="ghost" id="copy-doc">📋 نسخ</button>
-          <button class="ghost" id="print-doc">🖨 طباعة</button>
+          <div id="doc-export"></div>
         </div>
       `;
       host.querySelector('#copy-doc').addEventListener('click', () => {
         navigator.clipboard.writeText(data.document);
         toast('اتنسخ', 'ok');
       });
-      host.querySelector('#print-doc').addEventListener('click', () => {
-        const w = window.open('', '_blank');
-        w.document.write(`<pre style="font-family:Tajawal;direction:rtl;padding:20px;white-space:pre-wrap">${esc(data.document)}</pre>`);
-        w.print();
-      });
+      // المسودة كمستند Word للتعديل، أو طباعة/PDF
+      mountExportMenu(host.querySelector('#doc-export'), () => ({
+        title: doc_type,
+        meta: parties ? [['الأطراف', parties]] : [],
+        blocks: [{ type: 'text', text: data.document }],
+      }), { formats: ['word', 'pdf'], label: '⬇️ Word / طباعة', filename: doc_type });
     } catch (e) {
       box.innerHTML = `<div class="warn">${esc(e.message)}</div>`;
     }

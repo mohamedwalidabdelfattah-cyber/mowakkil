@@ -1,7 +1,8 @@
 // web/js/views/clients.js
 import { apiJson } from '../api.js';
-import { esc, empty, waLink, toast, fmtMoney, fmtDate, skeleton } from '../ui.js';
+import { esc, empty, waLink, toast, fmtMoney, fmtDate, skeleton, bindPanels } from '../ui.js';
 import { setClients } from '../state.js';
+import { mountExportMenu, filterMeta } from '../exporter.js';
 
 // حالة الفلاتر
 let currentFilters = {
@@ -49,7 +50,15 @@ export async function render(host) {
     });
 
     host.innerHTML = `
-      <div class="card">
+      <div class="app-top">
+        <div>
+          <h2>الموكلين</h2>
+          <div class="meta" style="margin:2px 0 0">${list.length} موكل</div>
+        </div>
+        <button class="btn btn-primary" data-toggle-panel="client-panel">➕ موكل جديد</button>
+      </div>
+
+      <div class="card" id="client-panel" hidden>
         <h3>👥 إضافة موكل جديد</h3>
         <div class="row">
           <div><label>الاسم</label><input id="cl-name" placeholder="أحمد السيد"></div>
@@ -78,6 +87,11 @@ export async function render(host) {
         </div>
       </div>
 
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span class="meta" style="margin:0">${filtered.length} نتيجة</span>
+        <div id="clients-export"></div>
+      </div>
+
       <div id="clients-list">
         ${filtered.length 
           ? filtered.map(c => clientItem(c, statusMap[c.id])).join('') 
@@ -90,6 +104,32 @@ export async function render(host) {
         }
       </div>
     `;
+
+    bindPanels(host);
+
+    // التصدير (القايمة بعد الفلترة)
+    const accountLabel = s => !s?.has_account ? 'لا يوجد'
+      : (!s.has_password && s.invite_pending) ? 'دعوة معلقة'
+      : (!s.has_password && s.invite_expired) ? 'دعوة منتهية'
+      : (s.has_password && s.active) ? 'مفعّل' : 'معلّق';
+    mountExportMenu(host.querySelector('#clients-export'), () => ({
+      title: 'قائمة الموكلين',
+      meta: filterMeta([
+        ['بحث', currentFilters.search],
+        ['الحساب', { yes: 'عندهم حساب', no: 'بدون حساب' }[currentFilters.has_account]],
+      ]),
+      blocks: [{
+        type: 'table',
+        columns: [
+          { label: 'الاسم', key: 'name' },
+          { label: 'الهاتف', key: 'phone' },
+          { label: 'الرقم القومي', key: 'national_id' },
+          { label: 'حساب البوابة', value: c => accountLabel(statusMap[c.id]) },
+          { label: 'تاريخ الإضافة', key: 'created_at', type: 'date' },
+        ],
+        rows: filtered,
+      }],
+    }), { filename: 'الموكلين' });
 
     // ربط أحداث الفلاتر
     let searchTimeout;

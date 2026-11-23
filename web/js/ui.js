@@ -94,6 +94,27 @@ export function empty(msg, icon = '📭', action = null) {
   `;
 }
 
+// ============ لوحات الإضافة القابلة للطي ============
+// زرار [data-toggle-panel="id"] بيفتح/يقفل العنصر #id ويركز على أول حقل فيه
+export function bindPanels(host) {
+  host.querySelectorAll('[data-toggle-panel]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panel = host.querySelector('#' + btn.dataset.togglePanel);
+      if (!panel) return;
+      const open = panel.hidden;
+      host.querySelectorAll('[data-toggle-panel]').forEach(b => {
+        const p = host.querySelector('#' + b.dataset.togglePanel);
+        if (p && p !== panel) p.hidden = true;
+      });
+      panel.hidden = !open;
+      if (open) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        panel.querySelector('input, select, textarea')?.focus({ preventScroll: true });
+      }
+    });
+  });
+}
+
 // عشان نربط حدث الزرار ده تلقائياً
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-empty-action]');

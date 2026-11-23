@@ -6,7 +6,7 @@ import { safeJson } from '../lib/validation.js';
 import {
   getSubscription,
   getFeatures,
-  getLimits,
+  effectiveLimits,
   getUsage,
   getUsageDetails,
 } from '../middleware/feature-gate.js';
@@ -22,8 +22,9 @@ export const routes = [
 ];
 
 async function getPlans({ env }) {
+  // ✅ تم إضافة billing_type هنا
   const { results } = await env.DB.prepare(
-    `SELECT plan, display_name, display_name_en, price_egp, features, limits, sort_order
+    `SELECT plan, display_name, display_name_en, price_egp, features, limits, sort_order, billing_type
      FROM plan_features WHERE is_active = 1 ORDER BY sort_order`
   ).all();
 
@@ -34,6 +35,7 @@ async function getPlans({ env }) {
     price_egp: p.price_egp,
     features: JSON.parse(p.features || '{}'),
     limits: JSON.parse(p.limits || '{}'),
+    billing_type: p.billing_type || 'monthly', // ✅ الحقل الجديد
   })));
 }
 
@@ -44,7 +46,7 @@ async function getMySubscription({ env, officeId }) {
   }
 
   const features = getFeatures(sub.plan);
-  const limits = getLimits(sub.plan);
+  const limits = effectiveLimits(sub);
 
   let daysRemaining = null;
   const targetDate = sub.status === 'trial' ? sub.trial_ends_at : sub.expires_at;
@@ -82,12 +84,14 @@ async function changePlan({ request, env, officeId, authUser }) {
   if (!b) return fail(env, 'JSON غلط', 400);
 
   const newPlan = b.plan;
-  const validPlans = ['free', 'starter', 'pro', 'plus'];
+  // ✅ تم إضافة الباقات الجديدة هنا
+  const validPlans = ['starter', 'pro', 'plus', 'lifetime_basic', 'lifetime_pro'];
   if (!validPlans.includes(newPlan)) {
     return fail(env, 'الباقة غلط', 400);
   }
 
-  const paidPlans = ['starter', 'pro', 'plus'];
+  // ✅ تم إضافة الباقات الجديدة هنا
+  const paidPlans = ['starter', 'pro', 'plus', 'lifetime_basic', 'lifetime_pro'];
   if (paidPlans.includes(newPlan)) {
     return fail(env, 'للترقية، اذهب لصفحة الدفع', 403, {
       code: 'PAYMENT_REQUIRED',

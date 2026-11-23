@@ -3,6 +3,7 @@ import { apiJson } from '../api.js';
 import { esc, empty, toast, fmtMoney, skeleton } from '../ui.js';
 import { openModal } from '../modal.js';
 import { getClients, getCases } from '../state.js';
+import { mountExportMenu, filterMeta } from '../exporter.js';
 
 let charts = {};
 let currentFilters = {
@@ -113,7 +114,10 @@ export async function render(host) {
       <div class="card">
         <div class="section-header">
           <h3>💰 الأتعاب (${fees.length})</h3>
-          <button class="btn btn-primary" id="add-fee">+ أتعاب جديدة</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div id="fees-export"></div>
+            <button class="btn btn-primary" id="add-fee">+ أتعاب جديدة</button>
+          </div>
         </div>
 
         <div class="filter-bar" style="margin-top:12px">
@@ -175,6 +179,37 @@ export async function render(host) {
         </div>
       </div>
     `;
+
+    // === التصدير (الأتعاب بعد الفلترة + إجمالي) ===
+    mountExportMenu(host.querySelector('#fees-export'), () => ({
+      title: 'كشف الأتعاب',
+      landscape: true,
+      meta: filterMeta([
+        ['بحث', currentFilters.search],
+        ['الحالة', { pending: 'مستحق', late: 'متأخر', paid: 'مدفوع' }[currentFilters.status]],
+        ['من', currentFilters.from], ['إلى', currentFilters.to],
+      ]),
+      blocks: [
+        { type: 'kv', heading: 'الملخص', pairs: [
+          ['إجمالي الأتعاب', totalDue, 'money'],
+          ['المحصّل', totalPaid, 'money'],
+          ['المتبقي', totalRemaining, 'money'],
+        ] },
+        { type: 'table', heading: 'التفاصيل',
+          columns: [
+            { label: 'الموكل / البيان', value: f => f.client_name || f.notes || `أتعاب #${f.id}` },
+            { label: 'القضية', value: f => (cases || []).find(c => c.id === f.case_id)?.case_number || '' },
+            { label: 'الإجمالي', key: 'amount_due', type: 'money' },
+            { label: 'المدفوع', key: 'amount_paid', type: 'money' },
+            { label: 'المتبقي', key: 'remaining', type: 'money', value: f => (f.amount_due || 0) - (f.amount_paid || 0) },
+            { label: 'تاريخ الاستحقاق', key: 'due_date', type: 'date' },
+            { label: 'الحالة', key: 'status' },
+          ],
+          rows: fees,
+          totals: { amount_due: totalDue, amount_paid: totalPaid, remaining: totalRemaining },
+        },
+      ],
+    }), { filename: 'الأتعاب' });
 
     // === ربط أحداث الفلاتر ===
     let searchTimeout;
@@ -244,8 +279,7 @@ function drawFeesStatusChart(paid, pending, late) {
       labels: ['مدفوع', 'مستحق', 'متأخر'],
       datasets: [{
         data: [paid, pending - late, late],
-        backgroundColor: ['#10B981', '#F59E0B', '#EF4444'],
-        borderWidth: 0,
+        backgroundColor: ['#12B76A', '#D4AF37', '#F04438'],
         hoverOffset: 8,
       }],
     },
@@ -265,7 +299,7 @@ function drawFeesStatusChart(paid, pending, late) {
           },
         },
         tooltip: {
-          backgroundColor: '#111827',
+          backgroundColor: '#0B1222',
           titleFont: { family: 'IBM Plex Sans Arabic', size: 13, weight: '700' },
           bodyFont: { family: 'IBM Plex Sans Arabic', size: 12.5 },
           padding: 12,
@@ -297,15 +331,9 @@ function drawCollectionChart(daily) {
       datasets: [{
         label: 'التحصيل',
         data: data.map(d => d.total),
-        borderColor: '#10B981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        borderWidth: 3,
-        tension: 0.4,
+        borderColor: '#D4AF37',
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
         fill: true,
-        pointRadius: 4,
-        pointBackgroundColor: '#10B981',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
       }],
     },
     options: {
@@ -314,7 +342,7 @@ function drawCollectionChart(daily) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#111827',
+          backgroundColor: '#0B1222',
           titleFont: { family: 'IBM Plex Sans Arabic', size: 13, weight: '700' },
           bodyFont: { family: 'IBM Plex Sans Arabic', size: 12.5 },
           padding: 12,
@@ -582,7 +610,7 @@ function showReceipt(host, payment, fee) {
     <head>
       <meta charset="UTF-8">
       <title>إيصال - ${payment.receipt_number}</title>
-      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <link href="${location.origin}/assets/fonts.css" rel="stylesheet">
       <style>
         * { box-sizing: border-box; }
         body { font-family: 'IBM Plex Sans Arabic', sans-serif; margin: 0; padding: 40px; background: #F9FAFB; color: #111827; }
@@ -638,7 +666,7 @@ function showReceipt(host, payment, fee) {
         </div>
       </div>
 
-      <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+      <script>window.onload = () => (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => setTimeout(() => window.print(), 300));</script>
     </body>
     </html>
   `);

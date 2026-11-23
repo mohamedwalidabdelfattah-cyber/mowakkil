@@ -31,7 +31,6 @@ export function getCurrentUser() {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
-    // ✅ فك التشفير باستخدام TextDecoder (UTF-8) بدل atob العادي
     let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     while (payload.length % 4) payload += '=';
 
@@ -70,10 +69,10 @@ export function getNameFromToken() {
 }
 
 // ============================================================
-// Simple cache (10 ثواني) — لتقليل الطلبات المتكررة
+// Simple cache (10 ثواني)
 // ============================================================
 const _cache = new Map();
-const CACHE_TTL = 10 * 1000; // 10 ثواني
+const CACHE_TTL = 10 * 1000;
 
 function getCached(key) {
   const item = _cache.get(key);
@@ -105,13 +104,11 @@ async function handle(res) {
     try {
       const body = await cloned.json();
 
-      // ✅ ميزة محتاجة ترقية
       if (body?.code === 'UPGRADE_REQUIRED') {
         showUpgradeModal(body.feature, body.required_plan);
         throw new Error(body.error || 'الميزة دي محتاجة ترقية');
       }
 
-      // ✅ وصل للحد الأقصى
       if (body?.code === 'LIMIT_REACHED') {
         showLimitModal(body);
         throw new Error(body.error || 'وصلت للحد الأقصى');
@@ -136,7 +133,6 @@ export async function api(path, opts = {}) {
 }
 
 export async function apiJson(path, opts = {}) {
-  // ✅ caching للـ GET requests
   const isGet = !opts.method || opts.method === 'GET';
 
   if (isGet && !opts.skipCache) {
@@ -152,7 +148,6 @@ export async function apiJson(path, opts = {}) {
 
   const data = await res.json();
 
-  // ✅ نخزن GET requests
   if (isGet) setCache(path, data);
 
   return data;
@@ -172,6 +167,61 @@ export async function saApiJson(path, opts = {}) {
     throw new Error(err.error || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+// ============================================================
+// رفع مستندات — مباشرة إلى Worker (بدون Presigned URL)
+// ============================================================
+export async function uploadDocument(file, { caseId = null, taskId = null, docType = null, notes = null } = {}) {
+  if (!file) throw new Error('مفيش ملف');
+
+  const params = new URLSearchParams();
+  if (caseId) params.set('case_id', caseId);
+  if (taskId) params.set('task_id', taskId);
+  if (docType) params.set('doc_type', docType);
+  if (notes) params.set('notes', String(notes).slice(0, 500));
+  params.set('file_name', file.name);
+
+  const res = await fetch(`${API_BASE}/api/documents?${params.toString()}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file, // الملف يمر عبر Worker (10 ميجا كحد أقصى)
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `فشل الرفع (${res.status})`);
+  }
+
+  return res.json();
+}
+
+// ============================================================
+// تحميل مستند — fetch على الـ API مع التوكن ثم تنزيل الـ blob
+// ============================================================
+export async function downloadDocument(id, name) {
+  const res = await fetch(`${API_BASE}/api/documents/${id}/download`, {
+    headers: { 'Authorization': `Bearer ${getToken()}` },
+  });
+
+  if (res.status === 401) { onAuthExpired(); throw new Error('انتهت الجلسة'); }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `فشل تحميل الملف (${res.status})`);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name || 'file';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ============================================================

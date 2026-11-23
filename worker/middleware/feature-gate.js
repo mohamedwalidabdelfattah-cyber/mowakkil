@@ -4,12 +4,6 @@
 import { fail } from '../lib/response.js';
 
 const FEATURES = {
-  free: {
-    cases: true, clients: true, agenda: true, portal: true,
-    finance: false, invoices: false, ai: false,
-    advanced_reports: false, whatsapp: false,
-    multi_office: false, api: false,
-  },
   starter: {
     cases: true, clients: true, agenda: true, portal: true,
     finance: true, invoices: true, ai: false,
@@ -28,20 +22,51 @@ const FEATURES = {
     advanced_reports: true, whatsapp: true,
     multi_office: true, api: true,
   },
+  // ✅ باقات مدى الحياة
+  lifetime_basic: {
+    cases: true, clients: true, agenda: true, portal: true,
+    finance: false, invoices: false, ai: false,
+    advanced_reports: false, whatsapp: false,
+    multi_office: false, api: false,
+  },
+  lifetime_pro: {
+    cases: true, clients: true, agenda: true, portal: true,
+    finance: true, invoices: true, ai: true,
+    advanced_reports: true, whatsapp: true,
+    multi_office: false, api: true,
+  },
 };
 
 const LIMITS = {
-  free:    { max_users: 1,  max_cases: 10, max_clients: 20,  max_storage_mb: 100 },
-  starter: { max_users: 3,  max_cases: 50, max_clients: 100, max_storage_mb: 1024 },
-  pro:     { max_users: 10, max_cases: -1, max_clients: -1,  max_storage_mb: 10240 },
-  plus:    { max_users: -1, max_cases: -1, max_clients: -1,  max_storage_mb: 51200 },
+  starter: { max_users: 3,  max_cases: 50, max_clients: 100, max_storage_mb: 500 },
+  pro:     { max_users: 10, max_cases: -1, max_clients: -1,  max_storage_mb: 2000 },
+  plus:    { max_users: -1, max_cases: -1, max_clients: -1,  max_storage_mb: 5000 },
+  // ✅ باقات مدى الحياة
+  lifetime_basic: { max_users: 3,  max_cases: -1, max_clients: -1, max_storage_mb: 500 },
+  lifetime_pro:   { max_users: 10, max_cases: -1, max_clients: -1, max_storage_mb: 2000 },
 };
 
+// باقة احتياطية داخلية (مش معروضة للعملاء) لأي اشتراك قديم باسم باقة غير معروف
+const FALLBACK_FEATURES = {
+  cases: true, clients: true, agenda: true, portal: true,
+  finance: false, invoices: false, ai: false,
+  advanced_reports: false, whatsapp: false,
+  multi_office: false, api: false,
+};
+const FALLBACK_LIMITS = { max_users: 1, max_cases: 10, max_clients: 20, max_storage_mb: 100 };
+
+// سقف التخزين أثناء التجربة المجانية (15 يوم) مهما كانت باقة التجربة
+export const TRIAL_STORAGE_MB = 200;
+// سقف تخزين المنصة كلها (ميجا). غيّره لما تشتري مساحة أكتر على Backblaze
+export const PLATFORM_STORAGE_CAP_MB = 9500;
+
 const PLAN_NAMES = {
-  free: 'المجانية',
   starter: 'الأساسية',
   pro: 'الاحترافية',
   plus: 'المتقدمة',
+  // ✅ باقات مدى الحياة
+  lifetime_basic: 'التأسيس (مدى الحياة)',
+  lifetime_pro: 'المكتب المتكامل (مدى الحياة)',
 };
 
 const LIMIT_LABELS = {
@@ -78,7 +103,7 @@ export async function checkFeature(env, officeId, feature) {
     return false;
   }
 
-  const planFeatures = FEATURES[sub.plan] || FEATURES.free;
+  const planFeatures = FEATURES[sub.plan] || FALLBACK_FEATURES;
   return planFeatures[feature] === true;
 }
 
@@ -100,7 +125,7 @@ export async function requireFeature(env, officeId, feature) {
 }
 
 function getRequiredPlan(feature) {
-  const order = ['free', 'starter', 'pro', 'plus'];
+  const order = ['starter', 'pro', 'plus'];
   for (const plan of order) {
     if (FEATURES[plan][feature]) return plan;
   }
@@ -110,29 +135,19 @@ function getRequiredPlan(feature) {
 // ============================================================
 // Limits
 // ============================================================
-
-/**
- * ✅ التحقق من الحد
- * - بيرجع `true` لو مسموح
- * - بيرجع `false` لو وصل الحد
- * - المسؤول (admin) مستثنى من حد المستخدمين
- */
 export async function checkLimit(env, officeId, limitType, currentCount, opts = {}) {
   const sub = await getSubscription(env, officeId);
   if (!sub) return false;
 
-  // ✅ لو الاشتراك موقوف / ملغي / منتهي
   if (sub.status === 'expired' || sub.status === 'cancelled') {
     return false;
   }
 
-  const planLimits = LIMITS[sub.plan] || LIMITS.free;
+  const planLimits = LIMITS[sub.plan] || FALLBACK_LIMITS;
   const max = planLimits[limitType];
 
-  // -1 = غير محدود
   if (max === -1) return true;
 
-  // ✅ استثناء المسؤول من حد المستخدمين
   let adjusted = currentCount;
   if (limitType === 'max_users' && opts.excludeAdmins) {
     adjusted = Math.max(0, currentCount - (opts.excludeAdmins || 0));
@@ -141,16 +156,12 @@ export async function checkLimit(env, officeId, limitType, currentCount, opts = 
   return adjusted < max;
 }
 
-/**
- * ✅ التحقق من الحد مع رسالة فشل جاهزة
- * بيرجع `null` لو مسموح، أو `Response` لو وصل الحد
- */
 export async function requireLimit(env, officeId, limitType, currentCount, opts = {}) {
   const allowed = await checkLimit(env, officeId, limitType, currentCount, opts);
   if (allowed) return null;
 
   const sub = await getSubscription(env, officeId);
-  const planLimits = LIMITS[sub?.plan || 'free'] || LIMITS.free;
+  const planLimits = LIMITS[sub?.plan] || FALLBACK_LIMITS;
   const max = planLimits[limitType];
   const label = LIMIT_LABELS[limitType] || limitType;
 
@@ -162,15 +173,64 @@ export async function requireLimit(env, officeId, limitType, currentCount, opts 
       limit_type: limitType,
       current: currentCount,
       max,
-      plan: sub?.plan || 'free',
+      plan: sub?.plan || 'none',
       upgrade_url: '/pricing',
     }
   );
 }
 
-/**
- * ✅ حساب الاستخدام الحالي
- */
+// الحدود الفعلية للمكتب: أثناء التجربة المساحة محدودة بـ TRIAL_STORAGE_MB
+export function effectiveLimits(sub) {
+  const base = LIMITS[sub?.plan] || FALLBACK_LIMITS;
+  if (sub?.status === 'trial') {
+    const cap = base.max_storage_mb === -1
+      ? TRIAL_STORAGE_MB
+      : Math.min(base.max_storage_mb, TRIAL_STORAGE_MB);
+    return { ...base, max_storage_mb: cap };
+  }
+  return base;
+}
+
+// حد المساحة: (1) سقف المنصة كلها، (2) حد باقة المكتب. الحساب بالبايت.
+export async function requireStorage(env, officeId, incomingBytes) {
+  const sub = await getSubscription(env, officeId);
+  const maxMb = effectiveLimits(sub).max_storage_mb;
+
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(file_size), 0) AS platform_total,
+            COALESCE(SUM(CASE WHEN office_id = ? THEN file_size ELSE 0 END), 0) AS office_total
+     FROM documents WHERE deleted_at IS NULL`
+  ).bind(officeId).first();
+
+  const platformCapMb = Number(env.PLATFORM_STORAGE_CAP_MB) || PLATFORM_STORAGE_CAP_MB;
+  if ((row?.platform_total || 0) + incomingBytes > platformCapMb * 1024 * 1024) {
+    return fail(env,
+      'التخزين غير متاح مؤقتاً — تواصل مع الدعم',
+      503,
+      { code: 'PLATFORM_STORAGE_FULL' }
+    );
+  }
+
+  if (maxMb === -1) return null;
+
+  const usedBytes = row?.office_total || 0;
+  if (usedBytes + incomingBytes <= maxMb * 1024 * 1024) return null;
+
+  const usedMb = Math.ceil(usedBytes / (1024 * 1024));
+  return fail(env,
+    `⛔ المساحة مش كفاية — التخزين (${usedMb}/${maxMb} ميجا)`,
+    403,
+    {
+      code: 'LIMIT_REACHED',
+      limit_type: 'max_storage_mb',
+      current: usedMb,
+      max: maxMb,
+      plan: sub?.plan || 'none',
+      upgrade_url: '/pricing',
+    }
+  );
+}
+
 export async function getUsage(env, officeId) {
   const [users, cases, clients, storage] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) as c FROM users WHERE office_id = ?`)
@@ -194,14 +254,11 @@ export async function getUsage(env, officeId) {
   };
 }
 
-/**
- * ✅ تفاصيل الاستخدام (مع الحدود والنسب)
- */
 export async function getUsageDetails(env, officeId) {
   const sub = await getSubscription(env, officeId);
   if (!sub) return null;
 
-  const planLimits = LIMITS[sub.plan] || LIMITS.free;
+  const planLimits = effectiveLimits(sub);
   const usage = await getUsage(env, officeId);
 
   const items = [
@@ -234,11 +291,11 @@ export async function getUsageDetails(env, officeId) {
 // Helpers
 // ============================================================
 export function getLimits(plan) {
-  return LIMITS[plan] || LIMITS.free;
+  return LIMITS[plan] || FALLBACK_LIMITS;
 }
 
 export function getFeatures(plan) {
-  return FEATURES[plan] || FEATURES.free;
+  return FEATURES[plan] || FALLBACK_FEATURES;
 }
 
 export function getPlanName(plan) {

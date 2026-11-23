@@ -1,15 +1,17 @@
 // web/js/views/reports.js
 import { apiJson } from '../api.js';
 import { fmtMoney, esc, skeleton } from '../ui.js';
+import { mountExportMenu } from '../exporter.js';
 
 let reportChart = null;
+let lastReport = null;
 
 export async function render(host) {
   const now = new Date().toISOString().slice(0, 7);
   host.innerHTML = `
     <div class="app-top">
       <h2>📊 التقرير المالي الشهري</h2>
-      <button class="btn btn-ghost" id="print-btn">🖨 طباعة</button>
+      <div id="report-export"></div>
     </div>
 
     <div class="card">
@@ -28,7 +30,25 @@ export async function render(host) {
   `;
 
   host.querySelector('#rp-month').addEventListener('change', () => load(host));
-  host.querySelector('#print-btn').addEventListener('click', () => window.print());
+  mountExportMenu(host.querySelector('#report-export'), () => {
+    if (!lastReport) throw new Error('استنى لحد ما التقرير يحمّل');
+    const { d, month } = lastReport;
+    const monthLabel = new Date(month + '-01').toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
+    return {
+      title: 'التقرير المالي الشهري',
+      subtitle: monthLabel,
+      meta: [['الشهر', monthLabel]],
+      blocks: [{
+        type: 'kv', heading: 'ملخص الشهر', pairs: [
+          ['الأتعاب المستحقة', d.fees_due, 'money'],
+          ['الأتعاب المتحصّلة', d.fees_paid, 'money'],
+          ['إجمالي المرتبات', d.salaries, 'money'],
+          ['مصاريف الجلسات', d.expenses, 'money'],
+          ['الصافي', d.net, 'money'],
+        ],
+      }],
+    };
+  }, { filename: 'التقرير_المالي' });
   load(host);
 }
 
@@ -42,6 +62,7 @@ async function load(host) {
 
   try {
     const d = await apiJson(`/api/reports/monthly?month=${month}`);
+    lastReport = { d, month };
 
     const isProfit = d.net >= 0;
     const totalExpenses = (d.salaries || 0) + (d.expenses || 0);
@@ -111,18 +132,8 @@ async function load(host) {
               d.expenses || 0,
               d.net || 0,
             ],
-            backgroundColor: [
-              'rgba(212, 175, 55, 0.8)',
-              'rgba(16, 185, 129, 0.8)',
-              'rgba(245, 158, 11, 0.8)',
-              'rgba(239, 68, 68, 0.8)',
-              d.net >= 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)',
-            ],
-            borderColor: [
-              '#0F172A', '#10B981', '#F59E0B', '#EF4444', d.net >= 0 ? '#10B981' : '#EF4444',
-            ],
-            borderWidth: 2,
-            borderRadius: 8,
+            backgroundColor: ['#2A3654', '#D4AF37', '#98A2B3', '#667085', d.net >= 0 ? '#12B76A' : '#F04438'],
+            maxBarThickness: 44,
           }],
         },
         options: {
@@ -131,7 +142,7 @@ async function load(host) {
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: '#111827',
+              backgroundColor: '#0B1222',
               titleFont: { family: 'IBM Plex Sans Arabic', size: 13, weight: '700' },
               bodyFont: { family: 'IBM Plex Sans Arabic', size: 12.5 },
               padding: 12,

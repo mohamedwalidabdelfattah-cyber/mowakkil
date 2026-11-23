@@ -199,10 +199,10 @@ function printInvoice(inv, lines, office) {
     <head>
       <meta charset="UTF-8">
       <title>فاتورة ${inv.invoice_number}</title>
-      <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+      <link href="${location.origin}/assets/fonts.css" rel="stylesheet">
       <style>
         * { box-sizing: border-box; }
-        body { font-family: 'Tajawal', sans-serif; margin: 0; padding: 40px; background: #f6f3ec; color: #101b28; }
+        body { font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, Arial, sans-serif; margin: 0; padding: 40px; background: #f6f3ec; color: #101b28; }
         .invoice { max-width: 800px; margin: 0 auto; background: #fff; padding: 50px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
         .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px double #b6903f; padding-bottom: 24px; margin-bottom: 30px; }
         .office-info h1 { margin: 0; color: #b6903f; font-size: 28px; }
@@ -319,7 +319,7 @@ function printInvoice(inv, lines, office) {
         </div>
       </div>
 
-      <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+      <script>window.onload = () => (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => setTimeout(() => window.print(), 300));</script>
     </body>
     </html>
   `);

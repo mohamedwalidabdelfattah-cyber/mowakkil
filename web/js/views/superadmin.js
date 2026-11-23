@@ -101,6 +101,20 @@ async function renderSABody() {
 
     <div id="sa-stats" class="stats"></div>
 
+    <!-- 🤖 أدوات الذكاء الاصطناعي -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <h3 style="margin:0">🤖 الذكاء الاصطناعي (نماذج مجانية)</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" data-action="ai-health">🩺 فحص النماذج</button>
+          <button class="btn btn-primary" data-action="ai-reindex">📚 فهرسة المواد القانونية</button>
+        </div>
+      </div>
+      <div id="sa-ai-out" style="font-size:13.5px;margin-top:10px;color:var(--text-soft)">
+        افحص النماذج للتأكد إن مفاتيح Groq وGemini شغالة. الفهرسة مطلوبة مرة واحدة عشان البحث الدلالي في المواد القانونية يشتغل.
+      </div>
+    </div>
+
     <!-- 💳 طلبات الدفع -->
     <div class="card" style="margin-bottom:20px">
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
@@ -120,12 +134,13 @@ async function renderSABody() {
       <div class="section-header" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
         <h3 style="margin:0">🏢 المكاتب</h3>
         <input id="sa-search" class="input" placeholder="ابحث باسم المكتب..." style="max-width:240px">
-        <select id="sa-filter-plan" class="select" style="max-width:140px">
+        <select id="sa-filter-plan" class="select" style="max-width:180px">
           <option value="">كل الباقات</option>
-          <option value="free">مجانية</option>
           <option value="starter">أساسية</option>
           <option value="pro">احترافية</option>
           <option value="plus">متقدمة</option>
+          <option value="lifetime_basic">تأسيس (مدى الحياة)</option>
+          <option value="lifetime_pro">متكامل (مدى الحياة)</option>
         </select>
         <select id="sa-filter-status" class="select" style="max-width:140px">
           <option value="">كل الحالات</option>
@@ -140,6 +155,8 @@ async function renderSABody() {
   `;
 
   host.querySelector('[data-action="sa-logout"]').addEventListener('click', doLogout);
+  host.querySelector('[data-action="ai-health"]').addEventListener('click', runAiHealth);
+  host.querySelector('[data-action="ai-reindex"]').addEventListener('click', runReindex);
 
   const searchInput = host.querySelector('#sa-search');
   const planSelect = host.querySelector('#sa-filter-plan');
@@ -168,6 +185,51 @@ async function renderSABody() {
   });
 
   await Promise.all([loadStats(), loadOffices(), loadPaymentRequests()]);
+}
+
+// ============================================================
+// AI tools
+// ============================================================
+async function runAiHealth() {
+  const out = document.getElementById('sa-ai-out');
+  out.textContent = '⏳ جاري فحص النماذج...';
+  try {
+    const d = await saApiJson('/api/superadmin/ai/health');
+    const rows = (d.providers || []).map(p => `
+      <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-soft)">
+        <span>${p.ok ? '✅' : '❌'} <strong>${esc(p.provider)}</strong> <span class="mono" style="font-size:12px">${esc(p.model || '')}</span></span>
+        <span style="font-size:12px">${p.ok ? esc(p.ms + 'ms') : esc(p.error || '')}</span>
+      </div>`).join('');
+    const v = d.vectorize || {};
+    out.innerHTML = `${rows}
+      <div style="margin-top:8px">📚 المواد في الداتابيز: <strong>${esc(d.law_articles)}</strong> ·
+        المفهرس في Vectorize: <strong>${esc(v.count ?? (v.error ? 'خطأ' : '—'))}</strong> ·
+        بحث الويب (Tavily): ${d.tavily ? '✅' : '❌'}</div>`;
+  } catch (e) {
+    out.innerHTML = `<span style="color:var(--danger)">${esc(e.message)}</span>`;
+  }
+}
+
+async function runReindex() {
+  const out = document.getElementById('sa-ai-out');
+  if (!confirm('هيتم فهرسة كل المواد القانونية على دفعات (ممكن ياخد كام دقيقة). نكمل؟')) return;
+  let after = 0;
+  let total = 0;
+  try {
+    for (;;) {
+      const d = await saApiJson('/api/superadmin/ai/reindex-laws', {
+        method: 'POST',
+        body: JSON.stringify({ after_id: after, limit: 25 }),
+      });
+      after = d.last_id;
+      total = d.total || total;
+      out.textContent = `⏳ تم فهرسة ${d.progress || 0} من ${total} مادة...`;
+      if (d.done) break;
+    }
+    out.textContent = `✅ خلصت الفهرسة (${total} مادة). ممكن الأرقام في Vectorize تاخد دقيقة عشان تتحدث.`;
+  } catch (e) {
+    out.innerHTML = `<span style="color:var(--danger)">${esc(e.message)}</span> — اضغط الزرار تاني عشان تكمل.`;
+  }
 }
 
 // ============================================================
@@ -207,7 +269,10 @@ async function loadPaymentRequests() {
       return;
     }
 
-    const planNames = { starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة' };
+    const planNames = {
+      starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة',
+      lifetime_basic: 'تأسيس (مدى الحياة)', lifetime_pro: 'متكامل (مدى الحياة)'
+    };
     const methodNames = { vodafone_cash: '📱 فودافون كاش', instapay: '⚡ إنستاباي' };
     const statusLabels = {
       pending:  { label: '⏳ قيد المراجعة', cls: 'trial' },
@@ -268,7 +333,10 @@ async function openPRModal(prId) {
 
   try {
     const r = await saApiJson(`/api/superadmin/payment-requests/${prId}`);
-    const planNames = { starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة' };
+    const planNames = {
+      starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة',
+      lifetime_basic: 'تأسيس (مدى الحياة)', lifetime_pro: 'متكامل (مدى الحياة)'
+    };
     const methodNames = { vodafone_cash: '📱 فودافون كاش', instapay: '⚡ إنستاباي' };
     const statusLabels = { pending: '⏳ قيد المراجعة', approved: '✅ مقبول', rejected: '❌ مرفوض' };
     const isPending = r.status === 'pending';
@@ -374,8 +442,19 @@ async function loadOffices() {
     }
 
     el.innerHTML = list.map(o => {
-      const planLabels = { free: 'مجانية', starter: 'أساسية', pro: 'احترافية', plus: 'متقدمة' };
+      const planLabels = {
+        free: 'مجانية', starter: 'أساسية', pro: 'احترافية', plus: 'متقدمة',
+        lifetime_basic: 'تأسيس (مدى الحياة)', lifetime_pro: 'متكامل (مدى الحياة)'
+      };
       const statusLabels = { trial: '🎁 تجربة', active: '✅ نشط', expired: '⏰ منتهي', cancelled: '❌ ملغي' };
+
+      let waUrl = '';
+      if (o.owner_phone) {
+        const cleanPhone = String(o.owner_phone).replace(/\D/g, '');
+        const prefixed = cleanPhone.startsWith('20') ? cleanPhone : '2' + cleanPhone;
+        const waMessage = encodeURIComponent(`مرحباً ${o.owner_name || ''}، أنا من منصة مُوكِّل. حابب أطمن على تجربتك للمنصة وأجاوب على أي استفسار.`);
+        waUrl = `https://wa.me/${prefixed}?text=${waMessage}`;
+      }
 
       return `
         <div class="item" data-office-id="${o.id}" style="cursor:pointer">
@@ -389,9 +468,23 @@ async function loadOffices() {
             💎 ${planLabels[o.sub_plan] || o.sub_plan || '—'}
             · 👥 ${o.users_count} مستخدم · 📁 ${o.cases_count} قضية · 👤 ${o.clients_count} موكل
           </div>
+          <div class="meta" style="font-size:12px">
+            ${o.owner_name ? `👤 ${esc(o.owner_name)}` : ''}
+            ${o.owner_phone ? ` · 📱 ${esc(o.owner_phone)}` : ''}
+            ${o.owner_email ? ` · ✉️ ${esc(o.owner_email)}` : ''}
+          </div>
           ${o.sub_trial_ends_at || o.sub_expires_at ? `
             <div class="meta" style="font-size:12px">
               📅 ${o.sub_status === 'trial' ? 'تنتهي التجربة' : 'يتجدد'}: ${esc(fmtDate(o.sub_trial_ends_at || o.sub_expires_at))}
+            </div>
+          ` : ''}
+          ${waUrl ? `
+            <div style="margin-top:6px">
+              <a href="${waUrl}" target="_blank" rel="noopener"
+                 onclick="event.stopPropagation()"
+                 class="btn btn-ghost btn-sm" style="color:var(--success);font-size:12px;display:inline-flex;align-items:center;gap:4px">
+                💬 واتساب
+              </a>
             </div>
           ` : ''}
         </div>
@@ -437,8 +530,19 @@ async function openOfficeModal(officeId) {
     const data = await saApiJson(`/api/superadmin/offices/${officeId}`);
     const { office, subscription: sub, history } = data;
 
-    const planLabels = { free: 'المجانية', starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة' };
+    const planLabels = {
+      free: 'المجانية', starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة',
+      lifetime_basic: 'التأسيس (مدى الحياة)', lifetime_pro: 'المكتب المتكامل (مدى الحياة)'
+    };
     const statusLabels = { trial: '🎁 تجربة', active: '✅ نشط', expired: '⏰ منتهي', cancelled: '❌ ملغي' };
+
+    let waUrl = '';
+    if (office.owner_phone) {
+      const cleanPhone = String(office.owner_phone).replace(/\D/g, '');
+      const prefixed = cleanPhone.startsWith('20') ? cleanPhone : '2' + cleanPhone;
+      const waMessage = encodeURIComponent(`مرحباً ${office.owner_name || ''}، أنا من منصة مُوكِّل. حابب أطمن على تجربتك للمنصة وأجاوب على أي استفسار.`);
+      waUrl = `https://wa.me/${prefixed}?text=${waMessage}`;
+    }
 
     document.getElementById('sa-office-content').innerHTML = `
       <div style="text-align:center;padding:8px 0 16px;border-bottom:1px solid var(--border-soft);margin-bottom:16px">
@@ -451,6 +555,21 @@ async function openOfficeModal(officeId) {
         <div class="stat"><div class="l">📁 قضايا</div><div class="n">${office.cases_count}</div></div>
         <div class="stat"><div class="l">👤 موكلين</div><div class="n">${office.clients_count}</div></div>
       </div>
+
+      ${office.owner_name || office.owner_phone || office.owner_email ? `
+        <div class="card" style="margin-bottom:12px;background:var(--gray-50)">
+          <h4 style="margin:0 0 12px;font-size:14px">👤 بيانات صاحب المكتب</h4>
+          ${office.owner_name ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13.5px"><span>الاسم:</span><strong>${esc(office.owner_name)}</strong></div>` : ''}
+          ${office.owner_phone ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13.5px"><span>الهاتف:</span><strong style="font-family:var(--font-mono)">${esc(office.owner_phone)}</strong></div>` : ''}
+          ${office.owner_email ? `<div style="display:flex;justify-content:space-between;font-size:13.5px"><span>الإيميل:</span><strong>${esc(office.owner_email)}</strong></div>` : ''}
+          ${waUrl ? `
+            <a href="${waUrl}" target="_blank" rel="noopener"
+               class="btn btn-primary btn-block" style="margin-top:12px;text-decoration:none;text-align:center;display:block;background:#25D366;border-color:#25D366">
+              💬 تواصل واتساب
+            </a>
+          ` : ''}
+        </div>
+      ` : ''}
 
       <div class="card" style="margin-bottom:12px;background:var(--gray-50)">
         <h4 style="margin:0 0 12px;font-size:14px">💎 الاشتراك الحالي</h4>
@@ -465,10 +584,11 @@ async function openOfficeModal(officeId) {
 
       <label class="label">🎛️ تغيير الباقة</label>
       <select id="sa-plan-select" class="select">
-        <option value="free" ${sub?.plan === 'free' ? 'selected' : ''}>المجانية (0 ج)</option>
-        <option value="starter" ${sub?.plan === 'starter' ? 'selected' : ''}>الأساسية (199 ج)</option>
-        <option value="pro" ${sub?.plan === 'pro' ? 'selected' : ''}>الاحترافية (399 ج)</option>
-        <option value="plus" ${sub?.plan === 'plus' ? 'selected' : ''}>المتقدمة (799 ج)</option>
+        <option value="starter" ${sub?.plan === 'starter' ? 'selected' : ''}>الأساسية (199 ج/شهر)</option>
+        <option value="pro" ${sub?.plan === 'pro' ? 'selected' : ''}>الاحترافية (399 ج/شهر)</option>
+        <option value="plus" ${sub?.plan === 'plus' ? 'selected' : ''}>المتقدمة (799 ج/شهر)</option>
+        <option value="lifetime_basic" ${sub?.plan === 'lifetime_basic' ? 'selected' : ''}>التأسيس (مدى الحياة - 4999 ج)</option>
+        <option value="lifetime_pro" ${sub?.plan === 'lifetime_pro' ? 'selected' : ''}>المكتب المتكامل (مدى الحياة - 9999 ج)</option>
       </select>
 
       <button class="btn btn-primary btn-block" style="margin-top:12px" data-action="change-plan">
@@ -552,7 +672,6 @@ async function openOfficeModal(officeId) {
       } catch (e) { toast(e.message, 'bad'); }
     });
 
-    // ✅ حذف المكتب
     modal.querySelector('[data-action="delete-office"]')?.addEventListener('click', async () => {
       if (!confirm('⚠️ متأكد؟ هيتم حذف كل بيانات المكتب:\n- القضايا\n- الموكلين\n- الفواتير\n- المستخدمين\n- الاشتراكات\n\nلا يمكن التراجع!')) return;
       if (!confirm('⚠️ تأكيد أخير — هل أنت متأكد 100%؟')) return;
@@ -577,4 +696,4 @@ async function openOfficeModal(officeId) {
 // ============================================================
 export function render(host) {
   host.innerHTML = '<div class="card"><div class="empty">المسؤول له لوحة منفصلة — اضغط على "دخول مسؤول المنصة".</div></div>';
-} 
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "corsRuleName": "allowMowakkilUpload",
+    "allowedOrigins": ["https://mowakkil-2026.pages.dev"],
+    "allowedHeaders": ["content-type"],
+    "allowedOperations": ["s3_put"],
+    "exposeHeaders": ["ETag"],
+    "maxAgeSeconds": 3600
+  }
+]

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0F172A">
+  <meta name="theme-color" content="#070C18">
   <title>مُوكِّل — المنصة الذكية لإدارة مكاتب المحاماة</title>
 
   <link rel="stylesheet" href="/assets/fonts.css">
@@ -12,19 +12,16 @@
   <link rel="manifest" href="/assets/site.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="مُوكِّل">
-  <link rel="apple-touch-icon" href="/assets/logos/icon-192.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="/assets/logos/icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="/assets/logos/icon-512.png">
+  <link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/app/favicon-48.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/app/icon-192.png">
   <link rel="shortcut icon" href="/assets/logos/favicon.ico">
 
   <!-- مكتبات أساسية -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  
-  <!-- ✅ مكتبات التصدير الاحترافي -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+  <!-- مكتبة Excel بتتحمل وقت التصدير بس (web/js/exporter.js) -->
 
   <!-- ملفات التنسيقات الأساسية -->
   <link rel="stylesheet" href="/assets/design-system.css">
@@ -32,7 +29,7 @@
   <link rel="stylesheet" href="/assets/styles.clean.css">
   
   <!-- ملف الهوية الجديدة (يغلب الألوان القديمة) -->
-  <link rel="stylesheet" href="/assets/brand-theme.css">
+  <link rel="stylesheet" href="/assets/theme.css">
   
   <!-- تنسيقات الصفحة الرئيسية -->
   <link rel="stylesheet" href="/assets/landing.css">
@@ -394,7 +391,7 @@
 
 <script>
   function isAppInstalled() {
-    if (localStorage.getItem('pwa-installed') === '1') return true;
+    // شغال جوه التطبيق نفسه (المثبّت أو الـ APK) — مش بنعتمد على علامة محفوظة لأن المستخدم ممكن يمسح التطبيق
     return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   }
   function getEnvironment() {
@@ -412,9 +409,25 @@
     if (/chrome/.test(ua)) return { os: 'desktop', browser: 'chrome', canDirect: true };
     return { os: 'desktop', browser: 'other', canDirect: false };
   }
+  // ملف تطبيق أندرويد (APK) — بديل للمتصفحات اللي مش بتدعم التثبيت المباشر
+  const APK_URL = '/downloads/mowakkil.apk';
+  let apkAvailable = null;
+  async function hasApk() {
+    if (apkAvailable !== null) return apkAvailable;
+    try {
+      const r = await fetch(APK_URL, { method: 'HEAD', cache: 'no-store' });
+      apkAvailable = r.ok && !(r.headers.get('content-type') || '').includes('text/html');
+    } catch { apkAvailable = false; }
+    return apkAvailable;
+  }
+
+  // الترتيب: 1) تثبيت أصلي من المتصفح (ضغطة واحدة، بدون تحذيرات)
+  //          2) أندرويد بدون دعم → تنزيل APK
+  //          3) آيفون/غيره → خطوات الإضافة للشاشة الرئيسية
   document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('#pwa-install-btn');
+    const btn = e.target.closest('#pwa-install-btn, [data-install-app]');
     if (!btn) return;
+    e.preventDefault();
     const env = getEnvironment();
     if (isAppInstalled()) { alert('✅ التطبيق مثبّت عندك بالفعل'); return; }
     if (window.__deferredInstallPrompt) {
@@ -426,8 +439,35 @@
         return;
       } catch (err) { console.error('Prompt failed:', err); }
     }
+    if (env.os === 'android' && await hasApk()) {
+      const a = document.createElement('a');
+      a.href = APK_URL;
+      a.download = 'mowakkil.apk';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showApkSheet();
+      return;
+    }
     showInstallSheet(env);
   });
+
+  function showApkSheet() {
+    document.querySelectorAll('.install-sheet, .install-sheet-backdrop').forEach(el => el.remove());
+    const steps = [
+      'استنى التنزيل يخلص، وافتح الملف <strong>mowakkil.apk</strong> من الإشعارات أو من "التنزيلات"',
+      'لو ظهرت رسالة <strong>"تثبيت تطبيقات غير معروفة"</strong>، دوس <strong>الإعدادات</strong> وفعّل <strong>"السماح من هذا المصدر"</strong> وارجع',
+      'دوس <strong>تثبيت</strong> — وهتلاقي مُوكِّل في قائمة التطبيقات',
+    ].map((s, i) => `<li class="install-step"><span class="install-step-num">${i + 1}</span><div class="install-step-body">${s}</div></li>`).join('');
+    const html = `<div class="install-sheet-backdrop" id="install-sheet-backdrop"></div><div class="install-sheet" id="install-sheet"><div class="install-sheet-handle"></div><h3 class="install-sheet-title">📲 جاري تنزيل تطبيق مُوكِّل</h3><p class="install-sheet-sub">التطبيق رسمي من مُوكِّل وحجمه صغير. لأنه مش من متجر جوجل، أندرويد هيطلب إذن مرة واحدة.</p><ul class="install-steps">${steps}</ul><div class="install-sheet-actions"><a href="${APK_URL}" download class="btn btn-ghost btn-block" style="text-decoration:none;text-align:center">⬇️ التنزيل ما بدأش؟ دوس هنا</a><button class="btn btn-primary btn-block" id="install-sheet-close">تمام، فهمت</button></div></div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const sheet = document.getElementById('install-sheet');
+    const backdrop = document.getElementById('install-sheet-backdrop');
+    requestAnimationFrame(() => { sheet.classList.add('show'); backdrop.classList.add('show'); });
+    const close = () => { sheet.classList.remove('show'); backdrop.classList.remove('show'); setTimeout(() => { sheet.remove(); backdrop.remove(); }, 300); };
+    document.getElementById('install-sheet-close')?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+  }
   function showInstallSheet(env) {
     document.querySelectorAll('.install-sheet, .install-sheet-backdrop').forEach(el => el.remove());
     let title = '', sub = '', steps = '', showChromeBtn = false;
@@ -459,9 +499,6 @@
     backdrop?.addEventListener('click', close);
   }
 </script>
-
-<!-- ✅ ملف التصدير (أزرار PDF / Word / Excel / طباعة) -->
-<script src="/js/export.js"></script>
 
 <script type="module" src="/js/main.js"></script>
 </body>

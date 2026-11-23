@@ -1,7 +1,11 @@
 // web/js/views/cases.js
-import { apiJson, api } from '../api.js';
+import { apiJson, api, uploadDocument, downloadDocument } from '../api.js';
 import { esc, empty, toast, skeleton, fmtMoney, fmtDate } from '../ui.js';
 import { getClients, setCases } from '../state.js';
+import { caseTypeOptions } from '../case-types.js';
+import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
+import { mountExportMenu, filterMeta } from '../exporter.js';
+import { bindPanels } from '../ui.js';
 
 let currentFilters = {
   archived: false,
@@ -35,7 +39,18 @@ export async function render(host) {
     const caseOpts   = cases.map(c => `<option value="${c.id}">${esc(c.case_number || c.id)}</option>`).join('');
 
     host.innerHTML = `
-      <div class="card">
+      <div class="app-top">
+        <div>
+          <h2>القضايا</h2>
+          <div class="meta" style="margin:2px 0 0">${cases.length} ${currentFilters.archived ? 'قضية مؤرشفة' : 'قضية مفتوحة'}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" data-toggle-panel="session-panel">📅 جلسة جديدة</button>
+          <button class="btn btn-primary" data-toggle-panel="case-panel">➕ قضية جديدة</button>
+        </div>
+      </div>
+
+      <div class="card" id="case-panel" hidden>
         <h3>إضافة قضية جديدة</h3>
         <div class="row">
           <div><label>الموكل</label>
@@ -50,18 +65,14 @@ export async function render(host) {
           <div><label>النوع</label>
             <select id="c-type">
               <option value="">— اختر —</option>
-              <option>مدني</option>
-              <option>جنائي</option>
-              <option>تجاري</option>
-              <option>أسرة</option>
-              <option>إداري</option>
+              ${caseTypeOptions()}
             </select>
           </div>
         </div>
         <button class="primary" style="margin-top:10px" id="add-case">حفظ القضية</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="session-panel" hidden>
         <h3>إضافة جلسة لقضية</h3>
         <div class="row">
           <div><label>القضية</label><select id="sx-case">${caseOpts}</select></div>
@@ -82,11 +93,7 @@ export async function render(host) {
           <div class="filter-item">
             <select class="filter-input" id="filter-type">
               <option value="">كل الأنواع</option>
-              <option value="مدني"   ${currentFilters.type === 'مدني' ? 'selected' : ''}>مدني</option>
-              <option value="جنائي"  ${currentFilters.type === 'جنائي' ? 'selected' : ''}>جنائي</option>
-              <option value="تجاري"  ${currentFilters.type === 'تجاري' ? 'selected' : ''}>تجاري</option>
-              <option value="أسرة"   ${currentFilters.type === 'أسرة' ? 'selected' : ''}>أسرة</option>
-              <option value="إداري"  ${currentFilters.type === 'إداري' ? 'selected' : ''}>إداري</option>
+              ${caseTypeOptions(currentFilters.type)}
             </select>
           </div>
           <div class="filter-item">
@@ -98,10 +105,13 @@ export async function render(host) {
         </div>
       </div>
 
-      <!-- التبويبات: المفتوحة / الأرشيف -->
-      <div class="filter-tabs" style="margin-bottom:12px">
+      <!-- التبويبات: المفتوحة / الأرشيف + التصدير -->
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <div class="filter-tabs">
         <button data-archived="0" class="${!currentFilters.archived ? 'active' : ''}">📂 القضايا المفتوحة</button>
         <button data-archived="1" class="${currentFilters.archived ? 'active' : ''}">🗄️ الأرشيف</button>
+      </div>
+      <div id="cases-export"></div>
       </div>
 
       <div id="cases-list">
@@ -116,6 +126,30 @@ export async function render(host) {
         }
       </div>
     `;
+
+    bindPanels(host);
+
+    // === التصدير (القايمة الحالية بعد الفلترة) ===
+    mountExportMenu(host.querySelector('#cases-export'), () => ({
+      title: currentFilters.archived ? 'القضايا المؤرشفة' : 'القضايا المفتوحة',
+      landscape: true,
+      meta: filterMeta([
+        ['بحث', currentFilters.search], ['النوع', currentFilters.type], ['المحكمة', currentFilters.court],
+      ]),
+      blocks: [{
+        type: 'table',
+        columns: [
+          { label: 'رقم القضية', key: 'case_number' },
+          { label: 'الموكل', key: 'client_name' },
+          { label: 'المحكمة', key: 'court' },
+          { label: 'الدرجة', key: 'degree' },
+          { label: 'النوع', key: 'case_type' },
+          { label: 'الحالة', key: 'status' },
+          { label: 'تاريخ الإضافة', key: 'created_at', type: 'date' },
+        ],
+        rows: cases,
+      }],
+    }), { filename: 'القضايا' });
 
     // === ربط أحداث الفلاتر ===
 
@@ -187,6 +221,7 @@ export async function render(host) {
       const action = btn.dataset.caseAction;
 
       if (action === 'view')     return showCaseDetail(id);
+      if (action === 'ai')       return showCaseDetail(id, 'ai');
       if (action === 'archive')  { await apiJson(`/api/cases/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'مؤرشفة' }) }); loadAndRender(); }
       if (action === 'restore')  { await apiJson(`/api/cases/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'مفتوحة' }) }); loadAndRender(); }
       if (action === 'delete')   { if (confirm('متأكد من الحذف؟')) { await apiJson(`/api/cases/${id}`, { method: 'DELETE' }); loadAndRender(); toast('اتحذفت', 'ok'); } }
@@ -206,6 +241,7 @@ function caseItem(c) {
       <div class="meta">${esc(c.court || '—')} · ${esc(c.degree || '')}${c.case_type ? ' · ' + esc(c.case_type) : ''}</div>
       <div class="acts">
         <button class="ghost" data-case-action="view" data-id="${c.id}" style="color:var(--primary);font-weight:700">👁 تفاصيل</button>
+        <button class="ghost" data-case-action="ai" data-id="${c.id}" style="font-weight:700">🤖 تحليل ذكي</button>
         ${c.status === 'مؤرشفة'
           ? `<button class="ghost" data-case-action="restore" data-id="${c.id}">استرجاع</button>`
           : `<button class="ghost" data-case-action="archive" data-id="${c.id}">أرشفة</button>`}
@@ -215,9 +251,9 @@ function caseItem(c) {
 }
 
 // ============================================================
-// تفاصيل القضية (Modal شامل) — لم يتغير
+// تفاصيل القضية (Modal شامل)
 // ============================================================
-async function showCaseDetail(id) {
+async function showCaseDetail(id, initialTab = 'overview') {
   document.getElementById('case-detail-modal')?.remove();
 
   const modal = document.createElement('div');
@@ -248,7 +284,8 @@ async function showCaseDetail(id) {
 
     const tabsHtml = `
       <div class="case-tabs" style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border-soft);overflow-x:auto">
-        <button class="case-tab active" data-tab="overview">📋 نظرة عامة</button>
+        <button class="case-tab ${initialTab === 'overview' ? 'active' : ''}" data-tab="overview">📋 نظرة عامة</button>
+        <button class="case-tab ${initialTab === 'ai' ? 'active' : ''}" data-tab="ai">🤖 تحليل ذكي</button>
         <button class="case-tab" data-tab="sessions">📅 الجلسات (${sessions.length})</button>
         <button class="case-tab" data-tab="fees">💰 الأتعاب (${fees.length})</button>
         <button class="case-tab" data-tab="expenses">💸 المصاريف (${expenses.length})</button>
@@ -362,19 +399,18 @@ async function showCaseDetail(id) {
       }
 
       if (tab === 'docs') {
-        el.innerHTML = documents.length
-          ? documents.map(doc => `
-              <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
-                <div class="top">
-                  <span class="name">${esc(doc.file_name)}</span>
-                  <span class="num mono">${esc(doc.doc_type || '')}</span>
-                </div>
-                <div class="acts" style="margin-top:6px">
-                  <a class="ghost" href="/api/documents/${doc.id}/download" target="_blank" style="text-decoration:none">تحميل</a>
-                </div>
-              </div>
-            `).join('')
-          : empty('مفيش مستندات', '📎');
+        renderAttachments(el, {
+          caseId: id,
+          onChange: docs => {
+            documents.splice(0, documents.length, ...docs);
+            const t = modal.querySelector('.case-tab[data-tab="docs"]');
+            if (t) t.textContent = `📎 المستندات (${docs.length})`;
+          },
+        });
+      }
+
+      if (tab === 'ai') {
+        renderAiTab(el, c, documents);
       }
 
       if (tab === 'tasks') {
@@ -392,7 +428,7 @@ async function showCaseDetail(id) {
       }
     };
 
-    renderTab('overview');
+    renderTab(initialTab);
 
     modal.querySelectorAll('.case-tab').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -405,4 +441,261 @@ async function showCaseDetail(id) {
   } catch (e) {
     document.getElementById('case-detail-content').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
-} 
+}
+
+// ============================================================
+// تبويب "تحليل ذكي" — تحليل القضية بالذكاء الاصطناعي + المهارات القانونية
+// ============================================================
+const AI_DRAFT_KEY = id => `mw-case-ai-draft-${id}`;
+
+function renderAiTab(el, c, documents = []) {
+  let draft = {};
+  try { draft = JSON.parse(localStorage.getItem(AI_DRAFT_KEY(c.id)) || '{}'); } catch {}
+
+  const docsList = documents.length
+    ? documents.map(d => `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13.5px;cursor:pointer">
+          <input type="checkbox" class="ai-doc" value="${d.id}" checked style="width:auto">
+          <span>📄 ${esc(d.file_name)}</span>
+          ${d.doc_type ? `<span class="meta">${esc(d.doc_type)}</span>` : ''}
+        </label>`).join('')
+    : '<div class="meta">مفيش مرفقات للقضية لسه — ارفع ملف القضية من هنا.</div>';
+
+  el.innerHTML = `
+    <div class="card" style="background:var(--gray-50)">
+      <div style="font-size:13px;color:var(--text-soft);margin-bottom:10px">
+        التحليل بيقرا <strong>مرفقات القضية</strong> وبياناتها وجلساتها تلقائياً، ويستخدم مهارة قانونية حسب نوع القضية ومواد من قاعدة البيانات القانونية.
+        الوقائع اختيارية — اكتبها لو عايز تضيف تفاصيل مش موجودة في المستندات.
+      </div>
+
+      <h4 style="margin:0 0 6px;font-size:14px">📎 مستندات القضية اللي هتتحلل</h4>
+      <div id="ai-docs">${docsList}</div>
+      <input type="file" id="ai-upload-file" style="display:none" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png">
+      <div style="display:flex;gap:8px;margin:8px 0 12px;flex-wrap:wrap">
+        <select id="ai-upload-type" style="flex:1;min-width:150px">
+          <option value="">— نوع المستند —</option>
+          ${DOC_CATEGORIES.map(c => `<option value="${esc(c.label)}">${c.icon} ${esc(c.label)}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost" id="ai-upload-btn" style="flex:1;min-width:150px">⬆️ رفع مستند جديد للقضية</button>
+      </div>
+      <div id="ai-upload-status" class="status"></div>
+
+      <div class="row">
+        <div><label>نوع القضية</label>
+          <select id="ai-type"><option value="">— غير محدد —</option>${caseTypeOptions(c.case_type || '')}</select></div>
+        <div><label>صفة الموكل</label>
+          <select id="ai-role">
+            ${['', 'مدعي', 'مدعى عليه', 'متهم', 'مجني عليه / مدعي بالحق المدني', 'طاعن', 'مطعون ضده', 'مستأنف', 'مستأنف ضده']
+              .map(r => `<option value="${esc(r)}" ${draft.client_role === r ? 'selected' : ''}>${r ? esc(r) : '— اختر —'}</option>`).join('')}
+          </select></div>
+      </div>
+      <label>الخصم</label>
+      <input id="ai-opponent" placeholder="اسم الخصم وصفته (اختياري)" value="${esc(draft.opponent || '')}">
+      <label style="margin-top:8px">وقائع إضافية (اختياري)</label>
+      <textarea id="ai-facts" rows="4" placeholder="أي تفاصيل مش موجودة في المستندات: موقف الخصم، اللي حصل في الجلسات، اللي الموكل حكاه...">${esc(draft.facts || '')}</textarea>
+      <label style="margin-top:8px">الطلبات</label>
+      <textarea id="ai-requests" rows="2" placeholder="الطلبات في الدعوى أو اللي الموكل عايزه (اختياري)">${esc(draft.requests || '')}</textarea>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:13px">📄 لصق نص مستند من القضية (اختياري)</summary>
+        <textarea id="ai-doc" rows="5" placeholder="الصق نص صحيفة الدعوى أو العقد أو المحضر...">${esc(draft.document_text || '')}</textarea>
+      </details>
+      <button class="btn btn-primary" id="ai-run" style="width:100%;margin-top:12px">🤖 حلل القضية</button>
+    </div>
+    <div id="ai-result"></div>
+    <div id="ai-history" style="margin-top:12px"></div>
+  `;
+
+  const val = sel => el.querySelector(sel).value.trim();
+  const collect = () => ({
+    case_type: val('#ai-type'),
+    client_role: val('#ai-role'),
+    opponent: val('#ai-opponent'),
+    facts: val('#ai-facts'),
+    requests: val('#ai-requests'),
+    document_text: val('#ai-doc'),
+  });
+  el.querySelectorAll('textarea, input, select').forEach(i => i.addEventListener('input', () => {
+    try { localStorage.setItem(AI_DRAFT_KEY(c.id), JSON.stringify(collect())); } catch {}
+  }));
+
+  // ⬆️ رفع مستند جديد للقضية من نفس التبويب
+  const upFile = el.querySelector('#ai-upload-file');
+  const upStatus = el.querySelector('#ai-upload-status');
+  el.querySelector('#ai-upload-btn').addEventListener('click', () => {
+    if (!el.querySelector('#ai-upload-type').value) {
+      upStatus.textContent = '⚠️ اختار نوع المستند الأول';
+      upStatus.className = 'status bad';
+      return;
+    }
+    upFile.click();
+  });
+  upFile.addEventListener('change', async () => {
+    const file = upFile.files[0];
+    if (!file) return;
+    const upType = el.querySelector('#ai-upload-type').value || 'أخرى';
+    if (file.size > 10 * 1024 * 1024) {
+      upStatus.textContent = '⚠️ الملف أكبر من 10 ميجا';
+      upStatus.className = 'status bad';
+      return;
+    }
+    upStatus.textContent = '⏳ جاري الرفع...';
+    upStatus.className = 'status';
+    try {
+      const d = await uploadDocument(file, { caseId: c.id, docType: upType });
+      const newId = d?.id ?? d?.document?.id;
+      const box = el.querySelector('#ai-docs');
+      if (!documents.length) box.innerHTML = '';
+      documents.unshift({ id: newId, file_name: file.name, doc_type: upType });
+      box.insertAdjacentHTML('afterbegin', `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13.5px;cursor:pointer">
+          <input type="checkbox" class="ai-doc" value="${esc(newId ?? '')}" checked style="width:auto">
+          <span>📄 ${esc(file.name)}</span><span class="meta">${esc(upType)} · جديد</span>
+        </label>`);
+      upStatus.textContent = '✅ اترفع واتضاف للتحليل';
+      upStatus.className = 'status ok';
+    } catch (e) {
+      upStatus.textContent = '⚠️ ' + e.message;
+      upStatus.className = 'status bad';
+    } finally {
+      upFile.value = '';
+    }
+  });
+
+  const out = el.querySelector('#ai-result');
+  const btn = el.querySelector('#ai-run');
+  btn.addEventListener('click', async () => {
+    const body = collect();
+    const checked = [...el.querySelectorAll('.ai-doc:checked')].map(i => Number(i.value)).filter(Boolean);
+    body.document_ids = checked;
+    if (!checked.length && body.facts.length < 30 && body.document_text.length < 30) {
+      return toast('اختار مستند من مرفقات القضية أو اكتب الوقائع', 'bad');
+    }
+    btn.disabled = true;
+    btn.textContent = checked.length
+      ? `⏳ جاري قراءة ${checked.length} مستند وتحليل القضية (ممكن ياخد دقيقة)...`
+      : '⏳ جاري التحليل (ممكن ياخد دقيقة)...';
+    out.innerHTML = skeleton(5);
+    try {
+      const d = await apiJson(`/api/cases/${c.id}/analyze`, { method: 'POST', body: JSON.stringify(body) });
+      out.innerHTML = renderCaseAnalysis(d.result, d.provider);
+      mountAnalysisExport(out, d.result, c);
+      loadCaseAnalyses(el, c.id);
+    } catch (e) {
+      out.innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🤖 حلل القضية';
+    }
+  });
+
+  loadCaseAnalyses(el, c.id);
+}
+
+async function loadCaseAnalyses(el, caseId) {
+  const box = el.querySelector('#ai-history');
+  if (!box) return;
+  try {
+    const d = await apiJson(`/api/cases/${caseId}/analyses`, { skipCache: true });
+    const items = d.items || [];
+    if (!items.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <h4 style="margin:8px 0;font-size:14px">🗂️ تحليلات سابقة</h4>
+      ${items.map(i => `
+        <div class="item" style="cursor:pointer" data-analysis="${i.id}">
+          <div class="name">${esc(i.title || 'تحليل')}</div>
+          <div class="meta">${esc(i.created_at || '')}</div>
+        </div>`).join('')}`;
+    box.querySelectorAll('[data-analysis]').forEach(it => it.addEventListener('click', async () => {
+      try {
+        const r = await apiJson(`/api/analyze/history/${it.dataset.analysis}`);
+        el.querySelector('#ai-result').innerHTML = renderCaseAnalysis(r.result);
+        mountAnalysisExport(el.querySelector('#ai-result'), r.result, { case_number: r.title?.replace('تحليل قضية ', '') });
+        el.querySelector('#ai-result').scrollIntoView({ behavior: 'smooth' });
+      } catch (e) { toast(e.message, 'bad'); }
+    }));
+  } catch {
+    box.innerHTML = '';
+  }
+}
+
+// تصدير التحليل (Word / PDF) — بيتحط فوق نتيجة التحليل
+function mountAnalysisExport(out, r = {}, c = {}) {
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;justify-content:flex-end;margin-top:12px';
+  out.prepend(bar);
+  const str = x => (typeof x === 'string' ? x : '');
+  const fmtList = (arr, f) => (Array.isArray(arr) ? arr.map(x => (typeof x === 'string' ? x : f(x))).filter(Boolean) : []);
+  mountExportMenu(bar, () => ({
+    title: `التحليل القانوني للقضية ${c.case_number || ''}`.trim(),
+    subtitle: [c.court, c.case_type].filter(Boolean).join(' · '),
+    meta: filterMeta([['الموكل', c.client_name], ['تقييم فرص النجاح', r.success_probability]]),
+    blocks: [
+      { type: 'text', heading: 'الملخص', text: str(r.summary) },
+      { type: 'kv', heading: 'التكييف والاختصاص', pairs: [['التكييف القانوني', r.classification || '—'], ['المحكمة المختصة', r.competent_court || '—'], ['فرص النجاح', `${r.success_probability || '—'} — ${r.success_reasoning || ''}`]] },
+      { type: 'list', heading: 'القوانين والمواد المنطبقة', items: fmtList(r.applicable_laws, x => `${x.law || ''}${x.articles ? ' — ' + x.articles : ''}${x.relevance ? ': ' + x.relevance : ''}`) },
+      { type: 'list', heading: 'نقاط القوة', items: fmtList(r.strengths, String) },
+      { type: 'list', heading: 'نقاط الضعف', items: fmtList(r.weaknesses, String) },
+      { type: 'list', heading: 'الدفوع الشكلية', items: fmtList(r.formal_defenses, x => `${x.defense || ''}${x.applies ? ' (' + x.applies + ')' : ''}${x.basis ? ' — السند: ' + x.basis : ''}`) },
+      { type: 'list', heading: 'الدفاع الموضوعي', items: fmtList(r.substantive_defenses, x => `${x.defense || ''}${x.basis ? ' — السند: ' + x.basis : ''}`) },
+      { type: 'list', heading: 'دفاع الخصم المتوقع والرد عليه', items: fmtList(r.opponent_arguments, x => `${x.argument || ''} ← الرد: ${x.response || ''}`) },
+      { type: 'list', heading: 'المواعيد الحرجة', items: fmtList(r.deadlines, x => `${x.item || ''}: ${x.period || ''}${x.note ? ' (' + x.note + ')' : ''}`) },
+      { type: 'list', heading: 'الأدلة والمستندات المطلوبة', items: fmtList(r.evidence_needed, String) },
+      { type: 'list', heading: 'الخطوات التالية', items: fmtList(r.next_steps, String) },
+      { type: 'list', heading: 'المخاطر', items: fmtList(r.risks, String) },
+      { type: 'list', heading: 'معلومات ناقصة', items: fmtList(r.missing_info, String) },
+      { type: 'text', heading: 'تنبيه', text: 'تحليل مساعد بالذكاء الاصطناعي — يجب مراجعته من محامٍ قبل الاعتماد عليه، وأي ميعاد أو رقم مادة يُراجع على النص الرسمي.' },
+    ],
+  }), { formats: ['word', 'pdf'], filename: `تحليل_قضية_${c.case_number || ''}` });
+}
+
+function renderCaseAnalysis(r = {}, provider = '') {
+  if (r._raw) {
+    return `<div class="card"><h4>📝 التحليل</h4><div style="white-space:pre-wrap">${esc(r.summary || '')}</div></div>`;
+  }
+  const list = (arr, fmt = x => esc(typeof x === 'string' ? x : JSON.stringify(x))) =>
+    Array.isArray(arr) && arr.length ? `<ul style="margin:0;padding-inline-start:20px">${arr.map(x => `<li style="margin-bottom:6px">${fmt(x)}</li>`).join('')}</ul>` : '<div class="meta">—</div>';
+  const section = (icon, title, html) => `
+    <div class="card" style="margin-bottom:10px">
+      <h4 style="margin:0 0 8px;font-size:14px">${icon} ${title}</h4>
+      ${html}
+    </div>`;
+  const prob = String(r.success_probability || '');
+  const probColor = prob.includes('عالي') ? 'var(--success)' : prob.includes('منخفض') ? 'var(--danger)' : 'var(--warning, #B8860B)';
+  const meta = r._meta || {};
+
+  return `
+    <div style="margin-top:12px">
+      ${section('📌', 'الملخص', `<div>${esc(r.summary || '—')}</div>
+        ${r.classification ? `<div class="meta" style="margin-top:6px">⚖️ التكييف: ${esc(r.classification)}</div>` : ''}
+        ${r.competent_court ? `<div class="meta">🏛️ المحكمة المختصة: ${esc(r.competent_court)}</div>` : ''}`)}
+      ${prob ? section('🎯', 'تقييم فرص النجاح', `<strong style="color:${probColor}">${esc(prob)}</strong>
+        <div class="meta" style="margin-top:4px">${esc(r.success_reasoning || '')}</div>`) : ''}
+      ${section('📚', 'القوانين والمواد المنطبقة', list(r.applicable_laws, x => typeof x === 'string' ? esc(x)
+        : `<strong>${esc(x.law || '')}</strong>${x.articles ? ` — ${esc(x.articles)}` : ''}<div class="meta">${esc(x.relevance || '')}</div>`))}
+      ${section('💪', 'نقاط القوة', list(r.strengths))}
+      ${section('⚠️', 'نقاط الضعف', list(r.weaknesses))}
+      ${section('📋', 'الدفوع الشكلية', list(r.formal_defenses, x => typeof x === 'string' ? esc(x)
+        : `<strong>${esc(x.defense || '')}</strong>${x.applies ? ` <span class="meta">(${esc(x.applies)})</span>` : ''}<div class="meta">${esc(x.basis || '')}</div>`))}
+      ${section('⚖️', 'الدفاع الموضوعي', list(r.substantive_defenses, x => typeof x === 'string' ? esc(x)
+        : `<strong>${esc(x.defense || '')}</strong><div class="meta">${esc(x.basis || '')}</div>`))}
+      ${section('🥊', 'دفاع الخصم المتوقع والرد عليه', list(r.opponent_arguments, x => typeof x === 'string' ? esc(x)
+        : `<strong>${esc(x.argument || '')}</strong><div class="meta">↩️ ${esc(x.response || '')}</div>`))}
+      ${section('⏰', 'المواعيد الحرجة', list(r.deadlines, x => typeof x === 'string' ? esc(x)
+        : `<strong>${esc(x.item || '')}</strong>: ${esc(x.period || '')}${x.note ? `<div class="meta">${esc(x.note)}</div>` : ''}`))}
+      ${section('🗂️', 'الأدلة والمستندات المطلوبة', list(r.evidence_needed))}
+      ${section('➡️', 'الخطوات التالية', list(r.next_steps))}
+      ${section('🚨', 'المخاطر', list(r.risks))}
+      ${section('❓', 'معلومات ناقصة', list(r.missing_info))}
+      ${Array.isArray(meta.documents) && meta.documents.length ? `
+        <div class="meta" style="font-size:12px;margin-top:6px">📎 المستندات المقروءة:
+          ${meta.documents.map(d => d.read
+            ? `✅ ${esc(d.file_name)}`
+            : `⚠️ ${esc(d.file_name)} (${esc(d.error || 'مفيش نص')})`).join(' · ')}
+        </div>` : ''}
+      <div class="meta" style="font-size:12px;margin-top:6px">
+        ${meta.skill ? `🧠 المهارة المستخدمة: ${esc(meta.skill)} · ` : ''}📚 مواد من الداتابيز: ${esc(meta.articles_found ?? 0)}
+        ${provider ? ` · 🤖 ${esc(provider)}` : ''}
+        <br>⚠️ تحليل مساعد بالذكاء الاصطناعي — لازم مراجعته من محامٍ قبل الاعتماد عليه، وأي ميعاد أو رقم مادة يُراجع على النص الرسمي.
+      </div>
+    </div>`;
+}

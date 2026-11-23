@@ -25,27 +25,29 @@ async function bootstrap() {
 }
 
 describe('document upload', () => {
-  it('rejects files > 25MB', async () => {
+  it('rejects files > 10MB', async () => {
     const token = await bootstrap();
-    const big = new Uint8Array(26 * 1024 * 1024);
-    const fd = new FormData();
-    fd.append('file', new File([big], 'big.pdf', { type: 'application/pdf' }));
-    const res = await SELF.fetch('https://x/api/documents', {
+    const big = new Uint8Array(11 * 1024 * 1024);
+    const res = await SELF.fetch('https://x/api/documents?file_name=big.pdf', {
       method: 'POST',
-      headers: { authorization: 'Bearer ' + token },
-      body: fd,
+      headers: {
+        authorization: 'Bearer ' + token,
+        'content-type': 'application/pdf',
+      },
+      body: big,
     });
     expect(res.status).toBe(413);
   });
 
   it('rejects disallowed extensions', async () => {
     const token = await bootstrap();
-    const fd = new FormData();
-    fd.append('file', new File(['x'], 'malware.exe', { type: 'application/octet-stream' }));
-    const res = await SELF.fetch('https://x/api/documents', {
+    const res = await SELF.fetch('https://x/api/documents?file_name=malware.exe', {
       method: 'POST',
-      headers: { authorization: 'Bearer ' + token },
-      body: fd,
+      headers: {
+        authorization: 'Bearer ' + token,
+        'content-type': 'application/octet-stream',
+      },
+      body: new Uint8Array([1, 2, 3]),
     });
     expect(res.status).toBe(415);
   });

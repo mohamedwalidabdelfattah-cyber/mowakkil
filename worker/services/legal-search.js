@@ -1,8 +1,8 @@
 // worker/services/legal-search.js
-// بحث قانوني + توليد مستندات — Vectorize (RAG) + bge-m3 + Claude + Llama fallback
+// بحث قانوني + توليد مستندات — Vectorize (RAG) + bge-m3 + نماذج مجانية (Groq/Gemini/Workers AI)
+import { completeText } from './llm.js';
 
-async function callAI(env, prompt, maxTokens = 1500, systemPrompt = null) {
-  const defaultSystem = `أنت مستشار قانوني مصري خبير، بتفكر زي محامٍ شاطر مش زي روبوت.
+const DEFAULT_SYSTEM = `أنت مستشار قانوني مصري خبير، بتفكر زي محامٍ شاطر مش زي روبوت.
 - بتحلل النصوص القانونية وتستنتج منها إجابات عملية.
 - بتربط المواد القانونية ببعضها لو ده يخدم الإجابة.
 - بتبين للمستخدم إيه اللي في صالحه وإيه اللي ضده.
@@ -10,51 +10,74 @@ async function callAI(env, prompt, maxTokens = 1500, systemPrompt = null) {
 - لا تخترع مواد قانونية غير موجودة في النصوص المرفقة.
 - لو النصوص مش كافية، قول "النصوص المتاحة مش كافية" واشرح إيه اللي ناقص.`;
 
-  if (env.ANTHROPIC_API_KEY) {
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
-          max_tokens: Math.min(maxTokens, 1024),
-          system: systemPrompt || defaultSystem,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
+async function callAI(env, prompt, maxTokens = 1500, systemPrompt = null) {
+  const { text } = await completeText(env, {
+    system: systemPrompt || DEFAULT_SYSTEM,
+    prompt,
+    maxTokens,
+  });
+  return text;
+}
 
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.content?.[0]?.text || '';
-        if (text) return text;
-      } else {
-        console.warn('Claude error:', res.status, await res.text());
-      }
-    } catch (e) {
-      console.warn('Claude failed, fallback to Llama:', e.message);
-    }
+const MAX_ARTICLE_CHARS = 1200;
+const trimArticle = t => {
+  const s = String(t || '');
+  return s.length > MAX_ARTICLE_CHARS ? s.slice(0, MAX_ARTICLE_CHARS) + '…' : s;
+};
+
+// بحث نصي احتياطي (لما Vectorize فاضي أو مفيش نتايج) — اختياري مقصور على قوانين معينة
+export async function keywordArticles(env, query, lawHints = [], limit = 8) {
+  const words = String(query || '')
+    .replace(/[؟?.,،:؛!()"'«»\-]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .slice(0, 8);
+  if (!words.length) return [];
+
+  const wordCond = words.map(() => 'article_text LIKE ?').join(' OR ');
+  const binds = words.map(w => `%${w}%`);
+  let sql = `SELECT id, law_name, law_number, article_number, article_text, source_url
+             FROM law_articles WHERE (${wordCond})`;
+  if (lawHints.length) {
+    sql += ` AND (${lawHints.map(() => 'law_name LIKE ?').join(' OR ')})`;
+    binds.push(...lawHints.map(h => `%${h}%`));
   }
+  // ترتيب بعدد الكلمات المطابقة
+  const score = words.map(() => '(CASE WHEN article_text LIKE ? THEN 1 ELSE 0 END)').join(' + ');
+  sql += ` ORDER BY (${score}) DESC LIMIT ?`;
+  binds.push(...words.map(w => `%${w}%`), limit);
 
-  if (env.AI) {
-    try {
-      const response = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-        messages: [
-          { role: 'system', content: systemPrompt || defaultSystem },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: maxTokens,
-      });
-      return response.response || '';
-    } catch (e) {
-      console.error('Llama also failed:', e.message);
-    }
+  try {
+    const r = await env.DB.prepare(sql).bind(...binds).all();
+    return r.results || [];
+  } catch (e) {
+    console.warn('keyword search failed:', e.message);
+    return [];
   }
+}
 
-  throw new Error('No AI model available');
+// بحث دلالي (Vectorize) مع fallback نصي — بيرجع مواد قانونية مقصوصة الطول
+export async function findRelevantArticles(env, query, { lawHints = [], topK = 8 } = {}) {
+  const safeQuery = String(query || '').slice(0, 1500);
+  try {
+    const emb = await env.AI.run('@cf/baai/bge-m3', { text: [safeQuery] });
+    const vr = await env.VECTORIZE.query(emb.data[0], { topK, returnMetadata: 'none' });
+    const ids = (vr.matches || []).filter(m => (m.score ?? 0) >= 0.45).map(m => m.id);
+    if (ids.length) {
+      const r = await env.DB.prepare(
+        `SELECT id, law_name, law_number, article_number, article_text, source_url
+         FROM law_articles WHERE id IN (${ids.map(() => '?').join(',')})`
+      ).bind(...ids).all();
+      const byId = new Map((r.results || []).map(x => [String(x.id), x]));
+      const rows = ids.map(id => byId.get(String(id))).filter(Boolean);
+      if (rows.length) return { method: 'vector', articles: rows.map(a => ({ ...a, article_text: trimArticle(a.article_text) })) };
+    }
+  } catch (e) {
+    console.warn('vector search failed:', e.message);
+  }
+  let rows = await keywordArticles(env, safeQuery, lawHints, topK);
+  if (!rows.length && lawHints.length) rows = await keywordArticles(env, safeQuery, [], topK);
+  return { method: 'keyword', articles: rows.map(a => ({ ...a, article_text: trimArticle(a.article_text) })) };
 }
 
 const UNSUPPORTED_TOPICS = [
@@ -211,77 +234,38 @@ export async function searchLegalDb(env, query) {
     };
   }
 
-  let queryEmbedding;
-  try {
-    const aiResponse = await env.AI.run('@cf/baai/bge-m3', { text: [safeQuery] });
-    queryEmbedding = aiResponse.data[0];
-  } catch (e) {
-    return { error: 'Embedding failed', results: [] };
-  }
-
-  let vectorResults;
-  try {
-    vectorResults = await env.VECTORIZE.query(queryEmbedding, {
-      topK: 10,
-      returnMetadata: 'none',
-    });
-  } catch (e) {
-    return { error: 'Vectorize query failed', results: [] };
-  }
-
-  if (!vectorResults.matches || vectorResults.matches.length === 0) {
+  const { articles, method } = await findRelevantArticles(env, safeQuery, { topK: 8 });
+  if (!articles.length) {
     return { source: 'db', results: [], message: 'مفيش نتايج في الداتابيز' };
   }
-
-  const THRESHOLD = 0.5;
-  const filteredMatches = vectorResults.matches.filter(m => (m.score ?? 0) >= THRESHOLD);
-
-  if (filteredMatches.length === 0) {
-    return { source: 'db', results: [], message: 'مفيش نتايج كافية في الداتابيز' };
-  }
-
-  const ids = filteredMatches.map(m => m.id);
-  const placeholders = ids.map(() => '?').join(',');
-  const dbResult = await env.DB.prepare(
-    `SELECT id, law_name, law_number, article_number, article_text, source_url
-     FROM law_articles WHERE id IN (${placeholders})`
-  ).bind(...ids).all();
-
-  const byId = new Map(dbResult.results.map(r => [String(r.id), r]));
-  const results = filteredMatches
-    .map(m => byId.get(String(m.id)))
-    .filter(Boolean)
-    .map(r => ({
-      law_name: r.law_name,
-      law_number: r.law_number,
-      article_number: r.article_number,
-      article_text: r.article_text,
-      source_url: r.source_url,
-    }));
-
-  return {
-    source: 'db',
-    results,
-    count: results.length,
-  };
+  const results = articles.map(r => ({
+    law_name: r.law_name,
+    law_number: r.law_number,
+    article_number: r.article_number,
+    article_text: r.article_text,
+    source_url: r.source_url,
+  }));
+  return { source: 'db', method, results, count: results.length };
 }
 
 // ============================================================
 // توليد المستندات
 // ============================================================
-export async function generateDocument(env, { doc_type, facts, parties, extra, case_id }) {
+export async function generateDocument(env, { doc_type, facts, parties, extra, case_id, officeId }) {
   const safeFacts = String(facts || '').trim().slice(0, 3000);
   const safeParties = String(parties || '').trim().slice(0, 500);
   const safeExtra = String(extra || '').trim().slice(0, 800);
   if (!safeFacts) return { error: 'اكتب الوقائع' };
 
   let caseContext = '';
-  if (case_id) {
+  if (case_id && officeId) {
     try {
+      // ✅ لازم القضية تكون تبع نفس المكتب (منع تسريب بيانات بين المكاتب)
       const c = await env.DB.prepare(
         `SELECT c.case_number, c.court, c.case_type, c.status, cl.name as client_name
-         FROM cases c LEFT JOIN clients cl ON cl.id = c.client_id WHERE c.id = ?`
-      ).bind(case_id).first();
+         FROM cases c LEFT JOIN clients cl ON cl.id = c.client_id
+         WHERE c.id = ? AND c.office_id = ? AND c.deleted_at IS NULL`
+      ).bind(case_id, officeId).first();
       if (c) {
         caseContext = `\n\nبيانات القضية:
 - رقم القضية: ${c.case_number || '—'}

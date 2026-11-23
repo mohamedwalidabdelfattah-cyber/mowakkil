@@ -1,5 +1,6 @@
 // worker/services/agent.js
-// Agent ذكي — Groq (أساسي) + Cloudflare (fallback) + دقة المصادر + عربية فصحى
+// Agent ذكي — نماذج مجانية (Groq/Gemini/Workers AI) + دقة المصادر + عربية فصحى
+import { chatCompletion } from './llm.js';
 
 const SYSTEM_PROMPT = `أنت مستشار قانوني مصري خبير، بتفكر زي محامٍ شاطر مش زي روبوت.
 
@@ -96,6 +97,7 @@ async function searchWeb(env, query) {
 
   try {
     // ✅ max_results 8 + advanced + include_answer
+    // ✅ basic = كريدت واحد بدل اتنين (الخطة المجانية 1000 كريدت/شهر)
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
@@ -104,11 +106,12 @@ async function searchWeb(env, query) {
       },
       body: JSON.stringify({
         query: String(query).slice(0, 400),
-        search_depth: 'advanced',
-        max_results: 8,
+        search_depth: env.TAVILY_DEPTH || 'basic',
+        max_results: 6,
         include_answer: true,
         include_raw_content: false,
       }),
+      signal: AbortSignal.timeout(20000),
     });
 
     if (!res.ok) {
@@ -134,127 +137,68 @@ async function searchWeb(env, query) {
 }
 
 // ============================================================
-// Chat with Agent — Groq (أساسي) + Cloudflare (fallback)
+// Chat with Agent — نماذج مجانية: Groq → Gemini → Groq Llama → Workers AI
 // ============================================================
+const MAX_HISTORY = 12;         // آخر 12 رسالة بس عشان منعديش context الموديل
+const MAX_TOOL_RESULT = 9000;   // حد حجم نتيجة الأداة اللي بترجع للموديل
+
 export async function chatWithAgent(env, messages, officeId, attachmentText = null) {
-  let processedMessages = [...messages];
+  let processedMessages = messages.slice(-MAX_HISTORY);
+  if (processedMessages[0]?.role === 'assistant') processedMessages = processedMessages.slice(1);
+
   if (attachmentText && processedMessages.length > 0) {
     const lastMsg = processedMessages[processedMessages.length - 1];
     if (lastMsg.role === 'user') {
       processedMessages[processedMessages.length - 1] = {
         role: 'user',
-        content: `${lastMsg.content}\n\n---\n📎 **محتوى الملف المرفق:**\n${attachmentText.slice(0, 3000)}`,
+        content: `${lastMsg.content}\n\n---\n📎 **محتوى الملف المرفق:**\n${attachmentText}`,
       };
     }
   }
 
-  const fullMessages = [
+  const currentMessages = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...processedMessages,
   ];
 
-  let currentMessages = [...fullMessages];
-  let iterations = 0;
   const MAX_ITERATIONS = 5;
+  let provider = '';
 
-  while (iterations < MAX_ITERATIONS) {
-    iterations++;
+  for (let iterations = 1; iterations <= MAX_ITERATIONS; iterations++) {
+    // في آخر لفة بنمنع الأدوات عشان الموديل يكتب الإجابة النهائية
+    const lastRound = iterations === MAX_ITERATIONS;
+    const { message, provider: p } = await chatCompletion(env, {
+      messages: currentMessages,
+      tools: lastRound ? null : TOOLS,
+      maxTokens: 2500,
+      temperature: 0.2,
+    });
+    provider = p;
 
-    let response = null;
-    let usedProvider = '';
-
-    // ============ المحاولة 1: Groq ============
-    if (env.GROQ_API_KEY) {
-      try {
-        console.log('Trying Groq...');
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.GROQ_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'openai/gpt-oss-120b',
-            messages: currentMessages,
-            tools: TOOLS,
-            max_tokens: 2000,
-            temperature: 0.2,
-          }),
-        });
-
-        if (groqRes.ok) {
-          const groqData = await groqRes.json();
-          response = { choices: groqData.choices || [] };
-          usedProvider = 'groq';
-        } else {
-          console.error('Groq failed:', groqRes.status);
-        }
-      } catch (e) {
-        console.error('Groq error:', e.message);
-      }
-    }
-
-    // ============ المحاولة 2: Cloudflare Fallback ============
-    if (!response) {
-      try {
-        const cfRes = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-          messages: currentMessages.map(m => {
-            if (m.role === 'tool') return { role: 'user', content: `نتيجة البحث: ${m.content}` };
-            if (m.tool_calls) return { role: 'assistant', content: m.content || '' };
-            return { role: m.role, content: m.content || '' };
-          }),
-          max_tokens: 2000,
-          temperature: 0.2,
-        });
-
-        if (cfRes?.response) {
-          response = {
-            choices: [{ message: { role: 'assistant', content: cfRes.response } }],
-          };
-          usedProvider = 'cloudflare';
-        }
-      } catch (e) {
-        console.error('Cloudflare error:', e.message);
-      }
-    }
-
-    if (!response) throw new Error('كل الموديلات فشلت. جرب تاني بعد شوية.');
-
-    const choice = response.choices?.[0];
-    if (!choice) throw new Error('الرد فاضي من الموديل');
-
-    const assistantMessage = choice.message;
-
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      currentMessages.push(assistantMessage);
-
-      for (const toolCall of assistantMessage.tool_calls) {
-        const toolName = toolCall.function.name;
+    if (message.tool_calls?.length && !lastRound) {
+      currentMessages.push(message);
+      for (const toolCall of message.tool_calls) {
         let args = {};
         try {
           args = JSON.parse(toolCall.function.arguments || '{}');
         } catch (e) {
           console.warn('tool args parse failed:', e.message);
         }
-
-        console.log(`Executing tool: ${toolName}`, args);
-        const toolResult = await executeTool(env, toolName, args);
-
+        const toolResult = await executeTool(env, toolCall.function.name, args);
         currentMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          content: JSON.stringify(toolResult),
+          content: JSON.stringify(toolResult).slice(0, MAX_TOOL_RESULT),
         });
       }
-
       continue;
     }
 
     return {
-      answer: assistantMessage.content || '',
-      usedTools: currentMessages.filter(m => m.role === 'tool').length > 0,
+      answer: message.content || '',
+      usedTools: currentMessages.some(m => m.role === 'tool'),
       iterations,
-      provider: usedProvider,
+      provider,
     };
   }
 

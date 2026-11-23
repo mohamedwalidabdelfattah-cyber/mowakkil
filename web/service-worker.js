@@ -1,7 +1,7 @@
 // service-worker.js
 // النسخة المحسنة: Cache First للملفات الثابتة + Network First للـ HTML
 
-const CACHE_NAME = 'mowakkil-cache-v68';
+const CACHE_NAME = 'mowakkil-cache-v75';
 
 // الملفات الأساسية اللي بنعملها كاش عشان التطبيق يشتغل أوفلاين
 const PRECACHE_ASSETS = [
@@ -61,7 +61,12 @@ self.addEventListener('fetch', (event) => {
 
   // تجاهل طلبات الـ API (مش بنعملها كاش)
   if (url.pathname.includes('/api/')) {
-    return; 
+    return;
+  }
+
+  // ملف التطبيق (APK) وملفات التحقق — دايماً من الشبكة ومن غير كاش
+  if (url.pathname.startsWith('/downloads/') || url.pathname.startsWith('/.well-known/')) {
+    return;
   }
 
   // تجاهل طلبات غير الـ GET

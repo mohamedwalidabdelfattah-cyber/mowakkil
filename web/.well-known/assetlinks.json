@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.mowakkil.app",
+      "sha256_cert_fingerprints": ["BB:60:EF:94:09:51:25:A6:0F:13:4A:3C:6F:42:E0:1C:B0:95:73:CC:E1:F7:D1:D2:34:A8:6F:A2:15:D9:63:C1"]
+    }
+  }
+]

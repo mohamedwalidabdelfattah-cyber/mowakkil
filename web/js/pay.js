@@ -4,15 +4,11 @@
 import { API_BASE, STORAGE_KEYS } from './config.js';
 import { apiJson } from './api.js';
 
-// ============================================================
-// ✅ فحص التوكن **فورًا** قبل تحميل الصفحة
-// ============================================================
 (function checkAuth() {
   const t = localStorage.getItem(STORAGE_KEYS.TOKEN);
   if (!t) {
     const urlParams = new URLSearchParams(window.location.search);
     const plan = urlParams.get('plan') || '';
-    // نستخدم replace عشان ما يضيفش في الـ history
     window.location.replace(plan ? `/signup?plan=${plan}` : '/signup');
   }
 })();
@@ -22,12 +18,9 @@ let selectedPlan = null;
 let selectedMethod = null;
 let token = null;
 
-// ============================================================
-// Init
-// ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
   token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-  if (!token) return; // (redirect اتعمل فوق)
+  if (!token) return;
 
   try {
     const data = await apiJson('/api/payment-requests/info');
@@ -36,10 +29,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderMethods();
     await loadMyRequests();
 
-    // ✅ نقرا plan من الـ URL
     const urlParams = new URLSearchParams(window.location.search);
     const planFromUrl = urlParams.get('plan');
-    if (planFromUrl && ['starter', 'pro', 'plus'].includes(planFromUrl)) {
+    if (planFromUrl && paymentInfo.plans[planFromUrl]) {
       const radio = document.querySelector(`input[name="plan"][value="${planFromUrl}"]`);
       if (radio) {
         radio.checked = true;
@@ -58,15 +50,18 @@ function renderPlans() {
   const el = document.getElementById('plan-options');
   const plans = paymentInfo.plans || {};
 
-  el.innerHTML = Object.entries(plans).map(([key, p]) => `
-    <label class="pay-option" data-plan="${key}">
-      <input type="radio" name="plan" value="${key}">
-      <div class="pay-option-body">
-        <div class="pay-option-title">${p.name}</div>
-        <div class="pay-option-price">${p.price} ج / شهر</div>
-      </div>
-    </label>
-  `).join('');
+  el.innerHTML = Object.entries(plans).map(([key, p]) => {
+    const isLifetime = p.type === 'lifetime';
+    return `
+      <label class="pay-option" data-plan="${key}">
+        <input type="radio" name="plan" value="${key}">
+        <div class="pay-option-body">
+          <div class="pay-option-title">${p.name} ${isLifetime ? '💎' : ''}</div>
+          <div class="pay-option-price">${p.price} ج / ${isLifetime ? 'مرة واحدة' : 'شهر'}</div>
+        </div>
+      </label>
+    `;
+  }).join('');
 
   el.querySelectorAll('input[name="plan"]').forEach(input => {
     input.addEventListener('change', () => {
@@ -204,7 +199,10 @@ async function loadMyRequests() {
       return;
     }
 
-    const planNames = { starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة' };
+    const planNames = {
+      starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة',
+      lifetime_basic: 'التأسيس (مدى الحياة)', lifetime_pro: 'المكتب المتكامل (مدى الحياة)'
+    };
     const methodNames = { vodafone_cash: '📱 فودافون كاش', instapay: '⚡ إنستاباي' };
     const statusLabels = {
       pending:  '⏳ قيد المراجعة',

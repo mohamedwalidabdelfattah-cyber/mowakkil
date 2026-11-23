@@ -1,6 +1,6 @@
 // web/js/views/lawyers.js
 import { apiJson } from '../api.js';
-import { esc, empty, waLink, toast, fmtMoney, skeleton } from '../ui.js';
+import { esc, empty, waLink, toast, fmtMoney, skeleton, bindPanels } from '../ui.js';
 import { setLawyers } from '../state.js';
 
 // حالة الفلاتر
@@ -28,7 +28,15 @@ export async function render(host) {
     setLawyers(list);
 
     host.innerHTML = `
-      <div class="card">
+      <div class="app-top">
+        <div>
+          <h2>المحامين</h2>
+          <div class="meta" style="margin:2px 0 0">${list.length} محامٍ</div>
+        </div>
+        <button class="btn btn-primary" data-toggle-panel="lawyer-panel">➕ محامٍ جديد</button>
+      </div>
+
+      <div class="card" id="lawyer-panel" hidden>
         <h3>➕ إضافة محامٍ</h3>
         <div class="row">
           <div><label>الاسم</label><input id="l-name" placeholder="مثال: كريم عادل"></div>
@@ -74,6 +82,8 @@ export async function render(host) {
         }
       </div>
     `;
+
+    bindPanels(host);
 
     // === ربط أحداث الفلاتر ===
     let searchTimeout;

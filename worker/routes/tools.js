@@ -41,5 +41,6 @@ async function generateDoc({ request, env, officeId }) {
     parties: b.parties || '',
     extra: b.extra || '',
     case_id: b.case_id || null,
+    officeId,
   }));
 }

@@ -1,6 +1,8 @@
 // web/js/views/tasks.js
-import { apiJson, api } from '../api.js';
-import { esc, empty, toast, waLink, fmtMoney, skeleton } from '../ui.js';
+import { apiJson, api, uploadDocument, downloadDocument } from '../api.js';
+import { renderAttachments } from '../attachments.js';
+import { mountExportMenu, filterMeta } from '../exporter.js';
+import { esc, empty, toast, waLink, fmtMoney, skeleton, bindPanels } from '../ui.js';
 import { getLawyers, getCases } from '../state.js';
 
 // حالة الفلاتر
@@ -36,7 +38,15 @@ export async function render(host) {
     const caseOpts   = cases.map(c => `<option value="${c.id}">${esc(c.case_number || c.id)}</option>`).join('');
 
     host.innerHTML = `
-      <div class="card">
+      <div class="app-top">
+        <div>
+          <h2>المهام</h2>
+          <div class="meta" style="margin:2px 0 0">${tasks.filter(t => t.status !== 'منجزة').length} مهمة مفتوحة من ${tasks.length}</div>
+        </div>
+        <button class="btn btn-primary" data-toggle-panel="task-panel">➕ مهمة جديدة</button>
+      </div>
+
+      <div class="card" id="task-panel" hidden>
         <h3>➕ مهمة جديدة</h3>
         <div class="row">
           <div><label>عنوان المهمة</label><input id="t-title" placeholder="مثال: تقديم مذكرة"></div>
@@ -77,6 +87,11 @@ export async function render(host) {
         </div>
       </div>
 
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span class="meta" style="margin:0">${tasks.length} نتيجة</span>
+        <div id="tasks-export"></div>
+      </div>
+
       <div id="tasks-list">
         ${tasks.length 
           ? tasks.map(t => renderTaskItem(t)).join('') 
@@ -92,6 +107,30 @@ export async function render(host) {
         }
       </div>
     `;
+
+    bindPanels(host);
+
+    // === التصدير (القايمة بعد الفلترة) ===
+    mountExportMenu(host.querySelector('#tasks-export'), () => ({
+      title: 'قائمة المهام',
+      landscape: true,
+      meta: filterMeta([
+        ['بحث', currentFilters.search],
+        ['الحالة', currentFilters.status],
+        ['الموعد', { overdue: 'متأخرة', today: 'اليوم', week: 'هذا الأسبوع' }[currentFilters.due]],
+      ]),
+      blocks: [{
+        type: 'table',
+        columns: [
+          { label: 'المهمة', key: 'title' },
+          { label: 'المحامي', key: 'lawyer_name' },
+          { label: 'القضية', key: 'case_number' },
+          { label: 'الموعد', key: 'due_date', type: 'date' },
+          { label: 'الحالة', value: t => (t.status !== 'منجزة' && t.due_date && new Date(t.due_date) < new Date() ? `${t.status || ''} (متأخرة)` : t.status) },
+        ],
+        rows: tasks,
+      }],
+    }), { filename: 'المهام' });
 
     // === ربط أحداث الفلاتر ===
     let searchTimeout;
@@ -422,70 +461,13 @@ async function showTaskModal(id) {
       }
 
       if (tab === 'docs') {
-        const docsHtml = (d.documents || []).length
-          ? d.documents.map(doc => `
-              <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
-                <div class="top">
-                  <span class="name">${esc(doc.file_name)}</span>
-                  <span class="num mono">${esc(doc.doc_type || '')}</span>
-                </div>
-                <div class="acts" style="margin-top:6px">
-                  <a class="ghost" href="/api/documents/${doc.id}/download" target="_blank" rel="noopener" style="text-decoration:none">تحميل</a>
-                </div>
-              </div>
-            `).join('')
-          : empty('مفيش مرفقات.', '📎');
-
-        el.innerHTML = `
-          ${docsHtml}
-          <div style="margin-top:12px">
-            <input type="file" id="attach-file" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt">
-            <button class="btn btn-primary" id="attach-btn" style="width:100%">📎 إرفاق ملف</button>
-            <div id="attach-status" class="status" style="margin-top:8px"></div>
-            <div style="font-size:11.5px;color:var(--text-soft);margin-top:6px;text-align:center">
-              الحد الأقصى: 1.5 ميجا · PDF · Word · صور · نصوص
-            </div>
-          </div>
-        `;
-
-        const attachBtn = el.querySelector('#attach-btn');
-        const fileInput = el.querySelector('#attach-file');
-        const attachStatus = el.querySelector('#attach-status');
-
-        attachBtn.addEventListener('click', () => fileInput.click());
-
-        fileInput.addEventListener('change', async () => {
-          const file = fileInput.files[0];
-          if (!file) return;
-
-          if (file.size > 1.5 * 1024 * 1024) {
-            attachStatus.textContent = '⚠️ الملف أكبر من 1.5 ميجا';
-            attachStatus.className = 'status bad';
-            return;
-          }
-
-          attachStatus.textContent = '⏳ جاري الرفع...';
-          attachStatus.className = 'status';
-
-          try {
-            const form = new FormData();
-            form.append('file', file);
-            form.append('task_id', id);
-            form.append('doc_type', 'مرفق مهمة');
-
-            const res = await api('/api/documents', { method: 'POST', body: form });
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              throw new Error(err.error || 'فشل الرفع');
-            }
-
-            toast('✅ اترفع', 'ok');
-            modal.remove();
-            showTaskModal(id);
-          } catch (e) {
-            attachStatus.textContent = '⚠️ ' + e.message;
-            attachStatus.className = 'status bad';
-          }
+        renderAttachments(el, {
+          taskId: id,
+          onChange: docs => {
+            d.documents = docs;
+            const t = modal.querySelector('.case-tab[data-tab="docs"]');
+            if (t) t.textContent = `📎 المرفقات (${docs.length})`;
+          },
         });
       }
 
@@ -573,4 +555,4 @@ function openExpenseModal(taskId, parentModal) {
       }
     }
   });
-} 
+}

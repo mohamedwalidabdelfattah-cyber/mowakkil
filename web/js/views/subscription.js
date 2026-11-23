@@ -4,6 +4,12 @@
 import { fetchSubscription, fetchPlans, apiJson } from '../api.js';
 import { esc, fmtMoney, fmtDate, toast, skeleton, empty } from '../ui.js';
 
+function fmtStorage(mb) {
+  if (mb === -1) return '∞';
+  if (mb >= 1024) return `${+(mb / 1024).toFixed(1)} GB`;
+  return `${mb} MB`;
+}
+
 export async function render(host) {
   host.innerHTML = '<div class="card">' + skeleton(5) + '</div>';
 
@@ -28,7 +34,6 @@ export async function render(host) {
       ${renderUsage(sub)}
     `;
 
-    // Event delegation
     host.addEventListener('click', handleClick);
 
   } catch (err) {
@@ -43,6 +48,8 @@ function renderCurrentPlan(sub) {
   const planNames = {
     free: 'المجانية', starter: 'الأساسية',
     pro: 'الاحترافية', plus: 'المتقدمة',
+    lifetime_basic: 'التأسيس (مدى الحياة)',
+    lifetime_pro: 'المكتب المتكامل (مدى الحياة)',
   };
   const statusLabels = {
     trial: '🎁 تجربة مجانية',
@@ -51,8 +58,9 @@ function renderCurrentPlan(sub) {
     cancelled: '❌ ملغي',
   };
 
+  const isLifetime = sub.plan === 'lifetime_basic' || sub.plan === 'lifetime_pro';
   const daysLeft = sub.days_remaining ?? '—';
-  const targetDate = sub.status === 'trial' ? sub.trial_ends_at : sub.expires_at;
+  const targetDate = isLifetime ? null : (sub.status === 'trial' ? sub.trial_ends_at : sub.expires_at);
 
   return `
     <div class="card current-plan-card">
@@ -66,7 +74,11 @@ function renderCurrentPlan(sub) {
         </div>
       </div>
 
-      ${targetDate ? `
+      ${isLifetime ? `
+        <div class="current-plan-meta">
+          💎 <strong>باقة مدى الحياة</strong> — مش محتاجة تجديد
+        </div>
+      ` : targetDate ? `
         <div class="current-plan-meta">
           📅 ${sub.status === 'trial' ? 'تنتهي التجربة' : 'يتجدد'}: 
           <strong>${esc(fmtDate(targetDate))}</strong>
@@ -74,7 +86,7 @@ function renderCurrentPlan(sub) {
         </div>
       ` : ''}
 
-      ${sub.plan !== 'free' ? `
+      ${sub.plan !== 'free' && !isLifetime ? `
         <div class="current-plan-actions">
           <a href="/pay" class="btn btn-primary">💳 تجديد الاشتراك</a>
         </div>
@@ -96,7 +108,8 @@ function renderPlansGrid(plans, currentPlan) {
 
 function renderPlanCard(plan, currentPlan) {
   const isCurrent = plan.plan === currentPlan;
-  const isPopular = plan.plan === 'pro';
+  const isPopular = plan.plan === 'pro' || plan.plan === 'lifetime_pro';
+  const isLifetime = plan.billing_type === 'lifetime' || plan.plan.startsWith('lifetime_');
 
   const featureLabels = {
     cases: 'إدارة القضايا', clients: 'إدارة الموكلين',
@@ -121,11 +134,12 @@ function renderPlanCard(plan, currentPlan) {
     <div class="plan-card ${isPopular ? 'popular' : ''} ${isCurrent ? 'current' : ''}">
       ${isPopular ? '<div class="plan-badge">الأكثر شعبية</div>' : ''}
       ${isCurrent ? '<div class="plan-badge current-badge"> باقتك الحالية</div>' : ''}
+      ${isLifetime ? '<div class="plan-badge" style="background:#D4AF37;color:#0F172A">💎 مدى الحياة</div>' : ''}
 
       <div class="plan-name">${esc(plan.display_name)}</div>
       <div class="plan-price">
         <span class="plan-price-num">${plan.price_egp}</span>
-        <span class="plan-price-cur">ج / شهر</span>
+        <span class="plan-price-cur">ج / ${isLifetime ? 'مرة واحدة' : 'شهر'}</span>
       </div>
 
       <ul class="plan-features-list">
@@ -136,6 +150,7 @@ function renderPlanCard(plan, currentPlan) {
         <div>👥 ${maxUsers} مستخدم</div>
         <div>📁 ${maxCases} قضية</div>
         <div>👤 ${maxClients} موكل</div>
+        <div>💾 ${fmtStorage(limits.max_storage_mb)} تخزين</div>
       </div>
 
       ${isCurrent ? `
@@ -144,7 +159,7 @@ function renderPlanCard(plan, currentPlan) {
         <button class="btn btn-ghost btn-block" disabled>الباقة المجانية</button>
       ` : `
         <a href="/pay?plan=${plan.plan}" class="btn btn-primary btn-block" style="text-decoration:none;display:block;text-align:center">
-          💳 ترقية الآن
+          💳 ${isLifetime ? 'اشترِ الآن' : 'ترقية الآن'}
         </a>
       `}
     </div>
@@ -186,13 +201,18 @@ function renderUsage(sub) {
         </div>
         <div class="usage-num">${u.clients || 0} / ${l.max_clients === -1 ? '∞' : l.max_clients}</div>
       </div>
+
+      <div class="usage-row">
+        <div class="usage-label">التخزين</div>
+        <div class="usage-bar">
+          <div class="usage-fill" style="width:${pct(u.storage_mb, l.max_storage_mb)}%"></div>
+        </div>
+        <div class="usage-num">${fmtStorage(u.storage_mb || 0)} / ${fmtStorage(l.max_storage_mb)}</div>
+      </div>
     </div>
   `;
 }
 
-// ============================================================
-// Click Handler
-// ============================================================
 function handleClick(e) {
   // الأزرار دلوقتي روابط مباشرة لـ /pay — مفيش حاجة هنا
 }
