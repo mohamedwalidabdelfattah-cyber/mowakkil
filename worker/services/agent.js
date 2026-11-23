@@ -91,7 +91,7 @@ async function executeTool(env, toolName, args) {
 }
 
 async function searchWeb(env, query) {
-  if (!env.TAVILY_API_KEY) {
+  if (String(env.TAVILY_API_KEY || '').length < 20) {
     return { error: 'TAVILY_API_KEY مش متظبط', results: [] };
   }
 

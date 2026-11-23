@@ -258,6 +258,18 @@ button .mi, .btn .mi { margin-inline-end: 6px; }
   #app-body > footer { padding-bottom: 24px; }
 }
 
+/* Superadmin mode: لوحة المنصة من غير قائمة وأزرار المكتب */
+body.sa-mode .drawer, body.sa-mode .drawer-backdrop, body.sa-mode .bottom-nav,
+body.sa-mode .topbar .menu-btn, body.sa-mode .topbar .search-trigger, body.sa-mode #notif-btn,
+body.sa-mode #cfg-btn, body.sa-mode #pwa-install-btn, body.sa-mode .topbar a.icon-btn,
+body.sa-mode #logout-btn, body.sa-mode #view-host { display: none !important; }
+body.sa-mode #app-body { padding-right: 0 !important; }
+body.sa-mode #app-body > .topbar { margin-right: 0 !important; }
+body.sa-mode .topbar .brand::after {
+  content: 'لوحة المنصة'; margin-inline-start: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: var(--gold-300); border: 1px solid rgba(212, 175, 55, .4); background: rgba(212, 175, 55, .08);
+}
+
 /* Bottom nav (mobile) */
 .bottom-nav {
   background: rgba(7, 12, 24, .96) !important; backdrop-filter: blur(10px);

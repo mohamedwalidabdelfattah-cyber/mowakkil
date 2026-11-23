@@ -65,6 +65,7 @@ export async function doLogin() {
     }
 
     setSAToken(token);
+    document.body.classList.add('sa-mode');
     document.getElementById('sa-gate').hidden = true;
     document.getElementById('sa-body').hidden = false;
     document.getElementById('landing-view').hidden = true;
@@ -81,6 +82,7 @@ export async function doLogin() {
 
 export function doLogout() {
   clearSAToken();
+  document.body.classList.remove('sa-mode');
   document.getElementById('sa-body').hidden = true;
   document.getElementById('sa-gate').hidden = true;
   document.getElementById('landing-view').hidden = false;

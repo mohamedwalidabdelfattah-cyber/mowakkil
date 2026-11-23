@@ -89,7 +89,6 @@ async function handleFetch(request, env) {
       return cors(json({ status: 'ok', service: 'mowakkil-api', version: 2 }), env, request);
     }
 
-
     const pubHit = matchRoute(PUBLIC_ROUTES, method, path);
     if (pubHit) {
       return await pubHit.route.handler({

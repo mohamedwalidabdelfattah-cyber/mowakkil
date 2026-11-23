@@ -107,7 +107,7 @@ export async function chatCompletion(env, {
   const errors = [];
 
   for (const p of PROVIDERS) {
-    if (!env[p.key] || skip.includes(p.name)) continue;
+    if (String(env[p.key] || '').length < 20 || skip.includes(p.name)) continue; // مفتاح ناقص/غلط → منضيعش وقت
     try {
       const message = await callOpenAICompatible(env, p, { messages, tools, maxTokens, temperature, timeoutMs });
       return { message, provider: p.name, errors };
@@ -144,10 +144,16 @@ export async function providersHealth(env) {
   const ping = [{ role: 'user', content: 'رد بكلمة واحدة: تمام' }];
   const out = [];
   for (const p of PROVIDERS) {
-    if (!env[p.key]) { out.push({ provider: p.name, model: p.model(env), ok: false, error: `${p.key} مش متظبط` }); continue; }
+    const key = String(env[p.key] || '');
+    if (key.length < 20) {
+      out.push({ provider: p.name, model: p.model(env), ok: false,
+        error: key ? `${p.key} قيمته غلط (${key.length} حرف) — اتحفظ من غير المفتاح، اعمله من جديد` : `${p.key} مش متظبط` });
+      continue;
+    }
     const t0 = Date.now();
     try {
-      await callOpenAICompatible(env, p, { messages: ping, maxTokens: 20, temperature: 0, timeoutMs: 15000 });
+      // 400 توكن عشان الموديلات اللي "بتفكر" الأول (gpt-oss / gemini 2.5) يلحقوا يردوا
+      await callOpenAICompatible(env, p, { messages: ping, maxTokens: 400, temperature: 0, timeoutMs: 20000 });
       out.push({ provider: p.name, model: p.model(env), ok: true, ms: Date.now() - t0 });
     } catch (e) {
       out.push({ provider: p.name, model: p.model(env), ok: false, error: e.message.slice(0, 200) });
