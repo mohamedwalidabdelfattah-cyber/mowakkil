@@ -1118,6 +1118,33 @@ node seed-vectorize.mjs
 - [ ] جرّب من موبايل أندرويد حقيقي: ابعت دعوة لموكل، افتح الرابط، ودوس «تثبيت التطبيق».
 - [ ] لسه ماتعملش: دوس «📚 فهرسة المواد القانونية» من لوحة السوبر أدمن (مرة واحدة)، وتأكد من مفاتيح Groq/Gemini بزرار «🩺 فحص النماذج».
 
+## ٧.٥) مفاتيح الذكاء الاصطناعي + التبديل التلقائي للنماذج
+
+### ليه عملنا كده
+النماذج المجانية بتتغير. مثال حصل فعلاً: Google قفل `gemini-2.5-flash` للحسابات الجديدة، فالنظام كان هيقع لو اسم النموذج ثابت في الكود.
+
+### إزاي شغال دلوقتي (`worker/services/model-discovery.js`)
+1. **كل يوم الساعة 3 الفجر** السيرفر بيسأل Groq و Gemini و OpenRouter عن النماذج المتاحة.
+2. **بيجرّب كل نموذج بسؤال صغير** ويحتفظ باللي بيرد بس. ده مهم، لأن Google بيعرض في قايمته نماذج مقفولة.
+3. **أثناء الاستخدام:** لو نموذج رجّع «مش متاح»، بيتشال فوراً وبنروح للي بعده. **العميل مش بيحس بحاجة.**
+4. **الترتيب:** Groq ← Gemini ← Groq (التاني) ← Gemini (التاني) ← OpenRouter المجاني ← ذكاء Cloudflare (من غير مفتاح، آخر حل).
+5. تقدر تشوف النماذج الشغالة حالياً من لوحة السوبر أدمن ← «🩺 فحص النماذج». الزرار ده كمان بيعمل اكتشاف جديد على طول.
+
+### المفاتيح بتتعمل مرة واحدة بس (مش بتتغير)
+**ملاحظة مهمة:** السكريبت **بياخد المفتاح من الحافظة لوحده**. يعني: انسخ المفتاح الأول بزرار Copy، وبعدين شغّل الأمر **من غير ما تنسخ أي حاجة تانية في النص**. اكتب الأمر بإيدك أو استخدم زرار التشغيل.
+
+| المزود | منين | الأمر |
+|---|---|---|
+| Gemini (أهم واحد) | https://aistudio.google.com/apikey ← Create API key (بيبدأ بـ `AIza`) | `powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 -Provider gemini` |
+| Groq (لو اتفتح عندك) | https://console.groq.com/keys ← Create API Key (بيبدأ بـ `gsk_`) | `powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 -Provider groq` |
+| Tavily (بحث النت) | https://app.tavily.com (بيبدأ بـ `tvly-`) | `powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 -Provider tavily` |
+| OpenRouter (احتياطي، اختياري) | https://openrouter.ai/settings/keys | `powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 -Provider openrouter` |
+
+- شغّل الأوامر من فولدر المشروع: `cd "D:\Mohamed Walid\mowakkil"`.
+- السكريبت بيجرّب المفتاح الأول، ولو اشتغل بيحفظه في Cloudflare. المفتاح **مش بيتكتب في أي ملف**.
+- **متبعتش المفتاح في أي شات.** لو حصل، امسحه من موقع المزود واعمل واحد جديد.
+- مفيش أي سكريبت بيدخل بإيميلك وباسوردك. ده ممنوع عند Google وممكن يقفل حسابك، ومش محتاجه لأن المفاتيح مش بتنتهي.
+
 ## ٨) لو حاجة باظت — ارجع لنسخة سابقة
 
 **الموقع:** من لوحة Cloudflare → Workers & Pages → mowakkil-2026 → Deployments → اختار نسخة قديمة → «Rollback».

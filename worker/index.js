@@ -152,7 +152,11 @@ export default {
     const { runTrialExpiry } = await import('../cron/trial-expiry.js');
     const { runNotificationJobs } = await import('./services/notification-jobs.js');
 
+    const { refreshModels } = await import('./services/model-discovery.js');
+
     ctx.waitUntil(runTrialExpiry(env));
     ctx.waitUntil(runNotificationJobs(env));
+    // اكتشاف النماذج المجانية المتاحة النهارده (أسماؤها بتتغير من وقت للتاني)
+    ctx.waitUntil(refreshModels(env).catch(e => console.warn('model discovery failed', e.message)));
   },
 };

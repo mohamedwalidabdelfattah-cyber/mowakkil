@@ -9,13 +9,14 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 gemini
 #   powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 tavily
 
-param([Parameter(Mandatory = $true)][ValidateSet('groq', 'gemini', 'tavily')][string]$Provider)
+param([Parameter(Mandatory = $true)][ValidateSet('groq', 'gemini', 'tavily', 'openrouter')][string]$Provider)
 
 $ErrorActionPreference = 'Stop'
 $spec = @{
   groq   = @{ name = 'GROQ_API_KEY';   site = 'https://console.groq.com/keys' }
   gemini = @{ name = 'GEMINI_API_KEY'; site = 'https://aistudio.google.com/apikey' }
   tavily = @{ name = 'TAVILY_API_KEY'; site = 'https://app.tavily.com' }
+  openrouter = @{ name = 'OPENROUTER_API_KEY'; site = 'https://openrouter.ai/settings/keys' }
 }[$Provider]
 
 function Fail($msg) {
@@ -41,17 +42,21 @@ try {
       Write-Host "   Groq شغال — $(@($r.data).Count) موديل متاح"
     }
     'gemini' {
-      # بنجرب بنفس الطريقة اللي التطبيق بيستخدمها (OpenAI-compatible + Bearer)
-      $body = @{ model = 'gemini-2.5-flash'; messages = @(@{ role = 'user'; content = 'say ok' }); max_tokens = 300 } | ConvertTo-Json -Depth 5
-      $null = Invoke-RestMethod -Method Post -Uri 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' `
-        -Headers @{ Authorization = "Bearer $value" } -ContentType 'application/json' -Body $body -TimeoutSec 60
-      Write-Host '   Gemini شغال'
+      # بنتأكد من المفتاح بقايمة النماذج (مش بنموذج معيّن — أسماء النماذج بتتغير)
+      $r = Invoke-RestMethod -Uri 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=200' `
+        -Headers @{ 'x-goog-api-key' = $value } -TimeoutSec 30
+      $flash = @($r.models | Where-Object { $_.name -match 'flash' -and $_.supportedGenerationMethods -contains 'generateContent' })
+      Write-Host "   Gemini شغال — $(@($r.models).Count) نموذج متاح ($($flash.Count) منهم Flash). النظام هيختار الأنسب لوحده."
     }
     'tavily' {
       $body = @{ query = 'Egyptian civil code'; max_results = 1; search_depth = 'basic' } | ConvertTo-Json
       $r = Invoke-RestMethod -Method Post -Uri 'https://api.tavily.com/search' `
         -Headers @{ Authorization = "Bearer $value" } -ContentType 'application/json' -Body $body -TimeoutSec 30
       Write-Host "   Tavily شغال — $(@($r.results).Count) نتيجة"
+    }
+    'openrouter' {
+      $r = Invoke-RestMethod -Uri 'https://openrouter.ai/api/v1/key' -Headers @{ Authorization = "Bearer $value" } -TimeoutSec 30
+      Write-Host '   OpenRouter شغال — النظام هيستخدم النماذج المجانية (:free) بس'
     }
   }
 } catch {

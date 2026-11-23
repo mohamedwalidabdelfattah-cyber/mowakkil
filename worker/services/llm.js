@@ -1,34 +1,35 @@
 // worker/services/llm.js
-// سلسلة موديلات مجانية بالكامل (مفيش أي مزود محتاج بطاقة دفع):
-//   1) Groq        — openai/gpt-oss-120b   (مفتاح مجاني من console.groq.com)
-//   2) Gemini      — gemini-2.5-flash      (مفتاح مجاني من aistudio.google.com)
-//   3) Groq        — llama-3.3-70b-versatile (حد منفصل عن الأول)
-//   4) Workers AI  — llama-3.3-70b         (الحصة المجانية اليومية في Cloudflare، صغيرة، آخر حل)
-// كل مزود بيتجرب بمهلة زمنية، ولو فشل بننتقل للي بعده.
+// سلسلة موديلات مجانية بالكامل (مفيش أي مزود محتاج بطاقة دفع).
+// أسماء النماذج مش ثابتة: بتيجي من model-discovery.js اللي بيسأل كل مزود عن
+// النماذج المتاحة حالياً ويجربها (وبيتحدث كل يوم لوحده). الترتيب:
+//   Groq (أفضل نموذج) → Gemini (أفضل نموذج) → Groq (التاني) → Gemini (التاني) → OpenRouter (مجاني) → Workers AI
+// لو نموذج رجّع "مش موجود/اتقفل" بيتشال فوراً وبننتقل للي بعده — المستخدم مش بيحس بحاجة.
 
-const PROVIDERS = [
-  {
-    name: 'groq',
-    key: 'GROQ_API_KEY',
-    url: 'https://api.groq.com/openai/v1/chat/completions',
-    model: env => env.GROQ_MODEL || 'openai/gpt-oss-120b',
-    tools: true,
-  },
-  {
-    name: 'gemini',
-    key: 'GEMINI_API_KEY',
-    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    model: env => env.GEMINI_MODEL || 'gemini-2.5-flash',
-    tools: true,
-  },
-  {
-    name: 'groq-llama',
-    key: 'GROQ_API_KEY',
-    url: 'https://api.groq.com/openai/v1/chat/completions',
-    model: () => 'llama-3.3-70b-versatile',
-    tools: true,
-  },
-];
+import { getModels, markModelGone, refreshModels, ENDPOINTS } from './model-discovery.js';
+
+// GROQ_MODEL / GEMINI_MODEL في [vars] لو حبيت تفرض نموذج معيّن (اختياري)
+async function buildAttempts(env) {
+  const models = await getModels(env);
+  const list = (provider, override) => {
+    const arr = [...(models?.[provider] || [])];
+    if (override && !arr.includes(override)) arr.unshift(override);
+    return arr;
+  };
+  const groq = list('groq', env.GROQ_MODEL);
+  const gemini = list('gemini', env.GEMINI_MODEL);
+  const openrouter = list('openrouter');
+  const order = [
+    ['groq', groq[0]], ['gemini', gemini[0]],
+    ['groq', groq[1]], ['gemini', gemini[1]],
+    ['openrouter', openrouter[0]], ['openrouter', openrouter[1]],
+  ];
+  return order
+    .filter(([p, m]) => m && secret(env, ENDPOINTS[p].key).length >= 20)
+    .map(([p, m]) => ({ name: p, key: ENDPOINTS[p].key, url: ENDPOINTS[p].url, model: m, tools: true }));
+}
+
+// الأخطاء اللي معناها إن النموذج نفسه مبقاش متاح (مش مشكلة مؤقتة)
+const MODEL_GONE = /\b(404)\b|no longer available|not found|does not exist|decommissioned|deprecated|model_not_found|invalid model/i;
 
 const WORKERS_AI_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
@@ -52,7 +53,7 @@ function cleanMessage(m) {
 
 async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temperature, timeoutMs }) {
   const body = {
-    model: p.model(env),
+    model: p.model,
     messages: messages.map(cleanMessage),
     max_tokens: maxTokens,
     temperature,
@@ -71,7 +72,9 @@ async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temper
 
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    throw new Error(`${p.name} ${res.status}: ${txt.slice(0, 200)}`);
+    const err = new Error(`${p.name}/${p.model} ${res.status}: ${txt.slice(0, 200)}`);
+    err.modelGone = (res.status === 404 || res.status === 400) && MODEL_GONE.test(`${res.status} ${txt}`);
+    throw err;
   }
   const data = await res.json();
   const msg = data.choices?.[0]?.message;
@@ -108,15 +111,19 @@ export async function chatCompletion(env, {
   skip = [],
 } = {}) {
   const errors = [];
+  let attempts = [];
+  try { attempts = await buildAttempts(env); } catch (e) { errors.push(`discovery: ${e.message}`); }
 
-  for (const p of PROVIDERS) {
-    if (secret(env, p.key).length < 20 || skip.includes(p.name)) continue; // مفتاح ناقص/غلط → منضيعش وقت
+  for (const p of attempts) {
+    if (skip.includes(p.name)) continue;
     try {
       const message = await callOpenAICompatible(env, p, { messages, tools, maxTokens, temperature, timeoutMs });
-      return { message, provider: p.name, errors };
+      return { message, provider: p.name, model: p.model, errors };
     } catch (e) {
       console.warn(`LLM provider failed: ${e.message}`);
       errors.push(e.message);
+      // النموذج اتقفل/اتشال → نشيله من القايمة عشان الطلبات الجاية متضيعش وقت عليه
+      if (e.modelGone) await markModelGone(env, p.name, p.model);
     }
   }
 
@@ -142,24 +149,29 @@ export async function completeText(env, { system, prompt, maxTokens = 1500, temp
   return { text: message.content || '', provider };
 }
 
-/** فحص سريع لكل مزود (للسوبر أدمن) — بيبعت رسالة قصيرة جداً */
-export async function providersHealth(env) {
+/** فحص سريع لكل مزود (للسوبر أدمن). refresh=true → يعيد اكتشاف النماذج الأول. */
+export async function providersHealth(env, { refresh = true } = {}) {
   const ping = [{ role: 'user', content: 'رد بكلمة واحدة: تمام' }];
   const out = [];
-  for (const p of PROVIDERS) {
-    const key = secret(env, p.key);
-    if (key.length < 20) {
-      out.push({ provider: p.name, model: p.model(env), ok: false,
-        error: key ? `${p.key} قيمته غلط (${key.length} حرف) — اتحفظ من غير المفتاح، اعمله من جديد` : `${p.key} مش متظبط` });
-      continue;
-    }
+  if (refresh) { try { await refreshModels(env); } catch {} }
+
+  // مزود مفتاحه ناقص → نوضح السبب
+  for (const [name, ep] of Object.entries(ENDPOINTS)) {
+    const key = secret(env, ep.key);
+    if (key.length >= 20) continue;
+    if (name === 'openrouter' && !key) continue; // اختياري
+    out.push({ provider: name, model: '', ok: false,
+      error: key ? `${ep.key} قيمته غلط (${key.length} حرف) — اعمله من جديد` : `${ep.key} مش متظبط` });
+  }
+
+  for (const p of await buildAttempts(env)) {
     const t0 = Date.now();
     try {
-      // 400 توكن عشان الموديلات اللي "بتفكر" الأول (gpt-oss / gemini 2.5) يلحقوا يردوا
+      // 400 توكن عشان الموديلات اللي "بتفكر" الأول يلحقوا يردوا
       await callOpenAICompatible(env, p, { messages: ping, maxTokens: 400, temperature: 0, timeoutMs: 20000 });
-      out.push({ provider: p.name, model: p.model(env), ok: true, ms: Date.now() - t0 });
+      out.push({ provider: p.name, model: p.model, ok: true, ms: Date.now() - t0 });
     } catch (e) {
-      out.push({ provider: p.name, model: p.model(env), ok: false, error: e.message.slice(0, 200) });
+      out.push({ provider: p.name, model: p.model, ok: false, error: e.message.slice(0, 200) });
     }
   }
   try {
