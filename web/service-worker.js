@@ -1,7 +1,7 @@
 // service-worker.js
 // النسخة المحسنة: Cache First للملفات الثابتة + Network First للـ HTML
 
-const CACHE_NAME = 'mowakkil-cache-v75';
+const CACHE_NAME = 'mowakkil-cache-v76';
 
 // الملفات الأساسية اللي بنعملها كاش عشان التطبيق يشتغل أوفلاين
 const PRECACHE_ASSETS = [

@@ -537,7 +537,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--navy-900); wid
 /* -------------------------------------------------------------------------
    11) Charts
    ------------------------------------------------------------------------- */
-.charts-grid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important; gap: 16px !important; }
+.charts-grid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)) !important; gap: 16px !important; }
+.row { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)) !important; }
 .chart-card h3 { font-size: 15px !important; margin-bottom: 12px !important; }
 .chart-card h3 span { color: var(--text-3) !important; font-weight: 500 !important; font-size: 12.5px !important; }
 .chart-wrapper { position: relative; height: 260px; }
@@ -610,7 +611,28 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--navy-900); wid
 }
 @media (max-width: 768px) {
   #app { padding: 16px 14px 100px !important; }
-  .topbar { padding: 0 10px !important; }
+  .topbar { padding: 0 8px !important; gap: 4px !important; }
+  /* الشريط العلوي: الأسعار والإعدادات موجودين في القائمة الجانبية */
+  .topbar a.icon-btn, #cfg-btn { display: none !important; }
+  .topbar-actions { gap: 0 !important; flex-shrink: 0; }
+  .topbar .icon-btn, .topbar .menu-btn, #logout-btn, .topbar .search-trigger { width: 36px !important; height: 36px !important; }
+  .topbar .brand { min-width: 0; overflow: hidden; }
+  .topbar .brand-logo img { width: 30px; height: 30px; }
+  .topbar .brand h1 { font-size: 16px !important; white-space: nowrap; }
+  /* تابات الإعدادات: صف أفقي بيتسحب */
+  .settings-layout { display: block !important; }
+  .settings-sidebar {
+    display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; overflow-x: auto !important;
+    position: static !important; width: auto !important; padding: 6px !important; gap: 6px !important; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .settings-sidebar::-webkit-scrollbar { display: none; }
+  .settings-tab { flex-shrink: 0 !important; white-space: nowrap; width: auto !important; }
+}
+@media (max-width: 380px) {
+  .topbar .brand h1 { display: none !important; }
+}
+@media (max-width: 768px) {
   .topbar .search-trigger { width: 38px !important; min-width: 0 !important; padding: 0 !important; justify-content: center !important; background: transparent !important; border-color: transparent !important; margin: 0 !important; }
   .topbar .search-trigger-text, .topbar .search-trigger-kbd { display: none !important; }
   .stat { padding: 14px !important; }
