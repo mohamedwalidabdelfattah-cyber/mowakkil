@@ -37,8 +37,8 @@ export async function render(host) {
 
     <div class="calendar-legends">
       <div class="cal-legend"><span class="dot" style="background:#0F172A"></span> جلسات</div>
-      <div class="cal-legend"><span class="dot" style="background:#10B981"></span> مهام</div>
-      <div class="cal-legend"><span class="dot" style="background:#F59E0B"></span> أتعاب</div>
+      <div class="cal-legend"><span class="dot" style="background:#12B76A"></span> مهام</div>
+      <div class="cal-legend"><span class="dot" style="background:#D4AF37"></span> أتعاب</div>
     </div>
 
     <div id="calendar-host" class="calendar-host">
@@ -90,7 +90,7 @@ async function loadCalendarLib() {
     const link = document.createElement('link');
     link.id = 'tui-calendar-css';
     link.rel = 'stylesheet';
-    link.href = 'https://uicdn.toast.com/calendar/latest/toastui-calendar.min.css';
+    link.href = 'https://cdn.jsdelivr.net/npm/@toast-ui/calendar@2.1.3/dist/toastui-calendar.min.css';
     document.head.appendChild(link);
   }
 
@@ -98,7 +98,7 @@ async function loadCalendarLib() {
     await new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.id = 'tui-calendar-js';
-      script.src = 'https://uicdn.toast.com/calendar/latest/toastui-calendar.min.js';
+      script.src = 'https://cdn.jsdelivr.net/npm/@toast-ui/calendar@2.1.3/dist/toastui-calendar.min.js';
       script.onload = resolve;
       script.onerror = reject;
       document.head.appendChild(script);
@@ -138,16 +138,16 @@ function initCalendar(host) {
       {
         id: 'tasks',
         name: 'مهام',
-        backgroundColor: '#10B981',
-        borderColor: '#10B981',
+        backgroundColor: '#12B76A',
+        borderColor: '#12B76A',
         color: '#ffffff',
       },
       {
         id: 'fees',
         name: 'أتعاب',
-        backgroundColor: '#F59E0B',
-        borderColor: '#F59E0B',
-        color: '#ffffff',
+        backgroundColor: '#D4AF37',
+        borderColor: '#D4AF37',
+        color: '#0B1222',
       },
     ],
     month: {
@@ -243,7 +243,7 @@ async function loadEvents() {
     const events = await apiJson(`/api/calendar/events?${params.toString()}`);
 
     calendar.clear();
-    calendar.createEvents(events);
+    calendar.createEvents(Array.isArray(events) ? events : (events?.items || []));
 
     if (events.length === 0) {
       const calHost = document.getElementById('calendar-host');
