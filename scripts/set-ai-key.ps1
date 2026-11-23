@@ -43,11 +43,20 @@ if ($m.Success -and $m.Value -ne $value) {
   $value = $m.Value
 }
 
-if ($value.Length -lt 20) { Fail "الحافظة مفيهاش مفتاح (طول اللي فيها $($value.Length) حرف)." }
-if ($value -match '\s') {
-  if ($value -match 'set-ai-key|powershell|cd ') { Fail 'اللي في الحافظة هو الأمر نفسه مش المفتاح. انسخ المفتاح آخر حاجة قبل ما تدوس Enter.' }
-  Fail 'اللي في الحافظة فيه مسافات ومش لاقي فيه مفتاح.'
+# مفيش مفتاح في الحافظة (مثلاً اتنسخ الأمر نفسه) → نطلبه يتلصق في خانة مخفية (مش بيظهر على الشاشة)
+if (-not $m.Success -and ($value.Length -lt 20 -or $value -match '\s')) {
+  Write-Host ''
+  Write-Host "مالقيتش مفتاح $Provider في الحافظة." -ForegroundColor Yellow
+  Write-Host "انسخ المفتاح من $($spec.site) وبعدين الصقه هنا (كليك يمين أو Ctrl+V) ودوس Enter."
+  Write-Host '(المفتاح مش هيظهر وانت بتلصقه — ده طبيعي عشان الأمان)'
+  $secure = Read-Host 'المفتاح' -AsSecureString
+  $value = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)).Trim()
+  $m2 = [regex]::Match($value, $pattern)
+  if ($m2.Success) { $value = $m2.Value }
 }
+
+if ($value.Length -lt 20) { Fail "مفيش مفتاح (طول اللي اتلصق $($value.Length) حرف)." }
+if ($value -match '\s') { Fail 'اللي اتلصق فيه مسافات ومش لاقي فيه مفتاح.' }
 
 # ---- تجربة المفتاح فعلياً ----
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
