@@ -8,6 +8,9 @@ import { openSearch, initSearch } from './search.js';
 import { startIconify, icon } from './icons.js';
 import { applyChartTheme } from './chart-theme.js';
 import { loadAccess, canView, guardActions, clearAccess } from './access.js';
+import { startOffline } from './offline.js';
+import { apiJson } from './api.js';
+import { getCurrentView } from './router.js';
 
 applyChartTheme();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startIconify);
@@ -238,6 +241,14 @@ if (getToken()) {
   accountView.loadOffice();
   guardActions(document.getElementById('view-host'));
   loadAccess(); // الصلاحيات (بتعيد بناء القايمة لما توصل)
+  startOffline(apiJson); // الأجندة من غير نت + إرسال اللي اتسجل من غير نت
+  document.addEventListener('mowakkil:synced', (e) => {
+    const { sent, failed } = e.detail || {};
+    if (sent) toast(`✅ اتبعت ${sent} عملية كانت مستنية النت`, 'ok');
+    (failed || []).forEach(f => toast(`⚠️ «${f.label}» اترفضت: ${f.error}`, 'bad'));
+    const v = getCurrentView();
+    if (v) showView(v); // نحدّث الشاشة بالبيانات الجديدة
+  });
   showView('dashboard');
   // الشاشات الأكتر استخداماً تتحمل في الخلفية عشان التنقل يبقى فوري
   prefetchViews(['cases', 'clients', 'tasks', 'agenda', 'fees', 'search']);

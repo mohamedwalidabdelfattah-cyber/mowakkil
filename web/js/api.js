@@ -1,6 +1,7 @@
 // web/js/api.js
 import { STORAGE_KEYS, API_BASE } from './config.js';
-import { onAuthExpired, onTrialExpired, showUpgradeModal, showLimitModal } from './ui.js';
+import { onAuthExpired, onTrialExpired, showUpgradeModal, showLimitModal, toast } from './ui.js';
+import { enqueue, queueLabel, readResponse, saveResponse, isCacheable, updateBanner, clearOffline } from './offline.js';
 
 export function getToken()   { return localStorage.getItem(STORAGE_KEYS.TOKEN) || ''; }
 export function getSAToken() { return localStorage.getItem(STORAGE_KEYS.SA_TOKEN) || ''; }
@@ -17,6 +18,7 @@ export function clearSession() {
   localStorage.removeItem(STORAGE_KEYS.ROLE);
   localStorage.removeItem(STORAGE_KEYS.OFFICE);
   localStorage.removeItem('mowakkil_access'); // صلاحيات المستخدم اللي خرج (web/js/access.js)
+  clearOffline(); // بيانات الشغل من غير نت على الجهاز
 }
 export function setSAToken(t)  { localStorage.setItem(STORAGE_KEYS.SA_TOKEN, t); }
 export function clearSAToken() { localStorage.removeItem(STORAGE_KEYS.SA_TOKEN); }
@@ -138,9 +140,27 @@ export async function api(path, opts = {}) {
     headers['content-type'] = 'application/json';
   }
 
-  const res = await fetch(API_BASE + path, { ...opts, headers });
-  // أي تعديل (إضافة/تعديل/حذف) ناجح → نمسح كاش القراءة عشان القوايم تتحدث فوراً
   const method = (opts.method || 'GET').toUpperCase();
+
+  // من غير نت: العمليات المسموحة (تسجيل جلسة/تأجيل/مهمة) بتتحفظ على الجهاز وتتبعت لما النت يرجع
+  const queueOffline = async () => {
+    await enqueue(method, path, opts.body);
+    clearCache();
+    toast('📴 اتحفظ على الجهاز — هيتبعت لوحده أول ما النت يرجع', 'ok');
+    return new Response(JSON.stringify({ queued: true, data: { queued: true } }),
+      { status: 202, headers: { 'content-type': 'application/json' } });
+  };
+  if (method !== 'GET' && !navigator.onLine && queueLabel(method, path)) return queueOffline();
+
+  let res;
+  try {
+    res = await fetch(API_BASE + path, { ...opts, headers });
+  } catch (e) {
+    // الشبكة وقعت أثناء الطلب
+    if (method !== 'GET' && queueLabel(method, path)) return queueOffline();
+    throw e;
+  }
+  // أي تعديل (إضافة/تعديل/حذف) ناجح → نمسح كاش القراءة عشان القوايم تتحدث فوراً
   if (method !== 'GET' && res.ok) clearCache();
   return handle(res);
 }
@@ -153,7 +173,21 @@ export async function apiJson(path, opts = {}) {
     if (cached !== null) return cached;
   }
 
-  const res = await api(path, opts);
+  // من غير نت: آخر نسخة محفوظة على الجهاز
+  const fromDevice = async () => {
+    const saved = await readResponse(path);
+    if (saved != null) { updateBanner(); return saved; }
+    throw new Error('📴 مفيش إنترنت، والصفحة دي مش محفوظة على الجهاز — افتحها مرة وانت متصل');
+  };
+  if (isGet && !navigator.onLine && isCacheable(path)) return fromDevice();
+
+  let res;
+  try {
+    res = await api(path, opts);
+  } catch (e) {
+    if (isGet && e instanceof TypeError && isCacheable(path)) return fromDevice();
+    throw e;
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `HTTP ${res.status}`);
@@ -161,7 +195,10 @@ export async function apiJson(path, opts = {}) {
 
   const data = await res.json();
 
-  if (isGet) setCache(path, data);
+  if (isGet) {
+    setCache(path, data);
+    saveResponse(path, data); // نسخة للشغل من غير نت
+  }
 
   return data;
 }

@@ -118,7 +118,8 @@ function cleanFormText(root) {
     RE.lastIndex = 0;
   }
 }
-const SKIP_SEL = '.no-icons, .chat-ai-text, .chat-bubble-user, .doc-output, [contenteditable="true"]';
+// التقويم (Toast UI) بيرسم نفسه بنفسه — لو غيّرنا نصوصه بيمسح عناوين المواعيد، فبنسيبه
+const SKIP_SEL = '.no-icons, .chat-ai-text, .chat-bubble-user, .doc-output, [contenteditable="true"], .calendar-host, [class*="toastui-calendar"]';
 
 function convertTextNode(node) {
   const text = node.nodeValue;

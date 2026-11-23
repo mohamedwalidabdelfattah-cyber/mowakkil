@@ -13,10 +13,21 @@ const CODE_CACHE = `${CACHE_PREFIX}-code`;
 const ASSET_CACHE = `${CACHE_PREFIX}-assets`;
 const NETWORK_TIMEOUT_MS = 4000;
 
+// مكتبات الأجندة والرسوم: بتتحفظ من أول تثبيت عشان الأجندة تفتح من غير نت حتى لو اتفتحت أول مرة أوفلاين
+const PRECACHE_LIBS = [
+  'https://cdn.jsdelivr.net/npm/@toast-ui/calendar@2.1.3/dist/toastui-calendar.min.js',
+  'https://cdn.jsdelivr.net/npm/@toast-ui/calendar@2.1.3/dist/toastui-calendar.min.css',
+  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
+];
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  // نخزن الصفحة الرئيسية بس عشان التطبيق يفتح أوفلاين
-  event.waitUntil(caches.open(CODE_CACHE).then(c => c.add('/').catch(() => {})));
+  // الصفحة الرئيسية + مكتبات الأجندة (لو فشل التحميل مش بيوقف التثبيت)
+  event.waitUntil(Promise.all([
+    caches.open(CODE_CACHE).then(c => c.add('/').catch(() => {})),
+    caches.open(`${CACHE_PREFIX}-libs`).then(c => Promise.all(PRECACHE_LIBS.map(u =>
+      fetch(u, { mode: 'cors' }).then(r => (r.ok ? c.put(u, r) : null)).catch(() => {})))),
+  ]));
 });
 
 self.addEventListener('activate', (event) => {
@@ -66,12 +77,25 @@ function staleWhileRevalidate(req) {
   }));
 }
 
+const LIB_CACHE = `${CACHE_PREFIX}-libs`;
+function cacheFirst(req) {
+  return caches.open(LIB_CACHE).then(cache => cache.match(req).then(cached => cached || fetch(req).then(res => {
+    // opaque (no-cors) أو ok — الاتنين ينفع يتخزنوا
+    if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => {});
+    return res;
+  })));
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // API، ملف الـ APK، ملفات التحقق، وأي دومين خارجي (CDN) → المتصفح يتصرف عادي
+  // مكتبات CDN بإصدار ثابت (التقويم، الرسوم البيانية...) → من المحفوظ الأول عشان الأجندة تشتغل من غير نت.
+  // الإصدار مكتوب في الرابط (@2.1.3) فمش بتتغير — تحديث الإصدار = رابط جديد.
+  if (url.hostname === 'cdn.jsdelivr.net' && /@\d/.test(url.pathname)) { event.respondWith(cacheFirst(req)); return; }
+
+  // API، ملف الـ APK، ملفات التحقق، وأي دومين خارجي تاني → المتصفح يتصرف عادي
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/downloads/') || url.pathname.startsWith('/.well-known/')) return;
 

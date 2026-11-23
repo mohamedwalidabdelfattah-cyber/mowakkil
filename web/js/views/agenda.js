@@ -243,7 +243,14 @@ async function loadEvents() {
     const events = await apiJson(`/api/calendar/events?${params.toString()}`);
 
     calendar.clear();
-    calendar.createEvents(Array.isArray(events) ? events : (events?.items || []));
+    // Toast UI بيختار قالب رسم العنوان حسب category، ولازم تكون allday/time/task/milestone.
+    // قيمنا (session/task/fee) كانت بتخلي العنوان يترسم فاضي — فبنحفظ النوع في raw.kind.
+    const list = Array.isArray(events) ? events : (events?.items || []);
+    calendar.createEvents(list.map(e => ({
+      ...e,
+      category: e.isAllDay === false ? 'time' : 'allday',
+      raw: { ...(e.raw || {}), kind: e.category, pending: !!e._pending },
+    })));
 
     if (events.length === 0) {
       const calHost = document.getElementById('calendar-host');
@@ -270,7 +277,8 @@ function showEventDetails(event) {
       <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:16px">
         <div>
           <div style="font-size:12px;color:var(--text-soft);margin-bottom:4px">
-            ${event.category === 'session' ? '⚖️ جلسة' : event.category === 'task' ? '✅ مهمة' : '💰 أتعاب'}
+            ${(() => { const k = event.raw?.kind || event.category; return k === 'session' ? '⚖️ جلسة' : k === 'task' ? '✅ مهمة' : '💰 أتعاب'; })()}
+            ${event.raw?.pending ? ' · ⏳ مستني النت عشان يتبعت' : ''}
           </div>
           <h3 style="margin:0;font-size:18px">${esc(event.title)}</h3>
         </div>

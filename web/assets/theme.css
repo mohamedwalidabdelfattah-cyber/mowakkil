@@ -730,3 +730,19 @@ footer::before { content: none !important; display: none !important; }
 .cr-editor { margin-top: 14px; padding: 14px; border: 1px dashed var(--gold-400); border-radius: var(--r-lg); background: var(--gold-50); }
 .card.upsell { border-inline-start: 3px solid var(--gold-400); }
 @media (max-width: 640px) { .team-controls select { min-width: 0; flex: 1 1 140px; } }
+
+/* -------------------------------------------------------------------------
+   17) الشغل من غير إنترنت — شريط الحالة
+   ------------------------------------------------------------------------- */
+#offline-banner {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 9000;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); text-align: center;
+  font-size: 13.5px; font-weight: 600; box-shadow: 0 -6px 18px rgba(16, 24, 40, .12);
+}
+#offline-banner.offline { background: var(--navy-900); color: var(--gold-300); }
+#offline-banner.pending { background: var(--c-warning-bg); color: var(--c-warning); border-top: 1px solid var(--c-warning-bd); }
+#offline-banner button {
+  margin-inline-start: 10px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12.5px;
+  border: 1px solid currentColor; background: transparent; color: inherit;
+}
+@media (max-width: 768px) { #offline-banner { bottom: 64px; } } /* فوق شريط التنقل السفلي */
