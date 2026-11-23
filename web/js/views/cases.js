@@ -412,6 +412,7 @@ async function showCaseDetail(id, initialTab = 'overview') {
       if (tab === 'docs') {
         renderAttachments(el, {
           caseId: id,
+          caseLabel: c.case_number, // اسم فولدر القضية لو الحفظ على كمبيوتر المكتب
           onChange: docs => {
             documents.splice(0, documents.length, ...docs);
             const t = modal.querySelector('.case-tab[data-tab="docs"]');

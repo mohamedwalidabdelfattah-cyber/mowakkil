@@ -2,6 +2,11 @@
 // إدارة المرفقات (للقضايا والمهام): رفع مع تصنيف، تجميع حسب النوع، بحث، تحميل، تعديل، حذف.
 // التصنيفات لازم تتطابق مع worker/lib/doc-categories.js
 import { apiJson, uploadDocument, downloadDocument } from './api.js';
+import {
+  deviceSupported, getDeviceLabel, buildPath, saveToDevice, readFromDevice, deleteFromDevice, openBlob,
+} from './device-storage.js';
+
+const MAX_DEVICE_SIZE = 200 * 1024 * 1024; // على الكمبيوتر مفيش حد السحابة (10 ميجا)
 import { esc, toast } from './ui.js';
 
 export const DOC_CATEGORIES = [
@@ -50,8 +55,13 @@ const catSelect = (id, selected = '', placeholder = true) => `
  * @param {HTMLElement} el
  * @param {{caseId?: number, taskId?: number, defaultType?: string, onChange?: (docs:any[])=>void}} opts
  */
-export async function renderAttachments(el, { caseId = null, taskId = null, defaultType = '', onChange = null } = {}) {
+export async function renderAttachments(el, { caseId = null, taskId = null, defaultType = '', onChange = null, caseLabel = null } = {}) {
   const state = { docs: [], filter: 'all', q: '', editing: null };
+  // مكان الحفظ: السحابة أو فولدر على كمبيوتر المكتب (لو المتصفح بيدعم)
+  const canDevice = deviceSupported();
+  let defaultStorage = 'cloud';
+  try { defaultStorage = (await apiJson('/api/settings')).doc_storage_default || 'cloud'; } catch {}
+  if (!canDevice) defaultStorage = 'cloud';
   const qs = caseId ? `case_id=${caseId}` : `task_id=${taskId}`;
 
   el.innerHTML = `
@@ -65,6 +75,13 @@ export async function renderAttachments(el, { caseId = null, taskId = null, defa
         <div style="font-weight:700">اسحب الملفات هنا أو اضغط للاختيار</div>
         <div class="meta" style="font-size:12px">PDF · Word · صور · نصوص — حتى 10 ميجا للملف، وتقدر تختار أكتر من ملف</div>
       </div>
+      ${canDevice ? `
+      <div class="att-storage">
+        <label class="att-opt"><input type="radio" name="att-where" value="cloud" ${defaultStorage === 'cloud' ? 'checked' : ''}>
+          <span>☁️ <strong>السحابة</strong> <span class="meta" style="margin:0">— بيبان على كل الأجهزة، وبيتحسب من مساحة الباقة، وحتى 10 ميجا</span></span></label>
+        <label class="att-opt"><input type="radio" name="att-where" value="device" ${defaultStorage === 'device' ? 'checked' : ''}>
+          <span>💻 <strong>${esc(getDeviceLabel())}</strong> <span class="meta" style="margin:0">— فولدر على الجهاز ده، مش بيتحسب من المساحة، وبيبان على الجهاز ده بس</span></span></label>
+      </div>` : ''}
       <input type="file" id="att-file" multiple accept="${ACCEPT}" style="display:none">
       <div id="att-status" class="status" style="margin-top:8px"></div>
     </div>
@@ -143,6 +160,9 @@ export async function renderAttachments(el, { caseId = null, taskId = null, defa
         ${[fmtSize(d.file_size), (d.created_at || '').slice(0, 10), d.uploaded_by_name ? '👤 ' + esc(d.uploaded_by_name) : '']
           .filter(Boolean).join(' · ')}
         ${KNOWN.has(d.doc_type) ? '' : ' · <span title="مستند قديم مش متصنف">غير مصنف</span>'}
+        · ${d.storage === 'device'
+          ? `<span class="store-badge device" title="${esc(d.device_path || '')}">💻 على ${esc(d.device_label || 'كمبيوتر المكتب')}</span>`
+          : '<span class="store-badge cloud">☁️ سحابة</span>'}
       </div>
       ${d.notes ? `<div style="font-size:12.5px;margin-top:4px">📝 ${esc(d.notes)}</div>` : ''}
       <div class="acts" style="margin-top:6px">
@@ -169,22 +189,35 @@ export async function renderAttachments(el, { caseId = null, taskId = null, defa
     const type = $('#att-type').value;
     if (!type) { status('⚠️ اختار نوع المستند الأول (توكيل، صحيفة دعوى، ...)', 'bad'); $('#att-type').focus(); return; }
     const notes = $('#att-notes').value.trim();
+    const toDevice = canDevice && el.querySelector('input[name="att-where"]:checked')?.value === 'device';
+    const limit = toDevice ? MAX_DEVICE_SIZE : MAX_SIZE;
     const list = [...files];
-    const tooBig = list.filter(f => f.size > MAX_SIZE);
-    if (tooBig.length) toast(`⚠️ ${tooBig.map(f => f.name).join('، ')} أكبر من 10 ميجا`, 'bad');
-    const ok = list.filter(f => f.size <= MAX_SIZE);
+    const tooBig = list.filter(f => f.size > limit);
+    if (tooBig.length) toast(`⚠️ ${tooBig.map(f => f.name).join('، ')} أكبر من ${toDevice ? '200' : '10'} ميجا`, 'bad');
+    const ok = list.filter(f => f.size <= limit);
     let done = 0, failed = 0;
     for (const f of ok) {
-      status(`⏳ جاري رفع ${done + failed + 1} من ${ok.length}: ${f.name}`);
+      status(`⏳ جاري ${toDevice ? 'حفظ' : 'رفع'} ${done + failed + 1} من ${ok.length}: ${f.name}`);
       try {
-        await uploadDocument(f, { caseId, taskId, docType: type, notes });
+        if (toDevice) {
+          // الملف بيتحفظ في فولدر المكتب، والسيرفر بيسجّل بياناته بس
+          const path = await saveToDevice(f, buildPath({ caseLabel, caseId, taskId, docType: type, fileName: f.name }));
+          await apiJson('/api/documents/device', { method: 'POST', body: JSON.stringify({
+            case_id: caseId, task_id: taskId, doc_type: type, notes,
+            file_name: path.split('/').pop(), file_size: f.size, mime_type: f.type,
+            device_path: path, device_label: getDeviceLabel(),
+          }) });
+        } else {
+          await uploadDocument(f, { caseId, taskId, docType: type, notes });
+        }
         done++;
       } catch (e) {
         failed++;
         toast(`${f.name}: ${e.message}`, 'bad');
       }
     }
-    if (ok.length) status(failed ? `⚠️ اترفع ${done} وفشل ${failed}` : `✅ اترفع ${done} ملف في "${type}"`, failed ? 'bad' : 'ok');
+    if (ok.length) status(failed ? `⚠️ اتحفظ ${done} وفشل ${failed}`
+      : toDevice ? `✅ اتحفظ ${done} ملف على ${getDeviceLabel()} في "${type}"` : `✅ اترفع ${done} ملف في "${type}"`, failed ? 'bad' : 'ok');
     $('#att-notes').value = '';
     $('#att-file').value = '';
     await load();
@@ -212,7 +245,15 @@ export async function renderAttachments(el, { caseId = null, taskId = null, defa
 
     if (b.dataset.act === 'dl') {
       const old = b.textContent; b.disabled = true; b.textContent = '⏳';
-      try { await downloadDocument(id, d.file_name); } catch (err) { toast(err.message, 'bad'); }
+      try {
+        if (d.storage === 'device') {
+          const file = await readFromDevice(d.device_path);
+          if (!file) throw new Error(`الملف ده متخزن على «${d.device_label || 'كمبيوتر المكتب'}» — افتحه من الجهاز ده`);
+          openBlob(file, d.file_name);
+        } else {
+          await downloadDocument(id, d.file_name);
+        }
+      } catch (err) { toast(err.message, 'bad'); }
       finally { b.disabled = false; b.textContent = old; }
     }
     if (b.dataset.act === 'edit') { state.editing = id; draw(); }
@@ -233,10 +274,14 @@ export async function renderAttachments(el, { caseId = null, taskId = null, defa
       } catch (err) { toast(err.message, 'bad'); b.disabled = false; }
     }
     if (b.dataset.act === 'del') {
-      if (!confirm(`حذف "${d.file_name}" نهائياً؟\nالملف هيتمسح من التخزين ومش هينفع يرجع.`)) return;
+      const onDevice = d.storage === 'device';
+      if (!confirm(onDevice
+        ? `حذف "${d.file_name}" من قايمة المستندات؟\nلو الملف على الجهاز ده هيتمسح من الفولدر كمان.`
+        : `حذف "${d.file_name}" نهائياً؟\nالملف هيتمسح من التخزين ومش هينفع يرجع.`)) return;
       b.disabled = true;
       try {
         await apiJson(`/api/documents/${id}`, { method: 'DELETE' });
+        if (onDevice) await deleteFromDevice(d.device_path).catch(() => {});
         toast('🗑 اتحذف', 'ok');
         await load();
       } catch (err) { toast(err.message, 'bad'); b.disabled = false; }

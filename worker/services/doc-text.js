@@ -94,6 +94,11 @@ export async function getCaseDocumentsText(env, { officeId, caseId, ids = null, 
 
   const out = [];
   for (const doc of rows) {
+    // ملف متخزن على كمبيوتر المكتب — السيرفر مش شايفه
+    if (String(doc.r2_key || '').startsWith('device:')) {
+      out.push({ id: doc.id, file_name: doc.file_name, doc_type: doc.doc_type, text: '', error: 'متخزن على كمبيوتر المكتب — السيرفر مش بيقدر يقراه' });
+      continue;
+    }
     if (doc.extracted_text) {
       out.push({ id: doc.id, file_name: doc.file_name, doc_type: doc.doc_type, text: doc.extracted_text, cached: true });
       continue;

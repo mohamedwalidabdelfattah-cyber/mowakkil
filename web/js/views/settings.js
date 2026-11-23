@@ -5,6 +5,71 @@ import { apiJson, getRole } from '../api.js';
 import { can } from '../access.js';
 import { toast } from '../ui.js';
 import { pickerHTML, bindPicker } from '../ai-privacy.js';
+import { deviceSupported, getRootFolder, pickRootFolder, getDeviceLabel, setDeviceLabel } from '../device-storage.js';
+
+// ============================================================
+// التخزين: مكان حفظ المستندات (سحابة / كمبيوتر المكتب) + إعداد الجهاز ده
+// ============================================================
+async function renderStorageTab(content, settings, isAdmin, reload) {
+  const supported = deviceSupported();
+  const root = supported ? await getRootFolder() : null;
+  let usage = null;
+  try { usage = await apiJson('/api/subscription/usage', { skipCache: true }); } catch {}
+  const mode = settings.doc_storage_default || 'cloud';
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  content.innerHTML = `
+    <div class="card">
+      <h3>💾 مكان حفظ المستندات</h3>
+      <p class="meta" style="line-height:1.8;margin:0 0 12px">
+        تقدر تحفظ مستندات القضايا على <strong>السحابة</strong> (بتبان على كل الأجهزة) أو في <strong>فولدر على كمبيوتر المكتب</strong>
+        (مش بتتحسب من مساحة باقتك). ووقت الرفع تقدر تغيّر المكان لكل ملف.
+      </p>
+      <div class="att-storage">
+        <label class="att-opt"><input type="radio" name="st-default" value="cloud" ${mode === 'cloud' ? 'checked' : ''} ${isAdmin ? '' : 'disabled'}>
+          <span>☁️ <strong>السحابة (افتراضي)</strong><br><span class="meta" style="margin:0">بتبان من أي جهاز ومن بوابة الموكل والتحليل الذكي — بتتحسب من مساحة الباقة.</span></span></label>
+        <label class="att-opt"><input type="radio" name="st-default" value="device" ${mode === 'device' ? 'checked' : ''} ${isAdmin ? '' : 'disabled'}>
+          <span>💻 <strong>كمبيوتر المكتب</strong><br><span class="meta" style="margin:0">الملف بيفضل في فولدر على الجهاز اللي اترفع منه. مش بيبان على الموبايل أو أجهزة تانية، والتحليل الذكي مش بيقدر يقراه، <strong>والنسخ الاحتياطي مسؤولية المكتب</strong>.</span></span></label>
+      </div>
+      ${isAdmin ? `<button class="btn btn-primary" id="st-save" style="margin-top:12px">حفظ</button>` : '<div class="meta" style="margin-top:8px">تغيير الإعداد ده لمالك المكتب.</div>'}
+      ${usage?.storage_mb != null || usage?.usage?.storage_mb != null ? `<div class="meta" style="margin-top:10px">المساحة المستخدمة على السحابة: ${esc(usage.storage_mb ?? usage.usage?.storage_mb)} ميجا</div>` : ''}
+    </div>
+
+    <div class="card">
+      <h3>💻 الجهاز ده</h3>
+      ${supported ? `
+        <div class="row">
+          <div><label>اسم الجهاز (بيظهر جنب الملفات)</label><input id="st-label" value="${esc(getDeviceLabel())}" placeholder="كمبيوتر المكتب"></div>
+          <div><label>فولدر المستندات</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+              <strong>${root ? '📁 ' + esc(root.name) : '— لسه ما اتختارش —'}</strong>
+              <button class="btn btn-ghost btn-sm" id="st-pick">${root ? 'تغيير الفولدر' : 'اختيار فولدر'}</button>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="st-label-save" style="margin-top:8px">حفظ اسم الجهاز</button>
+        <p class="meta" style="margin:10px 0 0;line-height:1.8">جوه الفولدر ده الملفات بتتنظم لوحدها: <code>قضية 1234-2026 / توكيل / الملف.pdf</code>.
+        المتصفح هيطلب إذن الوصول للفولدر أول مرة في كل جلسة.</p>`
+      : `<div class="warn" style="line-height:1.8">الحفظ على الكمبيوتر متاح على <strong>جوجل كروم</strong> أو <strong>مايكروسوفت إيدج</strong> على الكمبيوتر بس.
+        على الموبايل أو المتصفحات التانية المستندات بتتحفظ على السحابة.</div>`}
+    </div>`;
+
+  content.querySelector('#st-save')?.addEventListener('click', async () => {
+    const v = content.querySelector('input[name="st-default"]:checked')?.value;
+    try {
+      await apiJson('/api/settings', { method: 'PATCH', body: JSON.stringify({ doc_storage_default: v }) });
+      toast('اتحفظ مكان الحفظ الافتراضي ✓', 'ok');
+    } catch (e) { toast(e.message, 'bad'); }
+  });
+  content.querySelector('#st-pick')?.addEventListener('click', async () => {
+    try { await pickRootFolder(); toast('اتختار الفولدر ✓', 'ok'); reload(); }
+    catch (e) { if (e?.name !== 'AbortError') toast(e.message, 'bad'); }
+  });
+  content.querySelector('#st-label-save')?.addEventListener('click', () => {
+    setDeviceLabel(content.querySelector('#st-label').value);
+    toast('اتحفظ اسم الجهاز ✓', 'ok');
+  });
+}
 
 let currentTab = 'office';
 
@@ -35,6 +100,9 @@ export async function render(host) {
         </button>
         <button class="settings-tab ${currentTab === 'plan' ? 'active' : ''}" data-tab="plan">
           <span>💎</span> الباقة
+        </button>
+        <button class="settings-tab ${currentTab === 'storage' ? 'active' : ''}" data-tab="storage">
+          <span>💾</span> التخزين
         </button>
         <button class="settings-tab ${currentTab === 'privacy' ? 'active' : ''}" data-tab="privacy">
           <span>🔒</span> الخصوصية
@@ -79,6 +147,10 @@ async function loadTab(host, tab, isAdmin) {
     else if (tab === 'notifications') content.innerHTML = renderNotificationsTab(settings, isAdmin);
     else if (tab === 'appearance')    content.innerHTML = renderAppearanceTab(settings, isAdmin);
     else if (tab === 'plan')          content.innerHTML = await renderPlanTab();
+    else if (tab === 'storage') {
+      await renderStorageTab(content, settings, isAdmin, () => loadTab(host, 'storage', isAdmin));
+      return;
+    }
     else if (tab === 'privacy') {
       const p = await apiJson('/api/settings/ai-privacy', { skipCache: true }).catch(() => ({ mode: 'balanced' }));
       content.innerHTML = `

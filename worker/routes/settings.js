@@ -82,7 +82,11 @@ async function update({ request, env, authUser, officeId }) {
     'notif_cases', 'notif_clients', 'session_reminder_days',
     'theme', 'primary_color', 'font_size', 'language',
     'date_format', 'timezone',
+    'doc_storage_default', // مكان حفظ المستندات الافتراضي: cloud | device
   ];
+  if (b.doc_storage_default !== undefined && !['cloud', 'device'].includes(b.doc_storage_default)) {
+    return fail(env, 'مكان الحفظ لازم يكون cloud أو device', 400);
+  }
 
   const fields = [];
   const binds = [];

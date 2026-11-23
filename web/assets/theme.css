@@ -746,3 +746,17 @@ footer::before { content: none !important; display: none !important; }
   border: 1px solid currentColor; background: transparent; color: inherit;
 }
 @media (max-width: 768px) { #offline-banner { bottom: 64px; } } /* فوق شريط التنقل السفلي */
+
+/* -------------------------------------------------------------------------
+   18) مكان حفظ المستندات (سحابة / كمبيوتر المكتب)
+   ------------------------------------------------------------------------- */
+.att-storage { display: grid; gap: 6px; margin-top: 10px; }
+.att-opt {
+  display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font-size: 13.5px;
+}
+.att-opt:has(input:checked) { border-color: var(--gold-400); background: var(--gold-50); }
+.att-opt input { margin-top: 4px; accent-color: var(--navy-900); }
+.store-badge { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; border: 1px solid transparent; }
+.store-badge.cloud { background: var(--c-info-bg); color: var(--c-info); border-color: var(--c-info-bd); }
+.store-badge.device { background: var(--gold-50); color: var(--gold-600); border-color: rgba(212, 175, 55, .45); }

@@ -199,7 +199,7 @@ export async function requireStorage(env, officeId, incomingBytes) {
   const row = await env.DB.prepare(
     `SELECT COALESCE(SUM(file_size), 0) AS platform_total,
             COALESCE(SUM(CASE WHEN office_id = ? THEN file_size ELSE 0 END), 0) AS office_total
-     FROM documents WHERE deleted_at IS NULL`
+     FROM documents WHERE deleted_at IS NULL AND r2_key NOT LIKE 'device:%'`
   ).bind(officeId).first();
 
   const platformCapMb = Number(env.PLATFORM_STORAGE_CAP_MB) || PLATFORM_STORAGE_CAP_MB;
@@ -239,7 +239,7 @@ export async function getUsage(env, officeId) {
       .bind(officeId).first().catch(() => ({ c: 0 })),
     env.DB.prepare(`SELECT COUNT(*) as c FROM clients WHERE office_id = ? AND deleted_at IS NULL`)
       .bind(officeId).first().catch(() => ({ c: 0 })),
-    env.DB.prepare(`SELECT COALESCE(SUM(file_size), 0) as total FROM documents WHERE office_id = ? AND deleted_at IS NULL`)
+    env.DB.prepare(`SELECT COALESCE(SUM(file_size), 0) as total FROM documents WHERE office_id = ? AND deleted_at IS NULL AND r2_key NOT LIKE 'device:%'`)
       .bind(officeId).first().catch(() => ({ total: 0 })),
   ]);
 
