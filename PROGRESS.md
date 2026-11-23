@@ -1140,6 +1140,15 @@ node seed-vectorize.mjs
 | Tavily (بحث النت) | https://app.tavily.com (بيبدأ بـ `tvly-`) | `powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 -Provider tavily` |
 | OpenRouter (احتياطي، اختياري) | https://openrouter.ai/settings/keys | `powershell -ExecutionPolicy Bypass -File scripts\set-ai-key.ps1 -Provider openrouter` |
 
+**الطريقة المضمونة (اللي نجحت مع Tavily):**
+1. انسخ المفتاح من موقع المزود (أيقونة 📋)، والصقه في **Notepad** وتأكد إنه سطر واحد بيبدأ بالبداية الصح.
+2. حدده من Notepad واعمل Ctrl+C.
+3. **على طول** شغّل الأمر في PowerShell. اكتبه بإيدك أو دوس زرار التشغيل، **متنسخوش**، عشان النسخة متمسحش المفتاح من الحافظة.
+4. لو السكريبت قال «مالقيتش مفتاح في الحافظة» هيطلب منك تلصقه في خانة مخفية (مش هيظهر وانت بتلصقه، وده طبيعي).
+5. متنسخش رسالة PowerShell بعدها وانت لسه محتاج المفتاح. النسخة الجديدة بتمسح القديمة.
+
+**الحالة (2026-11-23):** Gemini ✅ اتحفظ — Tavily ✅ اتحفظ — Groq ⏳ (الموقع مكانش بيعمل مفتاح) — OpenRouter ⏳ (اختياري).
+
 - شغّل الأوامر من فولدر المشروع: `cd "D:\Mohamed Walid\mowakkil"`.
 - السكريبت بيجرّب المفتاح الأول، ولو اشتغل بيحفظه في Cloudflare. المفتاح **مش بيتكتب في أي ملف**.
 - **متبعتش المفتاح في أي شات.** لو حصل، امسحه من موقع المزود واعمل واحد جديد.
