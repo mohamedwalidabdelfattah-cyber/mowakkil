@@ -1,5 +1,6 @@
 import { ok, fail } from '../lib/response.js';
 import { dashboard, monthlyTrend, getPeriodRange } from '../services/dashboard.js';
+import { caseScope, can } from '../lib/permissions.js';
 
 export const routes = [
   { method: 'GET', path: '/api/reports/monthly',        handler: monthly, adminOnly: true },
@@ -51,7 +52,8 @@ async function trend({ env, officeId, url }) {
   return ok(env, data);
 }
 
-async function agenda({ env, officeId, url }) {
+async function agenda({ env, officeId, url, access, authUser }) {
+  const sc = caseScope(access, authUser, 'c.id');
   const days = Math.min(Math.max(parseInt(url.searchParams.get('days') || '7', 10), 1), 60);
   const today = new Date().toISOString().slice(0, 10);
   const end = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
@@ -62,14 +64,20 @@ async function agenda({ env, officeId, url }) {
      JOIN cases c ON c.id = s.case_id
      LEFT JOIN clients cl ON cl.id = c.client_id
      WHERE c.office_id = ? AND c.deleted_at IS NULL
-       AND s.session_date BETWEEN ? AND ?
+       AND s.session_date BETWEEN ? AND ?${sc.sql}
      ORDER BY s.session_date`
-  ).bind(officeId, today, end).all();
+  ).bind(officeId, today, end, ...sc.binds).all();
   return ok(env, results);
 }
 
-async function dash({ env, officeId, url }) {
+async function dash({ env, officeId, url, access, authUser }) {
   const period = url.searchParams.get('period') || 'month';
   const range = getPeriodRange(period);
-  return ok(env, await dashboard(env, officeId, range));
+  const data = await dashboard(env, officeId, { ...range, scope: caseScope(access, authUser, 'c.id'), assignedUser: access?.scope === 'assigned' ? authUser.user_id : null });
+  // اللي مش معاه صلاحية الأتعاب ميشوفش الأرقام المالية في لوحة التحكم
+  if (!can(access, 'fees.view')) {
+    data.overdue_fees = [];
+    data.financial_summary = null;
+  }
+  return ok(env, data);
 }

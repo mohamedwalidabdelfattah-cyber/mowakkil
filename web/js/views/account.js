@@ -1,10 +1,12 @@
 // web/js/views/account.js
 import { apiJson, getRole } from '../api.js';
+import { can } from '../access.js';
+import { showView } from '../router.js';
 import { toast } from '../ui.js';
 import { STORAGE_KEYS } from '../config.js';
 
 export async function render(host) {
-  const isAdmin = getRole() === 'admin';
+  const isAdmin = can('team.manage');
   host.innerHTML = `
     <div class="card">
       <h3>بياناتي</h3>
@@ -24,12 +26,9 @@ export async function render(host) {
 
     ${isAdmin ? `
       <div class="card">
-        <h3>إضافة محامٍ جديد (حساب دخول)</h3>
-        <label>الاسم الكامل</label><input id="nu-name">
-        <label style="margin-top:10px">البريد الإلكتروني</label><input id="nu-email" type="email">
-        <label style="margin-top:10px">كلمة المرور المبدئية</label><input id="nu-pass" type="password">
-        <button class="primary" style="margin-top:10px" id="create-user">إنشاء الحساب</button>
-        <div id="nu-status" class="status" style="margin-top:8px"></div>
+        <h3>👥 أعضاء المكتب وصلاحياتهم</h3>
+        <p class="meta" style="margin:0 0 10px">إضافة أعضاء، تحديد دور كل واحد (شريك، محامي، سكرتير، محاسب، متدرب) والقضايا اللي يشوفها.</p>
+        <button class="btn btn-primary" id="go-team">فتح الفريق والصلاحيات</button>
       </div>` : ''}
   `;
 
@@ -66,6 +65,7 @@ export async function render(host) {
     } catch (e) { st.textContent = e.message; st.className = 'status bad'; }
   });
 
+  host.querySelector('#go-team')?.addEventListener('click', () => showView('team'));
   host.querySelector('#create-user')?.addEventListener('click', async () => {
     const st = document.getElementById('nu-status');
     st.textContent = 'جاري الإنشاء...'; st.className = 'status';

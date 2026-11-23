@@ -16,6 +16,7 @@ export function clearSession() {
   localStorage.removeItem(STORAGE_KEYS.TOKEN);
   localStorage.removeItem(STORAGE_KEYS.ROLE);
   localStorage.removeItem(STORAGE_KEYS.OFFICE);
+  localStorage.removeItem('mowakkil_access'); // صلاحيات المستخدم اللي خرج (web/js/access.js)
 }
 export function setSAToken(t)  { localStorage.setItem(STORAGE_KEYS.SA_TOKEN, t); }
 export function clearSAToken() { localStorage.removeItem(STORAGE_KEYS.SA_TOKEN); }

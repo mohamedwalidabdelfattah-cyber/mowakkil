@@ -3,6 +3,7 @@ import { audit } from '../lib/audit.js';
 import { isStr, toInt, safeJson } from '../lib/validation.js';
 import { autoEntryExpense } from '../services/accounting.js';
 import { createNotification } from './notifications.js';
+import { canAccessCase } from '../lib/permissions.js';
 
 export const routes = [
   { method: 'GET',   path: '/api/tasks',                 handler: list },
@@ -15,7 +16,7 @@ export const routes = [
   { method: 'DELETE', path: /^\/api\/task-expenses\/(\d+)$/,         handler: removeExpense },
 ];
 
-async function list({ env, officeId, url }) {
+async function list({ env, officeId, url, access, authUser }) {
   const search = url.searchParams.get('search');
   const status = url.searchParams.get('status');
   const due    = url.searchParams.get('due'); // 'overdue' | 'today' | 'week'
@@ -42,15 +43,22 @@ async function list({ env, officeId, url }) {
     query += ` AND t.due_date BETWEEN date('now') AND date('now', '+7 days') AND t.status != 'منجزة'`;
   }
 
+  // "المكلّف بيها بس": مهام قضاياه + المهام العامة (من غير قضية)
+  if (access?.scope === 'assigned') {
+    query += ' AND (t.case_id IS NULL OR t.case_id IN (SELECT case_id FROM case_members WHERE user_id = ? AND office_id = ?))';
+    binds.push(authUser.user_id, officeId);
+  }
+
   query += ' ORDER BY t.created_at DESC';
 
   const { results } = await env.DB.prepare(query).bind(...binds).all();
   return ok(env, results || []);
 }
 
-async function create({ request, env, authUser, officeId }) {
+async function create({ request, env, authUser, officeId, access }) {
   const b = await safeJson(request);
   if (!b || !isStr(b.title, 300)) return fail(env, 'اكتب عنوان المهمة', 400);
+  if (b.case_id && !(await canAccessCase(env, access, authUser, toInt(b.case_id)))) return fail(env, 'القضية مش موجودة', 400);
 
   const r = await env.DB.prepare(
     `INSERT INTO tasks (office_id, lawyer_id, case_id, title, due_date)

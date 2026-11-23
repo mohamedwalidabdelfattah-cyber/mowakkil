@@ -3,6 +3,7 @@ import { audit } from '../lib/audit.js';
 import { toInt, safeJson } from '../lib/validation.js';
 import { createNotification } from './notifications.js';
 import { requireLimit } from '../middleware/feature-gate.js';
+import { caseScope, can } from '../lib/permissions.js';
 
 export const routes = [
   { method: 'GET',    path: '/api/cases',                    handler: list },
@@ -12,7 +13,7 @@ export const routes = [
   { method: 'DELETE', path: /^\/api\/cases\/(\d+)$/,          handler: remove },
 ];
 
-async function list({ env, officeId, url }) {
+async function list({ env, officeId, url, access, authUser }) {
   const archived = url.searchParams.get('archived') === '1';
   const search   = url.searchParams.get('search');
   const type     = url.searchParams.get('type');
@@ -40,6 +41,11 @@ async function list({ env, officeId, url }) {
     query += ' AND c.court LIKE ?';
     binds.push(`%${court}%`);
   }
+
+  // اللي شايف "المكلّف بيها بس"
+  const scope = caseScope(access, authUser, 'c.id');
+  query += scope.sql;
+  binds.push(...scope.binds);
 
   query += ' ORDER BY c.created_at DESC';
 
@@ -82,6 +88,19 @@ async function create({ request, env, authUser, officeId }) {
     action: 'create', entity: 'case', entity_id: r.meta.last_row_id, request,
   });
 
+  // اللي أنشأ القضية بيبقى في فريقها تلقائياً (+ أي أعضاء اتختاروا في الفورم)
+  try {
+    const members = [authUser.user_id, ...(Array.isArray(b.member_ids) ? b.member_ids.map(toInt).filter(Boolean) : [])];
+    const valid = (await env.DB.prepare(
+      `SELECT id FROM users WHERE office_id = ? AND id IN (${members.map(() => '?').join(',')})`
+    ).bind(officeId, ...members).all()).results || [];
+    await env.DB.batch(valid.map(u => env.DB.prepare(
+      `INSERT OR IGNORE INTO case_members (office_id, case_id, user_id) VALUES (?,?,?)`
+    ).bind(officeId, r.meta.last_row_id, u.id)));
+  } catch (e) {
+    console.warn('case members insert failed:', e.message);
+  }
+
   const caseNumber = b.case_number || `#${r.meta.last_row_id}`;
   await createNotification(env, {
     officeId,
@@ -99,7 +118,7 @@ async function create({ request, env, authUser, officeId }) {
   return ok(env, { id: r.meta.last_row_id }, 201);
 }
 
-async function profile({ env, officeId, params }) {
+async function profile({ env, officeId, params, access }) {
   const id = toInt(params[0]);
   if (!id) return fail(env, 'id غلط', 400);
 
@@ -144,15 +163,21 @@ async function profile({ env, officeId, params }) {
      ORDER BY t.created_at DESC`
   ).bind(id, officeId).all();
 
-  const totalFees = (fees || []).reduce((s, f) => s + (f.amount_due || 0), 0);
-  const totalPaid = (fees || []).reduce((s, f) => s + (f.amount_paid || 0), 0);
-  const totalExpenses = (expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
+  // اللي مش معاه صلاحية الأتعاب/المصروفات ميشوفش الفلوس في ملف القضية
+  const showFees = can(access, 'fees.view');
+  const showExpenses = can(access, 'expenses.view');
+  const feesOut = showFees ? (fees || []) : [];
+  const expensesOut = showExpenses ? (expenses || []) : [];
+  const totalFees = feesOut.reduce((s, f) => s + (f.amount_due || 0), 0);
+  const totalPaid = feesOut.reduce((s, f) => s + (f.amount_paid || 0), 0);
+  const totalExpenses = expensesOut.reduce((s, e) => s + (e.amount || 0), 0);
 
   return ok(env, {
     case: caseRow,
     sessions: sessions || [],
-    expenses: expenses || [],
-    fees: fees || [],
+    expenses: expensesOut,
+    fees: feesOut,
+    hidden: { fees: !showFees, expenses: !showExpenses },
     documents: documents || [],
     tasks: tasks || [],
     stats: {

@@ -695,3 +695,38 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--navy-900); wid
 
 /* رمز زخرفي قديم في الفوتر كان بيظهر مكسور (□ آ ـ) */
 footer::before { content: none !important; display: none !important; }
+
+/* -------------------------------------------------------------------------
+   16) الفريق والصلاحيات
+   ------------------------------------------------------------------------- */
+.perm-hidden { display: none !important; }
+.team-list { display: grid; gap: 8px; }
+.team-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);
+}
+.team-row.inactive { opacity: .6; background: var(--surface-2); }
+.team-avatar {
+  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--navy-gradient); color: var(--gold-300); font-weight: 700;
+}
+.team-info { flex: 1 1 200px; min-width: 0; }
+.team-name { font-weight: 700; color: var(--navy-900); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.team-controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.team-controls select { height: 36px; min-width: 150px; }
+.btn-sm { height: 34px !important; padding: 0 10px !important; font-size: 13px !important; }
+.role-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.role-card { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
+.role-card.locked { opacity: .65; }
+.role-title { font-weight: 700; color: var(--navy-900); }
+.table-wrap { overflow-x: auto; }
+.perm-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
+.perm-matrix th, .perm-matrix td { border: 1px solid var(--border); padding: 7px 9px; text-align: right; vertical-align: top; }
+.perm-matrix thead th { background: var(--surface-2); color: var(--navy-900); white-space: nowrap; }
+.perm-matrix tbody th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
+.perm-matrix td.none { color: var(--text-4); text-align: center; }
+.perm-matrix.editable td { display: flex; flex-wrap: wrap; gap: 4px 14px; border: 0; border-bottom: 1px solid var(--border); }
+.perm-check { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; cursor: pointer; }
+.cr-editor { margin-top: 14px; padding: 14px; border: 1px dashed var(--gold-400); border-radius: var(--r-lg); background: var(--gold-50); }
+.card.upsell { border-inline-start: 3px solid var(--gold-400); }
+@media (max-width: 640px) { .team-controls select { min-width: 0; flex: 1 1 140px; } }

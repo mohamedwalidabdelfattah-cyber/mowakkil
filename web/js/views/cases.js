@@ -6,6 +6,7 @@ import { caseTypeOptions } from '../case-types.js';
 import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
+import { can } from '../access.js';
 
 let currentFilters = {
   archived: false,
@@ -281,14 +282,16 @@ async function showCaseDetail(id, initialTab = 'overview') {
   try {
     const d = await apiJson(`/api/cases/${id}/profile`);
     const { case: c, sessions, expenses, fees, documents, tasks, stats } = d;
+    const hideFees = d.hidden?.fees || !can('fees.view');
+    const hideExp = d.hidden?.expenses || !can('expenses.view');
 
     const tabsHtml = `
       <div class="case-tabs" style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border-soft);overflow-x:auto">
         <button class="case-tab ${initialTab === 'overview' ? 'active' : ''}" data-tab="overview">📋 نظرة عامة</button>
-        <button class="case-tab ${initialTab === 'ai' ? 'active' : ''}" data-tab="ai">🤖 تحليل ذكي</button>
+        ${can('ai.use') ? `<button class="case-tab ${initialTab === 'ai' ? 'active' : ''}" data-tab="ai">🤖 تحليل ذكي</button>` : ''}
         <button class="case-tab" data-tab="sessions">📅 الجلسات (${sessions.length})</button>
-        <button class="case-tab" data-tab="fees">💰 الأتعاب (${fees.length})</button>
-        <button class="case-tab" data-tab="expenses">💸 المصاريف (${expenses.length})</button>
+        ${hideFees ? '' : `<button class="case-tab" data-tab="fees">💰 الأتعاب (${fees.length})</button>`}
+        ${hideExp ? '' : `<button class="case-tab" data-tab="expenses">💸 المصاريف (${expenses.length})</button>`}
         <button class="case-tab" data-tab="docs">📎 المستندات (${documents.length})</button>
         <button class="case-tab" data-tab="tasks">✅ المهام (${tasks.length})</button>
       </div>
@@ -307,9 +310,12 @@ async function showCaseDetail(id, initialTab = 'overview') {
 
       <div class="stats" style="margin-bottom:16px">
         <div class="stat"><div class="l">📅 جلسات</div><div class="n primary">${stats.sessions_count}</div></div>
+        ${hideFees ? `
+        <div class="stat"><div class="l">✅ مهام</div><div class="n">${stats.tasks_count}</div></div>
+        <div class="stat"><div class="l">📎 مستندات</div><div class="n">${stats.documents_count}</div></div>` : `
         <div class="stat"><div class="l">💰 إجمالي الأتعاب</div><div class="n">${fmtMoney(stats.total_fees)}</div></div>
         <div class="stat"><div class="l">✅ مدفوع</div><div class="n success">${fmtMoney(stats.total_paid)}</div></div>
-        <div class="stat"><div class="l">⚠️ متبقي</div><div class="n danger">${fmtMoney(stats.total_remaining)}</div></div>
+        <div class="stat"><div class="l">⚠️ متبقي</div><div class="n danger">${fmtMoney(stats.total_remaining)}</div></div>`}
       </div>
 
       ${tabsHtml}
@@ -350,7 +356,12 @@ async function showCaseDetail(id, initialTab = 'overview') {
               <span>الحالة:</span><strong>${esc(c.status)}</strong>
             </div>
           </div>
+          <div class="card" style="background:var(--gray-50)" id="case-team-card">
+            <h4 style="margin:0 0 8px;font-size:14px">👥 فريق القضية</h4>
+            <div class="meta">جاري التحميل...</div>
+          </div>
         `;
+        renderCaseTeam(document.getElementById('case-team-card'), c.id);
       }
 
       if (tab === 'sessions') {
@@ -646,6 +657,58 @@ function mountAnalysisExport(out, r = {}, c = {}) {
       { type: 'text', heading: 'تنبيه', text: 'تحليل مساعد بالذكاء الاصطناعي — يجب مراجعته من محامٍ قبل الاعتماد عليه، وأي ميعاد أو رقم مادة يُراجع على النص الرسمي.' },
     ],
   }), { formats: ['word', 'pdf'], filename: `تحليل_قضية_${c.case_number || ''}` });
+}
+
+// ============================================================
+// فريق القضية (مين مكلّف بيها) — اللي دوره "المكلّف بيها بس" بيشوف القضايا دي بس
+// ============================================================
+async function renderCaseTeam(el, caseId) {
+  if (!el) return;
+  let members = [], directory = [];
+  try {
+    [members, directory] = await Promise.all([
+      apiJson(`/api/cases/${caseId}/members`, { skipCache: true }),
+      can('cases.edit') ? apiJson('/api/team/directory') : Promise.resolve([]),
+    ]);
+  } catch (e) {
+    el.innerHTML = `<h4 style="margin:0 0 8px;font-size:14px">👥 فريق القضية</h4><div class="meta">${esc(e.message)}</div>`;
+    return;
+  }
+  const ids = new Set(members.map(m => m.id));
+  const show = () => {
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h4 style="margin:0;font-size:14px">👥 فريق القضية</h4>
+        ${can('cases.edit') ? '<button class="btn btn-ghost btn-sm" data-team-edit>✏️ تعديل</button>' : ''}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        ${members.length ? members.map(m => `<span class="badge active">${esc(m.full_name || '—')}</span>`).join('')
+          : '<span class="meta">محدش متكلّف بالقضية دي لسه.</span>'}
+      </div>`;
+    el.querySelector('[data-team-edit]')?.addEventListener('click', edit);
+  };
+  const edit = () => {
+    el.innerHTML = `
+      <h4 style="margin:0 0 8px;font-size:14px">👥 مين مكلّف بالقضية دي؟</h4>
+      <div style="display:grid;gap:6px">
+        ${directory.map(u => `<label class="perm-check"><input type="checkbox" value="${u.id}" ${ids.has(u.id) ? 'checked' : ''}>
+          ${esc(u.full_name || '—')} <span class="meta" style="margin:0">(${esc(u.role_label)})</span></label>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-primary btn-sm" data-team-save>حفظ</button>
+        <button class="btn btn-ghost btn-sm" data-team-cancel>إلغاء</button>
+      </div>`;
+    el.querySelector('[data-team-cancel]').addEventListener('click', show);
+    el.querySelector('[data-team-save]').addEventListener('click', async () => {
+      const user_ids = [...el.querySelectorAll('input:checked')].map(i => Number(i.value));
+      try {
+        await apiJson(`/api/cases/${caseId}/members`, { method: 'PUT', body: JSON.stringify({ user_ids }) });
+        toast('اتحفظ فريق القضية ✓', 'ok');
+        renderCaseTeam(el, caseId);
+      } catch (e) { toast(e.message, 'bad'); }
+    });
+  };
+  show();
 }
 
 // مراجعة الأسانيد آلياً (من السيرفر: verified / not_found / law_unknown)

@@ -1,5 +1,6 @@
 // web/js/router.js
 import { getRole } from './api.js';
+import { canView } from './access.js';
 
 const views = new Map();
 let currentView = null;
@@ -58,6 +59,11 @@ export async function showView(name) {
   }
 
   const host = document.getElementById('view-host');
+  // الصلاحيات: الشاشة دي مش متاحة للدور ده
+  if (!canView(realName)) {
+    host.innerHTML = `<div class="card"><div class="empty">🔒 القسم ده مش متاح لدورك في المكتب — لو محتاجه كلّم مالك المكتب.</div></div>`;
+    return;
+  }
   host.innerHTML = '<div class="card">' + skeleton(4) + '</div>';
 
   let module;

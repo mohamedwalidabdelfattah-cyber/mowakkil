@@ -10,6 +10,11 @@ export async function dashboard(env, officeId, options = {}) {
   const today = new Date().toISOString().slice(0, 10);
   const from = options.from || null;
   const to = options.to || today;
+  // "المكلّف بيها بس": الجلسات وعدد القضايا والمهام على قضاياه بس
+  const sc = options.scope || { sql: '', binds: [] };
+  const uid = options.assignedUser;
+  const taskSql = uid ? ' AND (t.case_id IS NULL OR t.case_id IN (SELECT case_id FROM case_members WHERE user_id = ?))' : '';
+  const taskBinds = uid ? [uid] : [];
 
   // جلسات النهاردة + المهام المفتوحة + الأتعاب المتأخرة + إجمالي القضايا/الموكلين
   const promises = [
@@ -19,17 +24,17 @@ export async function dashboard(env, officeId, options = {}) {
        FROM sessions s
        JOIN cases c ON c.id = s.case_id
        LEFT JOIN clients cl ON cl.id = c.client_id
-       WHERE c.office_id = ? AND s.session_date = ? AND c.deleted_at IS NULL
+       WHERE c.office_id = ? AND s.session_date = ? AND c.deleted_at IS NULL${sc.sql}
        ORDER BY s.session_date`
-    ).bind(officeId, today).all(),
+    ).bind(officeId, today, ...sc.binds).all(),
 
     // مهام مفتوحة
     env.DB.prepare(
       `SELECT t.id, t.title, t.due_date, l.name as lawyer_name
        FROM tasks t LEFT JOIN lawyers l ON l.id = t.lawyer_id
-       WHERE t.office_id = ? AND t.status = 'مفتوحة'
+       WHERE t.office_id = ? AND t.status = 'مفتوحة'${taskSql}
        ORDER BY t.due_date LIMIT 20`
-    ).bind(officeId).all(),
+    ).bind(officeId, ...taskBinds).all(),
 
     // أتعاب متأخرة
     env.DB.prepare(
@@ -47,8 +52,8 @@ export async function dashboard(env, officeId, options = {}) {
 
     // إجمالي القضايا
     env.DB.prepare(
-      `SELECT COUNT(*) as c FROM cases WHERE office_id = ? AND deleted_at IS NULL AND status != 'مؤرشفة'`
-    ).bind(officeId).first(),
+      `SELECT COUNT(*) as c FROM cases c WHERE c.office_id = ? AND c.deleted_at IS NULL AND c.status != 'مؤرشفة'${sc.sql}`
+    ).bind(officeId, ...sc.binds).first(),
 
     // إجمالي الموكلين
     env.DB.prepare(

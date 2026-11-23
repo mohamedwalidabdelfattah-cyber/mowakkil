@@ -3,6 +3,7 @@
 
 import { showView, getCurrentView } from './router.js';
 import { getRoleFromToken, getNameFromToken } from './api.js';
+import { canView, getAccessState } from './access.js';
 
 const ICONS = {
   home: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
@@ -42,9 +43,9 @@ const MENU = [
     ],
   },
   { id: 'tasks',   icon: ICONS.tasks, label: 'المهام' },
-  { id: 'lawyers', icon: ICONS.lawyers, label: 'المحامون', adminOnly: true },
+  { id: 'lawyers', icon: ICONS.lawyers, label: 'المحامون' },
   {
-    id: 'money', icon: ICONS.wallet, label: 'الإدارة المالية', adminOnly: true,
+    id: 'money', icon: ICONS.wallet, label: 'الإدارة المالية',
     sub: [
       { id: 'money',              label: 'اللوحة المالية' },
       { id: 'money-expenses',     label: 'المصاريف' },
@@ -57,9 +58,10 @@ const MENU = [
       { id: 'accounting-bs',      label: 'المركز المالي' },
     ],
   },
-  { id: 'reports', icon: ICONS.chart, label: 'تقارير القضايا', adminOnly: true },
+  { id: 'reports', icon: ICONS.chart, label: 'تقارير القضايا' },
   { id: 'calc',    icon: ICONS.calculator, label: 'حاسبة الرسوم' },
   { id: 'search',  icon: ICONS.search, label: 'البحث القانوني' },
+  { id: 'team', icon: ICONS.clients, label: 'الفريق والصلاحيات' },
   { id: 'settings', icon: ICONS.settings, label: 'الإعدادات' },              // ✨ جديد
   { id: 'subscription', icon: ICONS.diamond, label: 'اشتراكي' },
   { id: 'account', icon: ICONS.user, label: 'حسابي' },
@@ -79,6 +81,12 @@ export function initDrawer() {
 
   renderMenu();
   updateUserInfo();
+  // الصلاحيات اتحمّلت/اتغيّرت → نعيد بناء القايمة
+  document.addEventListener('mowakkil:access-changed', () => {
+    renderMenu();
+    updateUserInfo();
+    highlightMenu(currentActiveId);
+  });
 
   document.addEventListener('mowakkil:view-changed', (e) => {
     closeDrawer();
@@ -94,7 +102,8 @@ function updateUserInfo() {
   const avatarEl = document.getElementById('drawer-avatar');
 
   if (userEl) userEl.textContent = name;
-  if (roleEl) roleEl.textContent = role === 'admin' ? 'مسؤول المكتب' : 'محامي';
+  const acc = getAccessState();
+  if (roleEl) roleEl.textContent = acc?.role_label || (role === 'admin' ? 'مالك المكتب' : 'محامي');
   if (avatarEl && name !== '—') avatarEl.textContent = name.charAt(0);
 }
 
@@ -133,8 +142,10 @@ function renderMenu() {
   const role = getRoleFromToken();
   const isAdmin = role === 'admin';
 
+  // كل قسم بيظهر حسب صلاحيات المستخدم (web/js/access.js)
   nav.innerHTML = MENU
-    .filter(item => !item.adminOnly || isAdmin)
+    .filter(item => (!item.adminOnly || isAdmin) && canView(item.id))
+    .map(item => ({ ...item, sub: item.sub?.filter(s => canView(s.id)) }))
     .map(item => {
       const hasSub = item.sub && item.sub.length > 0;
       return `

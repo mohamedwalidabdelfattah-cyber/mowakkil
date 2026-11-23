@@ -7,6 +7,7 @@ import { startNotifications, openNotifications } from './notifications.js';
 import { openSearch, initSearch } from './search.js';
 import { startIconify, icon } from './icons.js';
 import { applyChartTheme } from './chart-theme.js';
+import { loadAccess, canView, guardActions, clearAccess } from './access.js';
 
 applyChartTheme();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startIconify);
@@ -35,6 +36,7 @@ registerView('money',        () => import('./views/money.js'));
 registerView('accounting',   () => import('./views/accounting.js'));
 registerView('subscription', () => import('./views/subscription.js'));
 registerView('settings',     () => import('./views/settings.js'));
+registerView('team',         () => import('./views/team.js'));
 
 // ✅ "المزيد" كـ view مخصّص
 const moreView = {
@@ -49,15 +51,16 @@ const moreView = {
       { id: 'agenda',       icon: '📅', label: 'الأجندة' },
       { id: 'fees',         icon: '💰', label: 'التحصيل' },
       { id: 'tasks',        icon: '✅', label: 'المهام' },
-      { id: 'lawyers',      icon: '👨‍⚖️', label: 'المحامون',   adminOnly: true },
-      { id: 'money',        icon: '💼', label: 'الإدارة المالية', adminOnly: true },
-      { id: 'reports',      icon: '📊', label: 'التقارير',     adminOnly: true },
+      { id: 'lawyers',      icon: '👨‍⚖️', label: 'المحامون' },
+      { id: 'money',        icon: '💼', label: 'الإدارة المالية' },
+      { id: 'reports',      icon: '📊', label: 'التقارير' },
+      { id: 'team',         icon: '👥', label: 'الفريق والصلاحيات' },
       { id: 'calc',         icon: '🧮', label: 'حاسبة الرسوم' },
       { id: 'search',       icon: '🔍', label: 'البحث القانوني' },
       { id: 'settings',     icon: '⚙️', label: 'الإعدادات' },
       { id: 'subscription', icon: '💎', label: 'اشتراكي' },
       { id: 'account',      icon: '👤', label: 'حسابي' },
-    ].filter(it => !it.adminOnly || isAdmin);
+    ].filter(it => (!it.adminOnly || isAdmin) && canView(it.id));
 
     host.innerHTML = `
       <div class="app-top">
@@ -199,6 +202,7 @@ document.addEventListener('click', e => {
 });
 
 document.getElementById('logout-btn')?.addEventListener('click', () => {
+  clearAccess();
   clearSession();
   location.reload();
 });
@@ -232,6 +236,8 @@ async function initSubscription() {
 if (getToken()) {
   showApp();
   accountView.loadOffice();
+  guardActions(document.getElementById('view-host'));
+  loadAccess(); // الصلاحيات (بتعيد بناء القايمة لما توصل)
   showView('dashboard');
   // الشاشات الأكتر استخداماً تتحمل في الخلفية عشان التنقل يبقى فوري
   prefetchViews(['cases', 'clients', 'tasks', 'agenda', 'fees', 'search']);

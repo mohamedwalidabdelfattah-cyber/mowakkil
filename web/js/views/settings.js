@@ -2,13 +2,14 @@
 // صفحة الإعدادات الشاملة
 
 import { apiJson, getRole } from '../api.js';
+import { can } from '../access.js';
 import { toast } from '../ui.js';
 import { pickerHTML, bindPicker } from '../ai-privacy.js';
 
 let currentTab = 'office';
 
 export async function render(host) {
-  const isAdmin = getRole() === 'admin';
+  const isAdmin = can('settings.manage'); // المالك والشريك (والأدوار المخصصة اللي معاها الصلاحية)
 
   host.innerHTML = `
     <div class="app-top">

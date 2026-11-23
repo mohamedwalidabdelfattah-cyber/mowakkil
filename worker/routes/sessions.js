@@ -3,6 +3,7 @@ import { audit } from '../lib/audit.js';
 import { safeJson, toInt } from '../lib/validation.js';
 import { autoEntryExpense } from '../services/accounting.js';
 import { createNotification } from './notifications.js';
+import { canAccessCase } from '../lib/permissions.js';
 
 export const routes = [
   { method: 'POST', path: '/api/sessions',                       handler: createSession },
@@ -10,11 +11,12 @@ export const routes = [
   { method: 'POST', path: '/api/session-expenses',               handler: createExpense },
 ];
 
-async function createSession({ request, env, authUser, officeId }) {
+async function createSession({ request, env, authUser, officeId, access }) {
   const b = await safeJson(request);
   if (!b || !b.case_id || !b.session_date) {
     return fail(env, 'case_id و session_date مطلوبين', 400);
   }
+  if (!(await canAccessCase(env, access, authUser, toInt(b.case_id)))) return fail(env, 'القضية مش موجودة', 400);
 
   const c = await env.DB.prepare(
     `SELECT id, case_number, court FROM cases WHERE id = ? AND office_id = ? AND deleted_at IS NULL`

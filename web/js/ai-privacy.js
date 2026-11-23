@@ -4,6 +4,7 @@
 // وموجود كمان في الإعدادات ← الخصوصية.
 import { apiJson, getRole } from './api.js';
 import { esc, toast } from './ui.js';
+import { can } from './access.js';
 
 const MODES = [
   {
@@ -23,7 +24,7 @@ const MODES = [
   },
 ];
 
-export function pickerHTML(current = 'balanced', { isAdmin = getRole() === 'admin', acceptedAt = null } = {}) {
+export function pickerHTML(current = 'balanced', { isAdmin = can('settings.manage'), acceptedAt = null } = {}) {
   return `
     <div class="ai-privacy-picker">
       ${MODES.map(m => `
@@ -76,7 +77,7 @@ export async function showAiConsentModal() {
   open = true;
   let current = 'balanced';
   try { current = (await apiJson('/api/settings/ai-privacy', { skipCache: true })).mode || current; } catch {}
-  const isAdmin = getRole() === 'admin';
+  const isAdmin = can('settings.manage');
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay show';

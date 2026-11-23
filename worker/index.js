@@ -30,6 +30,8 @@ import * as calendarRoutes        from './routes/calendar.js';
 import * as settingsRoutes        from './routes/settings.js';
 import * as analyzeRoutes         from './routes/analyze.js';
 import * as chatRoutes            from './routes/chat.js';  // ✅ جديد
+import * as teamRoutes            from './routes/team.js';
+import { getAccess, permissionFor, can, canAccessCase } from './lib/permissions.js';
 
 const PUBLIC_ROUTES = [
   ...authRoutes.publicRoutes,
@@ -73,6 +75,7 @@ const OFFICE_ROUTES = [
   ...settingsRoutes.routes,
   ...analyzeRoutes.routes,
   ...chatRoutes.routes,  // ✅ جديد
+  ...teamRoutes.routes,
 ];
 
 async function handleFetch(request, env) {
@@ -127,14 +130,29 @@ async function handleFetch(request, env) {
     const hit = matchRoute(OFFICE_ROUTES, method, path);
     if (!hit) return fail(env, 'not found', 404, {}, request);
 
-    if (hit.route.adminOnly && authUser.role !== 'admin') {
-      return fail(env, 'غير مصرح — للمسؤول فقط', 403, {}, request);
+    // الصلاحيات: كل طلب ليه صلاحية مطلوبة حسب القسم والإجراء (lib/permissions.js)
+    const access = await getAccess(env, authUser);
+    const perm = permissionFor(method, path);
+    if (perm && !can(access, perm)) {
+      return fail(env, 'مش عندك صلاحية للإجراء ده — كلّم مالك المكتب', 403,
+        { code: 'PERMISSION_DENIED', permission: perm }, request);
+    }
+    if (!perm && hit.route.adminOnly && access.role !== 'admin') {
+      return fail(env, 'غير مصرح — لمالك المكتب فقط', 403, { code: 'PERMISSION_DENIED' }, request);
+    }
+    // "القضايا المكلّف بيها بس": أي طلب على قضية معيّنة (في المسار أو ?case_id=) لازم تكون من قضاياه
+    if (access.scope === 'assigned') {
+      const caseId = Number((path.match(/^\/api\/cases\/(\d+)/) || [])[1] || url.searchParams.get('case_id') || 0);
+      if (caseId && !(await canAccessCase(env, access, authUser, caseId))) {
+        return fail(env, 'القضية مش موجودة', 404, {}, request);
+      }
     }
 
     return await hit.route.handler({
       request, env, url, path, method,
       params: hit.params,
       authUser,
+      access,
       userId: authUser.user_id,
       officeId,
     });

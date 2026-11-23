@@ -4,6 +4,7 @@
 import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson, isStr } from '../lib/validation.js';
+import { caseScope, can } from '../lib/permissions.js';
 
 export const routes = [
   { method: 'GET',   path: '/api/calendar/events',                        handler: listEvents },
@@ -15,12 +16,22 @@ export const routes = [
 // ============================================================
 // 1) قائمة الأحداث (من from → to)
 // ============================================================
-async function listEvents({ env, officeId, url }) {
+async function listEvents({ env, officeId, url, access, authUser }) {
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
-  const type = url.searchParams.get('type'); // 'session' | 'task' | 'fee' | '' (الكل)
+  let type = url.searchParams.get('type'); // 'session' | 'task' | 'fee' | '' (الكل)
 
   if (!from || !to) return fail(env, 'from و to مطلوبين', 400);
+
+  // الصلاحيات: "المكلّف بيها بس" بتفلتر الجلسات والمهام والأتعاب، واللي مش شايف الأتعاب ميشوفهاش في الأجندة
+  const sc = caseScope(access, authUser, 'c.id');
+  const taskSc = access?.scope === 'assigned'
+    ? { sql: ' AND (t.case_id IS NULL OR t.case_id IN (SELECT case_id FROM case_members WHERE user_id = ? AND office_id = ?))', binds: sc.binds }
+    : { sql: '', binds: [] };
+  const showFees = can(access, 'fees.view');
+  if (type === 'fee' && !showFees) type = 'none';
+  const canTasks = can(access, 'tasks.view');
+  if (type === 'task' && !canTasks) type = 'none';
 
   const promises = [];
 
@@ -35,14 +46,14 @@ async function listEvents({ env, officeId, url }) {
          JOIN cases c ON c.id = s.case_id
          LEFT JOIN clients cl ON cl.id = c.client_id
          WHERE c.office_id = ? AND c.deleted_at IS NULL
-           AND s.session_date BETWEEN ? AND ?
+           AND s.session_date BETWEEN ? AND ?${sc.sql}
          ORDER BY s.session_date`
-      ).bind(officeId, from, to).all().then(r => ({ type: 'session', rows: r.results || [] }))
+      ).bind(officeId, from, to, ...sc.binds).all().then(r => ({ type: 'session', rows: r.results || [] }))
     );
   }
 
   // مهام
-  if (!type || type === 'task') {
+  if ((!type && canTasks) || type === 'task') {
     promises.push(
       env.DB.prepare(
         `SELECT t.id, t.title, t.due_date as date, t.status,
@@ -53,14 +64,17 @@ async function listEvents({ env, officeId, url }) {
          LEFT JOIN lawyers l ON l.id = t.lawyer_id
          WHERE t.office_id = ?
            AND t.due_date BETWEEN ? AND ?
-           AND t.status != 'منجزة'
+           AND t.status != 'منجزة'${taskSc.sql}
          ORDER BY t.due_date`
-      ).bind(officeId, from, to).all().then(r => ({ type: 'task', rows: r.results || [] }))
+      ).bind(officeId, from, to, ...taskSc.binds).all().then(r => ({ type: 'task', rows: r.results || [] }))
     );
   }
 
   // أتعاب
-  if (!type || type === 'fee') {
+  if ((!type && showFees) || type === 'fee') {
+    const feeSc = access?.scope === 'assigned'
+      ? { sql: ' AND f.case_id IN (SELECT case_id FROM case_members WHERE user_id = ? AND office_id = ?)', binds: sc.binds }
+      : { sql: '', binds: [] };
     promises.push(
       env.DB.prepare(
         `SELECT f.id, f.amount_due, f.amount_paid, f.due_date as date, f.status,
@@ -70,9 +84,9 @@ async function listEvents({ env, officeId, url }) {
          LEFT JOIN cases c ON c.id = f.case_id
          WHERE f.office_id = ?
            AND f.due_date BETWEEN ? AND ?
-           AND f.status != 'مدفوع بالكامل'
+           AND f.status != 'مدفوع بالكامل'${feeSc.sql}
          ORDER BY f.due_date`
-      ).bind(officeId, from, to).all().then(r => ({ type: 'fee', rows: r.results || [] }))
+      ).bind(officeId, from, to, ...feeSc.binds).all().then(r => ({ type: 'fee', rows: r.results || [] }))
     );
   }
 
