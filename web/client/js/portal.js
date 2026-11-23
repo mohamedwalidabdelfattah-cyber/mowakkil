@@ -1,7 +1,10 @@
 // web/client/js/portal.js
 // منطق بوابة الموكل
 
-const API_BASE = 'https://mowakkil-api.mohamed-walid-abdelfattah.workers.dev';
+// على الجهاز (localhost) بيكلم الـ Worker المحلي للتجربة، وغير كده الـ API الحي
+const API_BASE = ['localhost', '127.0.0.1'].includes(location.hostname)
+  ? 'http://localhost:8787'
+  : 'https://mowakkil-api.mohamed-walid-abdelfattah.workers.dev';
 
 let currentClient = null;
 let currentOffice = null;

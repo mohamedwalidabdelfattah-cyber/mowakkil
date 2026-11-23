@@ -193,16 +193,20 @@ function clientItem(c, status) {
 
   let accountBadge = '';
   if (hasAccount) {
-    if (!hasPassword && pending) {
+    if (!isActive) {
+      accountBadge = `<span class="badge suspended">🚫 معطّل</span>`;
+    } else if (!hasPassword && pending) {
       accountBadge = `<span class="badge trial">⏳ دعوة معلقة</span>`;
     } else if (!hasPassword && status?.invite_expired) {
       accountBadge = `<span class="badge suspended">⌛ دعوة منتهية</span>`;
-    } else if (hasPassword && isActive) {
+    } else if (hasPassword) {
       accountBadge = `<span class="badge active">✅ مفعّل</span>`;
-    } else if (!isActive) {
-      accountBadge = `<span class="badge suspended">🚫 معلّق</span>`;
+    } else if (!hasPassword && !pending) {
+      accountBadge = `<span class="badge suspended">✖ الدعوة اتلغت</span>`;
     }
   }
+  // دعوة اتلغت وما اتعملش باسورد → نسمح بدعوة جديدة (قبل كده كان الموكل بيفضل من غير أي زرار)
+  const cancelledInvite = hasAccount && !hasPassword && !pending && isActive;
 
   return `
     <div class="item">
@@ -213,20 +217,22 @@ function clientItem(c, status) {
       ${accountBadge ? `<div style="margin-top:6px">${accountBadge}</div>` : ''}
       <div class="acts">
         ${c.phone ? `<a class="wa" href="${waLink(c.phone)}" target="_blank" rel="noopener">💬 واتساب</a>` : ''}
-        ${!hasAccount ? `
+        ${!hasAccount || cancelledInvite ? `
           <button class="ghost" data-invite-client="${c.id}" style="color:var(--ok)">📱 إرسال دعوة</button>
         ` : ''}
-        ${hasAccount && !hasPassword && pending ? `
+        ${hasAccount && isActive && !hasPassword && pending ? `
           <button class="ghost" data-resend-invite="${c.id}" style="color:var(--ok)">🔄 إعادة الدعوة</button>
           <button class="ghost" data-cancel-invite="${c.id}" style="color:var(--bad)">❌ إلغاء الدعوة</button>
         ` : ''}
-        ${hasAccount && hasPassword ? `
+        ${hasAccount ? `
           <button class="ghost" data-toggle-active="${c.id}" style="color:${isActive ? 'var(--bad)' : 'var(--ok)'}">
-            ${isActive ? '🚫 تعطيل' : '✅ تفعيل'}
+            ${isActive ? '🚫 تعطيل الحساب' : '✅ تفعيل الحساب'}
           </button>
+        ` : ''}
+        ${hasAccount && hasPassword && isActive ? `
           <button class="ghost" data-resend-invite="${c.id}" style="color:var(--brass-deep)">🔄 إعادة تعيين</button>
         ` : ''}
-        ${hasAccount && hasPassword && !isActive ? `
+        ${hasAccount && !isActive ? `
           <button class="ghost" data-delete-account="${c.id}" style="color:var(--bad)">🗑 حذف الحساب</button>
         ` : ''}
         <button class="ghost" data-view-client="${c.id}" style="color:var(--primary);font-weight:700">👁 ملف</button>
@@ -404,9 +410,9 @@ function showInviteModal(invite, message, host) {
               ${esc(invite.invite_code)}
             </span>
           </div>
-          <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px">
-            ⏰ صالح حتى: ${esc(invite.expires_at?.slice(0, 10))}
-          </div>
+          ${invite.expires_at ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px">
+            ⏰ صالح حتى: ${esc(invite.expires_at.slice(0, 10))}
+          </div>` : ''}
         </div>
 
         <label style="font-size:13px;color:var(--ink-soft)">📋 نص الرسالة:</label>

@@ -129,6 +129,9 @@ export async function api(path, opts = {}) {
   }
 
   const res = await fetch(API_BASE + path, { ...opts, headers });
+  // أي تعديل (إضافة/تعديل/حذف) ناجح → نمسح كاش القراءة عشان القوايم تتحدث فوراً
+  const method = (opts.method || 'GET').toUpperCase();
+  if (method !== 'GET' && res.ok) clearCache();
   return handle(res);
 }
 
