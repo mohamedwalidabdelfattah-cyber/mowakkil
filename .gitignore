@@ -44,3 +44,7 @@ audit.js
 
 # نسخة احتياطية من تاريخ Git
 *.bundle
+
+# نسخ احتياطية محلية (فيها مفتاح توقيع أندرويد)
+backups/
+schema-local.sql
