@@ -91,7 +91,8 @@ async function executeTool(env, toolName, args) {
 }
 
 async function searchWeb(env, query) {
-  if (String(env.TAVILY_API_KEY || '').length < 20) {
+  const tavilyKey = String(env.TAVILY_API_KEY || '').trim();
+  if (tavilyKey.length < 20) {
     return { error: 'TAVILY_API_KEY مش متظبط', results: [] };
   }
 
@@ -101,7 +102,7 @@ async function searchWeb(env, query) {
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.TAVILY_API_KEY}`,
+        'Authorization': `Bearer ${tavilyKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

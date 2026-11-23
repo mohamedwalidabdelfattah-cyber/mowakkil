@@ -27,7 +27,7 @@ async function aiHealth({ env }) {
     providers,
     vectorize,
     law_articles: articles?.c || 0,
-    tavily: String(env.TAVILY_API_KEY || '').length >= 20,
+    tavily: String(env.TAVILY_API_KEY || '').trim().length >= 20,
   });
 }
 

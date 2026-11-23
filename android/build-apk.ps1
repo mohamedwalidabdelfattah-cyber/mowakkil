@@ -1,4 +1,4 @@
-# android/build-apk.ps1
+﻿# android/build-apk.ps1
 # يبني نسخة جديدة من تطبيق أندرويد ويحطها في web/downloads/mowakkil.apk
 #
 # الاستخدام (من فولدر المشروع):

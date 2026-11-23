@@ -31,6 +31,9 @@ const PROVIDERS = [
 ];
 
 const WORKERS_AI_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+
+// المفتاح بعد شيل أي مسافات/سطر جديد اتلزق معاه وقت الحفظ
+export const secret = (env, name) => String(env?.[name] ?? '').trim();
 const DEFAULT_TIMEOUT_MS = 45000;
 
 // بننضف رسالة الـ assistant من أي حقول خاصة بمزود معين (زي reasoning في gpt-oss)
@@ -59,7 +62,7 @@ async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temper
   const res = await fetch(p.url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${env[p.key]}`,
+      Authorization: `Bearer ${secret(env, p.key)}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -107,7 +110,7 @@ export async function chatCompletion(env, {
   const errors = [];
 
   for (const p of PROVIDERS) {
-    if (String(env[p.key] || '').length < 20 || skip.includes(p.name)) continue; // مفتاح ناقص/غلط → منضيعش وقت
+    if (secret(env, p.key).length < 20 || skip.includes(p.name)) continue; // مفتاح ناقص/غلط → منضيعش وقت
     try {
       const message = await callOpenAICompatible(env, p, { messages, tools, maxTokens, temperature, timeoutMs });
       return { message, provider: p.name, errors };
@@ -144,7 +147,7 @@ export async function providersHealth(env) {
   const ping = [{ role: 'user', content: 'رد بكلمة واحدة: تمام' }];
   const out = [];
   for (const p of PROVIDERS) {
-    const key = String(env[p.key] || '');
+    const key = secret(env, p.key);
     if (key.length < 20) {
       out.push({ provider: p.name, model: p.model(env), ok: false,
         error: key ? `${p.key} قيمته غلط (${key.length} حرف) — اتحفظ من غير المفتاح، اعمله من جديد` : `${p.key} مش متظبط` });
