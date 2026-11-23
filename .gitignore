@@ -29,3 +29,15 @@ android/*.log
 # Backups
 *.bak
 web-backup-*/
+
+# بيانات حساسة — متترفعش على Git أبداً
+PROGRESS.secrets.md
+.dev.vars
+backup-*.sql
+token.txt
+login.json
+office.json
+setup.json
+all_code.txt
+audit.cjs
+audit.js
