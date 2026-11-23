@@ -1,121 +1,80 @@
-// service-worker.js
-// النسخة المحسنة: Cache First للملفات الثابتة + Network First للـ HTML
+// service-worker.js — مُوكِّل
+//
+// ⚠️ مش محتاج تغيّر أي رقم إصدار يدوي بعد كل تعديل:
+//  - الكود (HTML / JS / CSS / manifest): من الشبكة الأول دايماً، والنسخة المحفوظة بس لو مفيش إنترنت.
+//    → أي deploy جديد بيوصل للمستخدم من أول تحميل للصفحة.
+//  - الصور والخطوط: من المحفوظ فوراً، وبتتحدث في الخلفية (stale-while-revalidate).
+//  - مفيش إعادة تحميل تلقائية للصفحة، ومفيش تحميل مسبق لملفات تقيلة.
+//
+// غيّر CACHE_PREFIX بس لو غيّرت طريقة التخزين نفسها (نادر جداً).
 
-const CACHE_NAME = 'mowakkil-cache-v77';
+const CACHE_PREFIX = 'mowakkil-v2';
+const CODE_CACHE = `${CACHE_PREFIX}-code`;
+const ASSET_CACHE = `${CACHE_PREFIX}-assets`;
+const NETWORK_TIMEOUT_MS = 4000;
 
-// الملفات الأساسية اللي بنعملها كاش عشان التطبيق يشتغل أوفلاين
-const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/pricing.html',
-  '/signup.html',
-  '/pay.html',
-  '/assets/styles.css',
-  '/assets/design-system.css',
-  '/assets/landing.css',
-  '/assets/pricing.css',
-  '/assets/fonts.css',
-  '/assets/brand-theme.css',
-  '/assets/styles.clean.css',
-  '/js/main.js',
-  '/js/api.js',
-  '/js/ui.js',
-  '/assets/app-icon.png',
-  '/assets/logo.png',
-  '/assets/logos/logo-md.png',
-  '/assets/logos/logo-lg.png',
-  '/assets/logos/icon-192.png',
-  '/assets/logos/icon-512.png'
-];
-
-// 1. التثبيت: بنعمل كاش للملفات الأساسية
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // عشان الـ SW الجديد يشتغل فوراً
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS).catch(err => {
-        console.warn('Precache failed for some assets:', err);
-      });
-    })
-  );
+  self.skipWaiting();
+  // نخزن الصفحة الرئيسية بس عشان التطبيق يفتح أوفلاين
+  event.waitUntil(caches.open(CODE_CACHE).then(c => c.add('/').catch(() => {})));
 });
 
-// 2. التفعيل: بنمسح الكاش القديم
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => !k.startsWith(CACHE_PREFIX)).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// 3. الجلب (Fetch): استراتيجية مختلطة
+const isCode = (url, req) =>
+  req.mode === 'navigate' || /\.(html|js|mjs|css|webmanifest|json)$/.test(url.pathname) || url.pathname === '/';
+const isAsset = url => /\.(png|jpe?g|webp|svg|ico|gif|woff2?|ttf)$/.test(url.pathname);
+
+function networkFirst(req) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const fromCache = () => caches.match(req).then(r => r || (req.mode === 'navigate' ? caches.match('/') : null));
+    const timer = setTimeout(async () => {
+      const cached = await fromCache();
+      if (cached && !settled) { settled = true; resolve(cached); }
+    }, NETWORK_TIMEOUT_MS);
+
+    fetch(req).then(res => {
+      clearTimeout(timer);
+      if (res && res.ok && res.type === 'basic') {
+        const copy = res.clone();
+        caches.open(CODE_CACHE).then(c => c.put(req, copy)).catch(() => {});
+      }
+      if (!settled) { settled = true; resolve(res); }
+    }).catch(async () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      resolve((await fromCache()) || new Response('أنت غير متصل بالإنترنت', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } }));
+    });
+  });
+}
+
+function staleWhileRevalidate(req) {
+  return caches.open(ASSET_CACHE).then(cache => cache.match(req).then(cached => {
+    const network = fetch(req).then(res => {
+      if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
+      return res;
+    }).catch(() => cached);
+    return cached || network;
+  }));
+}
+
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
 
-  // تجاهل طلبات الـ API (مش بنعملها كاش)
-  if (url.pathname.includes('/api/')) {
-    return;
-  }
+  // API، ملف الـ APK، ملفات التحقق، وأي دومين خارجي (CDN) → المتصفح يتصرف عادي
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/downloads/') || url.pathname.startsWith('/.well-known/')) return;
 
-  // ملف التطبيق (APK) وملفات التحقق — دايماً من الشبكة ومن غير كاش
-  if (url.pathname.startsWith('/downloads/') || url.pathname.startsWith('/.well-known/')) {
-    return;
-  }
-
-  // تجاهل طلبات غير الـ GET
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  // استراتيجية Cache First للملفات الثابتة (CSS, JS, Fonts, Images)
-  if (url.pathname.match(/\.(css|js|woff2|woff|ttf|png|jpg|jpeg|svg|ico|webp)$/)) {
-    event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return networkResponse;
-        }).catch(() => null);
-
-        // stale-while-revalidate: ارجع بالكاش فوراً وحدث في الخلفية
-        return cachedResponse || fetchPromise;
-      })
-    );
-    return;
-  }
-
-  // استراتيجية Network First لصفحات HTML
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return response;
-      })
-      .catch(() => {
-        return caches.match(event.request);
-      })
-  );
-});
-
-// الاستماع لرسائل من الصفحة (عشان نقدر نعمل skipWaiting)
-self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+  if (isAsset(url)) { event.respondWith(staleWhileRevalidate(req)); return; }
+  if (isCode(url, req)) { event.respondWith(networkFirst(req)); return; }
 });

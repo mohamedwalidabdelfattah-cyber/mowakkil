@@ -1,9 +1,20 @@
 import { fail } from '../lib/response.js';
 
+// كاش قصير داخل الـ isolate (20 ثانية) — بيوفّر استعلام offices في كل طلب
+const OFFICE_CACHE = new Map();
+
 export async function checkSubscription(env, officeId) {
-  const office = await env.DB.prepare(
-    `SELECT status, trial_ends_at FROM offices WHERE id = ?`
-  ).bind(officeId).first();
+  const hit = OFFICE_CACHE.get(officeId);
+  let office;
+  if (hit && hit.exp > Date.now()) {
+    office = hit.office;
+  } else {
+    office = await env.DB.prepare(
+      `SELECT status, trial_ends_at FROM offices WHERE id = ?`
+    ).bind(officeId).first();
+    if (OFFICE_CACHE.size > 500) OFFICE_CACHE.clear();
+    OFFICE_CACHE.set(officeId, { office, exp: Date.now() + 20_000 });
+  }
 
   if (!office) return fail(env, '\u0627\u0644\u0645\u0643\u062a\u0628 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f', 403);
   if (office.status === 'suspended') {

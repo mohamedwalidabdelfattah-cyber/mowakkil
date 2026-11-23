@@ -8,6 +8,20 @@
 
   <link rel="stylesheet" href="/assets/fonts.css">
 
+  <!-- تحديد الشاشة قبل أي رسم: يمنع ظهور اللاندنج والدخول مع بعض أو "وميض" اللاندنج قبل التطبيق -->
+  <script>
+    (function () {
+      var boot = 'landing';
+      try { if (localStorage.getItem('mowakkil_token')) boot = 'app'; } catch (e) {}
+      if (boot !== 'app' && (location.hash === '#login' || location.pathname === '/login')) boot = 'login';
+      document.documentElement.setAttribute('data-boot', boot);
+    })();
+  </script>
+  <style>
+    html[data-boot] #landing-view, html[data-boot] #login-gate-view, html[data-boot] #app-body { display: none !important; }
+    html[data-boot="landing"] #landing-view, html[data-boot="login"] #login-gate-view, html[data-boot="app"] #app-body { display: block !important; }
+  </style>
+
   <!-- PWA -->
   <link rel="manifest" href="/assets/site.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,7 +34,10 @@
   <link rel="shortcut icon" href="/assets/logos/favicon.ico">
 
   <!-- مكتبات أساسية -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-arabic-v15-arabic_latin-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <!-- defer: ميوقفش عرض الصفحة (بيتنفذ قبل main.js بالترتيب) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <!-- مكتبة Excel بتتحمل وقت التصدير بس (web/js/exporter.js) -->
 
   <!-- ملفات التنسيقات الأساسية -->
@@ -57,32 +74,10 @@
     try { localStorage.setItem('pwa-installed', '1'); } catch(e) {}
   });
 
+  // Service worker: الكود دايماً من الشبكة الأول، فمفيش إعادة تحميل تلقائية ولا رقم كاش يدوي
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(reg => {
-          console.log('SW registered');
-          setInterval(() => {
-            reg.update().catch(() => {});
-          }, 60 * 1000);
-
-          reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            newWorker?.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                newWorker.postMessage('SKIP_WAITING');
-              }
-            });
-          });
-        })
-        .catch(err => console.log('SW failed', err));
-    });
-
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
+      navigator.serviceWorker.register('/service-worker.js').catch(() => {});
     });
   }
 </script>
@@ -128,7 +123,10 @@
         </div>
       </div>
       <div class="landing-hero-image" style="position: relative;">
-        <img src="/assets/lady-justice.png" alt="تمثال العدالة" style="width: 100%; max-width: 400px; height: auto; object-fit: contain; filter: drop-shadow(0 20px 30px rgba(212, 175, 55, 0.2)); animation: float 6s ease-in-out infinite;" onerror="this.style.display='none'; document.getElementById('svg-fallback').style.display='block';">
+        <picture>
+          <source srcset="/assets/img/lady-justice.webp" type="image/webp">
+          <img src="/assets/img/lady-justice.png" alt="تمثال العدالة" width="400" height="500" fetchpriority="high" decoding="async" onerror="this.style.display='none'; document.getElementById('svg-fallback').style.display='block';">
+        </picture>
         
         <svg id="svg-fallback" viewBox="0 0 200 250" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none; width: 100%; max-width: 350px; height: auto; filter: drop-shadow(0 20px 30px rgba(212, 175, 55, 0.2)); animation: float 6s ease-in-out infinite;">
           <path d="M100 20V230" stroke="#D4AF37" stroke-width="6" stroke-linecap="round"/>
@@ -222,7 +220,7 @@
     <div class="landing-footer-links">
       <a href="/pricing">الباقات</a>
       <a href="/signup">إنشاء حساب</a>
-      <a href="/login">دخول</a>
+      <a href="#login" data-action="show-login">دخول</a>
       <a href="https://wa.me/201013917789" target="_blank">تواصل</a>
     </div>
   </footer>
@@ -247,22 +245,20 @@
       <button class="btn btn-primary btn-lg btn-block" data-action="login" style="margin-top:20px">تسجيل الدخول</button>
       <div id="lg-status" class="status"></div>
 
-      <div style="margin-top:20px;text-align:center">
-        <div style="font-size:13px;color:var(--text-soft)">معندكش حساب؟</div>
-        <a href="/signup" class="btn btn-ghost btn-block" style="margin-top:8px;text-decoration:none;display:block;text-align:center">
-          🚀 ابدأ مجانًا 15 يوم
-        </a>
-      </div>
+      <div class="gate-divider">معندكش حساب؟</div>
+      <a href="/signup" class="gate-signup">🚀 ابدأ مجانًا 15 يوم</a>
 
-      <button class="btn btn-ghost btn-block" id="pwa-install-btn" style="margin-top:8px">📲 ثبّت التطبيق على جهازك</button>
-      <button class="btn btn-ghost btn-block" data-action="toggle-sa" style="margin-top:8px">👑 دخول مسؤول المنصة</button>
-      <button class="btn btn-ghost btn-block" data-action="show-landing" style="margin-top:8px">← رجوع للرئيسية</button>
+      <div class="gate-links">
+        <button class="gate-link" data-action="show-landing">→ الرئيسية</button>
+        <button class="gate-link" id="pwa-install-btn">📲 ثبّت التطبيق</button>
+        <button class="gate-link" data-action="toggle-sa">👑 مسؤول المنصة</button>
+      </div>
 
       <div class="gate-footer">منصة SaaS متكاملة — قضايا، موكلين، محاسبة، وفواتير</div>
     </div>
 
     <div class="gate-card-login" id="sa-gate" hidden>
-      <div class="gate-icon" style="background: transparent;">👑</div>
+      <div class="gate-icon"><img src="/assets/logos/logo-lg.png" alt="مُوكِّل"></div>
       <h1>مسؤول المنصة</h1>
       <p class="gate-subtitle">دخول لوحة تحكم مُوكِّل</p>
       <label class="label">البريد الإلكتروني</label>
@@ -271,7 +267,7 @@
       <input id="sa-pass" class="input" type="password" autocomplete="current-password">
       <button class="btn btn-primary btn-lg btn-block" data-action="sa-login" style="margin-top:20px">دخول</button>
       <div id="sa-status" class="status"></div>
-      <button class="btn btn-ghost btn-block" data-action="toggle-sa" style="margin-top:16px">← رجوع</button>
+      <div class="gate-links"><button class="gate-link" data-action="toggle-sa">→ رجوع لدخول المكتب</button></div>
       <div class="gate-footer">لوحة التحكم الكاملة — مكاتب، اشتراكات، مدفوعات</div>
     </div>
   </div>

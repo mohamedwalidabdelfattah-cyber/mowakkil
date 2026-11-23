@@ -87,6 +87,7 @@ const EMOJI = {
   '📚': 'book', '🧠': 'brain', '🎯': 'target', '🥊': 'shield', '➡️': 'arrowLeft', '❓': 'help', '💪': 'thumbsUp',
   '🪪': 'idCard', '📷': 'camera', '🩺': 'activity', '🤝': 'users', '🏠️': 'home', '📭': 'inbox', '💬': 'message', '🔗': 'link', '🌐': 'globe',
   '🌳': 'folder', '📖': 'book', '💹': 'trendUp', '🏦': 'landmark', '🏢': 'landmark', '🎛️': 'settings',
+  '📲': 'download', '👑': 'shield',
 };
 const DROP = ['👋', '🎉', '🙌'];  // زخرفة بنشيلها
 
@@ -159,7 +160,7 @@ let started = false;
 export function startIconify() {
   if (started) return;
   started = true;
-  const targets = ['#view-host', '#sa-body', '#drawer', '#toast-host'].map(s => document.querySelector(s)).filter(Boolean);
+  const targets = ['#view-host', '#sa-body', '#drawer', '#toast-host', '#landing-view', '#login-gate-view', '.signup-wrapper'].map(s => document.querySelector(s)).filter(Boolean);
   const obs = new MutationObserver(muts => {
     for (const m of muts) {
       m.addedNodes.forEach(n => {

@@ -2,6 +2,9 @@
 // منطق التسجيل الذاتي
 
 import { STORAGE_KEYS, API_BASE } from './config.js';
+import { startIconify } from './icons.js';
+
+startIconify();
 
 const form = document.getElementById('signup-form');
 const btn = document.getElementById('signup-btn');

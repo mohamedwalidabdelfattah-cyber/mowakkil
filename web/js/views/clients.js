@@ -27,16 +27,16 @@ export async function render(host) {
     const list = await apiJson(`/api/clients${query}`);
     setClients(list);
 
-    // تحسين: نجيب حالة كل الحسابات مرة واحدة (بالتوازي، مش واحد ورا التاني)
+    // حالة حساب البوابة جاية مع القايمة نفسها (account_status) — طلب واحد بدل طلب لكل موكل
     const statusMap = {};
-    if (list.length > 0) {
-      const statusPromises = list.map(c => 
+    const missing = [];
+    list.forEach(c => { if (c.account_status) statusMap[c.id] = c.account_status; else missing.push(c); });
+    if (missing.length) {
+      // توافق مع سيرفر قديم ما بيرجعش account_status
+      const results = await Promise.all(missing.map(c =>
         apiJson(`/api/clients/account-status?client_id=${c.id}`)
           .then(s => ({ id: c.id, status: s }))
-          .catch(() => ({ id: c.id, status: { has_account: false } }))
-      );
-      
-      const results = await Promise.all(statusPromises);
+          .catch(() => ({ id: c.id, status: { has_account: false } }))));
       results.forEach(r => { statusMap[r.id] = r.status; });
     }
 

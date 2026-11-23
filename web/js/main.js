@@ -1,6 +1,6 @@
 // web/js/main.js
 import { getToken, getRoleFromToken, clearSession, fetchSubscription } from './api.js';
-import { registerView, showView } from './router.js';
+import { registerView, showView, prefetchViews } from './router.js';
 import { toast, showTrialBanner } from './ui.js';
 import { initDrawer } from './drawer.js';
 import { startNotifications, openNotifications } from './notifications.js';
@@ -12,40 +12,29 @@ applyChartTheme();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startIconify);
 else startIconify();
 
+// الشاشات اللي بنحتاجها من أول لحظة (الدخول + السوبر أدمن + بيانات المكتب)
 import * as loginView        from './views/login.js';
-import * as dashboardView    from './views/dashboard.js';
-import * as agendaView       from './views/agenda.js';
-import * as casesView        from './views/cases.js';
-import * as clientsView      from './views/clients.js';
-import * as lawyersView      from './views/lawyers.js';
-import * as feesView         from './views/fees.js';
-import * as tasksView        from './views/tasks.js';
-import * as reportsView      from './views/reports.js';
-import * as calcView         from './views/calc.js';
-import * as searchView       from './views/search.js';
 import * as accountView      from './views/account.js';
 import * as superadminView   from './views/superadmin.js';
-import * as moneyView        from './views/money.js';
-import * as accountingView   from './views/accounting.js';
-import * as subscriptionView from './views/subscription.js';
-import * as settingsView     from './views/settings.js';
 
-registerView('dashboard',     dashboardView);
-registerView('agenda',        agendaView);
-registerView('cases',         casesView);
-registerView('clients',       clientsView);
-registerView('lawyers',       lawyersView);
-registerView('fees',          feesView);
-registerView('tasks',         tasksView);
-registerView('reports',       reportsView);
-registerView('calc',          calcView);
-registerView('search',        searchView);
-registerView('account',       accountView);
-registerView('superadmin',    superadminView);
-registerView('money',         moneyView);
-registerView('accounting',    accountingView);
-registerView('subscription',  subscriptionView);
-registerView('settings',      settingsView);
+registerView('account',    accountView);
+registerView('superadmin', superadminView);
+
+// باقي الشاشات بتتحمل أول ما تتفتح بس (أسرع بكتير في أول تحميل)
+registerView('dashboard',    () => import('./views/dashboard.js'));
+registerView('agenda',       () => import('./views/agenda.js'));
+registerView('cases',        () => import('./views/cases.js'));
+registerView('clients',      () => import('./views/clients.js'));
+registerView('lawyers',      () => import('./views/lawyers.js'));
+registerView('fees',         () => import('./views/fees.js'));
+registerView('tasks',        () => import('./views/tasks.js'));
+registerView('reports',      () => import('./views/reports.js'));
+registerView('calc',         () => import('./views/calc.js'));
+registerView('search',       () => import('./views/search.js'));
+registerView('money',        () => import('./views/money.js'));
+registerView('accounting',   () => import('./views/accounting.js'));
+registerView('subscription', () => import('./views/subscription.js'));
+registerView('settings',     () => import('./views/settings.js'));
 
 // ✅ "المزيد" كـ view مخصّص
 const moreView = {
@@ -97,7 +86,12 @@ registerView('more', moreView);
 // ============================================================
 // View Switcher
 // ============================================================
+// بعد ما الـ JS يشتغل، الـ hidden هو المتحكم الوحيد (data-boot كان للحظة الأولى بس)
+function clearBoot() { document.documentElement.removeAttribute('data-boot'); window.scrollTo(0, 0); }
+
 function showLanding() {
+  clearBoot();
+  if (location.hash === '#login') history.replaceState(null, '', location.pathname);
   document.getElementById('landing-view').hidden = false;
   document.getElementById('login-gate-view').hidden = true;
   document.getElementById('app-body').hidden = true;
@@ -106,6 +100,7 @@ function showLanding() {
 }
 
 function showLoginGate() {
+  clearBoot();
   document.getElementById('landing-view').hidden = true;
   document.getElementById('login-gate-view').hidden = false;
   document.getElementById('app-body').hidden = true;
@@ -114,6 +109,7 @@ function showLoginGate() {
 }
 
 function showApp() {
+  document.documentElement.removeAttribute('data-boot');
   document.getElementById('landing-view').hidden = true;
   document.getElementById('login-gate-view').hidden = true;
   document.getElementById('app-body').hidden = false;
@@ -237,6 +233,8 @@ if (getToken()) {
   showApp();
   accountView.loadOffice();
   showView('dashboard');
+  // الشاشات الأكتر استخداماً تتحمل في الخلفية عشان التنقل يبقى فوري
+  prefetchViews(['cases', 'clients', 'tasks', 'agenda', 'fees', 'search']);
   initSubscription();
   startNotifications();
   initBottomNav();
@@ -245,6 +243,8 @@ if (getToken()) {
     e.stopPropagation();
     openNotifications();
   });
+} else if (location.hash === '#login' || location.pathname === '/login') {
+  showLoginGate();
 } else {
   showLanding();
 }

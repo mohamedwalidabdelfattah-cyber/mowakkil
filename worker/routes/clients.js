@@ -44,8 +44,35 @@ async function list({ env, officeId, url }) {
 
   query += ' ORDER BY created_at DESC';
 
-  const { results } = await env.DB.prepare(query).bind(...binds).all();
-  return ok(env, results || []);
+  // حالة حساب بوابة الموكل لكل الموكلين في استعلام واحد (بدل طلب منفصل لكل موكل)
+  const [{ results }, { results: accounts }] = await Promise.all([
+    env.DB.prepare(query).bind(...binds).all(),
+    env.DB.prepare(
+      `SELECT client_id, active, password_hash, invite_code FROM client_users
+       WHERE office_id = ? ORDER BY id DESC`
+    ).bind(officeId).all().catch(() => ({ results: [] })),
+  ]);
+
+  const byClient = new Map();
+  for (const a of accounts || []) if (!byClient.has(a.client_id)) byClient.set(a.client_id, a);
+
+  const rows = (results || []).map(c => {
+    const a = byClient.get(c.id);
+    if (!a) return { ...c, account_status: { has_account: false } };
+    const pending = a.password_hash === 'PENDING';
+    return {
+      ...c,
+      account_status: {
+        has_account: true,
+        active: a.active === 1,
+        has_password: !pending,
+        invite_pending: pending && !!a.invite_code,
+        invite_expired: false,
+        invite_code: a.invite_code,
+      },
+    };
+  });
+  return ok(env, rows);
 }
 
 async function create({ request, env, authUser, officeId }) {

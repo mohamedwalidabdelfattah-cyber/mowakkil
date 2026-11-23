@@ -1,5 +1,7 @@
 import { verifyJWT } from './jwt.js';
 
+const USER_CACHE = new Map();
+
 export async function getAuthUser(request, env) {
   const auth = request.headers.get('authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
@@ -10,10 +12,20 @@ export async function getAuthUser(request, env) {
 
   if (payload.super === true) return payload;
 
-  const user = await env.DB.prepare(
-    `SELECT id, office_id, role, email, full_name, active
-     FROM users WHERE id = ? AND office_id = ?`
-  ).bind(payload.user_id, payload.office_id).first();
+  // كاش قصير داخل الـ isolate (20 ثانية) — بيوفّر استعلام users في كل طلب
+  const key = `${payload.user_id}:${payload.office_id}`;
+  const hit = USER_CACHE.get(key);
+  let user;
+  if (hit && hit.exp > Date.now()) {
+    user = hit.user;
+  } else {
+    user = await env.DB.prepare(
+      `SELECT id, office_id, role, email, full_name, active
+       FROM users WHERE id = ? AND office_id = ?`
+    ).bind(payload.user_id, payload.office_id).first();
+    if (USER_CACHE.size > 500) USER_CACHE.clear();
+    USER_CACHE.set(key, { user, exp: Date.now() + 20_000 });
+  }
 
   if (!user) return null;
   if (user.active === 0) return null;

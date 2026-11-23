@@ -4,8 +4,25 @@ import { getRole } from './api.js';
 const views = new Map();
 let currentView = null;
 
+// module: كائن فيه render، أو دالة بترجع import() (تحميل عند الحاجة)
 export function registerView(name, module) {
   views.set(name, module);
+}
+
+async function resolveView(name) {
+  let m = views.get(name);
+  if (typeof m === 'function') {
+    m = await m();
+    views.set(name, m);
+  }
+  return m;
+}
+
+// تحميل مسبق في الخلفية لشاشات معينة (بعد الدخول، في وقت فراغ المتصفح)
+export function prefetchViews(names) {
+  const run = () => names.forEach(n => { if (typeof views.get(n) === 'function') resolveView(n).catch(() => {}); });
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 4000 });
+  else setTimeout(run, 1500);
 }
 
 export function getCurrentView() { return currentView; }
@@ -40,11 +57,17 @@ export async function showView(name) {
     return;
   }
 
-  const module = views.get(realName);
-  if (module.adminOnly && getRole() !== 'admin') return;
-
   const host = document.getElementById('view-host');
   host.innerHTML = '<div class="card">' + skeleton(4) + '</div>';
+
+  let module;
+  try {
+    module = await resolveView(realName);
+  } catch (e) {
+    host.innerHTML = `<div class="card"><div class="empty">تعذر تحميل الصفحة — تأكد من الاتصال وجرّب تاني</div></div>`;
+    return;
+  }
+  if (module.adminOnly && getRole() !== 'admin') return;
 
   currentView = name;
 
