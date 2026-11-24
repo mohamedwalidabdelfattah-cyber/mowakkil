@@ -2,6 +2,7 @@
 import { apiJson } from '../api.js';
 import { esc, toast, skeleton } from '../ui.js';
 import { mountExportMenu } from '../exporter.js';
+import { mountAiMeter } from '../ai-usage.js';
 
 const GOV_LINKS = [
   { name: 'منصة مصر الرقمية', desc: 'خدمات التوثيق والتقاضي الإلكتروني', url: 'https://digital.gov.eg', icon: '🇪🇬' },
@@ -21,6 +22,7 @@ export async function render(host) {
       <button class="tab-btn ghost" data-tab="analyze">🧠 تحليل ذكي</button>
       <button class="tab-btn ghost" data-tab="generate">📝 توليد مستندات</button>
     </div>
+    <div id="ai-meter-host" style="margin-bottom:12px"></div>
 
     <!-- ==================== شات المساعد ==================== -->
     <div id="tab-chat" class="tab-content">
@@ -175,6 +177,8 @@ export async function render(host) {
       </div>
     </div>
   `;
+
+  mountAiMeter(host.querySelector('#ai-meter-host'));
 
   // ==================== Tab Switching ====================
   const tabs = host.querySelectorAll('.tab-btn');

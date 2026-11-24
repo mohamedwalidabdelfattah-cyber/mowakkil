@@ -9,10 +9,10 @@ let plansData = [];
 // ✅ بيانات تجريبية للاختبار المحلي
 const MOCK_PLANS = [
   { plan: 'starter', display_name: 'الأساسية', display_name_en: 'Starter', price_egp: 199, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true }, limits: { max_users: 3, max_cases: -1, max_clients: -1, max_storage_mb: 500 } },
-  { plan: 'pro', display_name: 'الاحترافية', display_name_en: 'Pro', price_egp: 399, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true }, limits: { max_users: 5, max_cases: -1, max_clients: -1, max_storage_mb: 2000 } },
-  { plan: 'plus', display_name: 'المتقدمة', display_name_en: 'Plus', price_egp: 799, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true, whatsapp: true, multi_office: true, api: true }, limits: { max_users: 20, max_cases: -1, max_clients: -1, max_storage_mb: 5000 } },
+  { plan: 'pro', display_name: 'الاحترافية', display_name_en: 'Pro', price_egp: 399, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true }, limits: { max_users: 5, max_cases: -1, max_clients: -1, max_storage_mb: 2000, ai_monthly: 300 } },
+  { plan: 'plus', display_name: 'المتقدمة', display_name_en: 'Plus', price_egp: 799, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true, whatsapp: true, multi_office: true, api: true }, limits: { max_users: 20, max_cases: -1, max_clients: -1, max_storage_mb: 5000, ai_monthly: 1000 } },
   { plan: 'lifetime_basic', display_name: 'التأسيس (مدى الحياة)', display_name_en: 'Lifetime Basic', price_egp: 4999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true }, limits: { max_users: 3, max_cases: -1, max_clients: -1, max_storage_mb: 500 } },
-  { plan: 'lifetime_pro', display_name: 'المكتب المتكامل (مدى الحياة)', display_name_en: 'Lifetime Pro', price_egp: 9999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true, whatsapp: true, api: true }, limits: { max_users: 10, max_cases: -1, max_clients: -1, max_storage_mb: 2000 } },
+  { plan: 'lifetime_pro', display_name: 'المكتب المتكامل (مدى الحياة)', display_name_en: 'Lifetime Pro', price_egp: 9999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true, whatsapp: true, api: true }, limits: { max_users: 10, max_cases: -1, max_clients: -1, max_storage_mb: 2000, ai_monthly: 300 } },
 ];
 
 const I18N = {
@@ -31,7 +31,7 @@ const I18N = {
     popular: 'الأكثر شعبية', subscribe: '🚀 اشترك الآن', subscribeFree: '🎁 ابدأ مجانًا',
     perMonth: '/ شهر', forever: 'للأبد', once: 'مرة واحدة',
     featureLabels: { cases: 'إدارة القضايا', clients: 'إدارة الموكلين', agenda: 'الأجندة والجلسات', portal: 'بوابة الموكل', finance: 'الإدارة المالية', invoices: 'الفواتير والضرائب', ai: 'الذكاء الاصطناعي', advanced_reports: 'التقارير المتقدمة', whatsapp: 'تكامل واتساب', multi_office: 'مكاتب متعددة', api: 'API Access' },
-    limitLabels: { max_users: 'المستخدمين', max_cases: 'القضايا', max_clients: 'الموكلين', max_storage_mb: 'التخزين' },
+    limitLabels: { max_users: 'المستخدمين', max_cases: 'القضايا', max_clients: 'الموكلين', max_storage_mb: 'التخزين', ai_monthly: 'طلبات الذكاء الاصطناعي / شهر' },
     faqs: [
       { q: 'إيه الفرق بين الباقات؟', a: 'الأساسية للمكاتب الصغيرة وفيها المحاسبة والفواتير، الاحترافية تضيف الذكاء الاصطناعي والتقارير المتقدمة، والمتقدمة للمكاتب الكبيرة.' },
       { q: 'أقدر أرقّي الباقة في أي وقت؟', a: 'أيوه، من صفحة "اشتراكي" جوه النظام، وهتتفعّل فورًا.' },
@@ -56,7 +56,7 @@ const I18N = {
     popular: 'Most Popular', subscribe: '🚀 Subscribe', subscribeFree: '🎁 Start Free',
     perMonth: '/ month', forever: 'forever', once: 'once',
     featureLabels: { cases: 'Case Management', clients: 'Client Management', agenda: 'Agenda & Sessions', portal: 'Client Portal', finance: 'Financial Management', invoices: 'Invoices & Tax', ai: 'AI', advanced_reports: 'Advanced Reports', whatsapp: 'WhatsApp', multi_office: 'Multi Offices', api: 'API Access' },
-    limitLabels: { max_users: 'Users', max_cases: 'Cases', max_clients: 'Clients', max_storage_mb: 'Storage' },
+    limitLabels: { max_users: 'Users', max_cases: 'Cases', max_clients: 'Clients', max_storage_mb: 'Storage', ai_monthly: 'AI requests / month' },
     faqs: [
       { q: 'What is the difference between plans?', a: 'Starter for small firms (with finance & invoices), Pro adds AI and advanced reports, Plus for large firms.' },
       { q: 'Can I upgrade anytime?', a: 'Yes, from the "My Subscription" page.' },
@@ -192,8 +192,8 @@ function renderComparison() {
     <tr><th>${currentLang === 'ar' ? 'الميزة' : 'Feature'}</th>${plans.map(p => `<th>${currentLang === 'ar' ? p.display_name : (p.display_name_en || p.display_name)}</th>`).join('')}</tr>
   `;
   const featureRows = features.map(f => `<tr><td>${t.featureLabels[f] || f}</td>${plans.map(p => `<td>${p.features?.[f] ? '<span class="check">✓</span>' : '<span class="cross">×</span>'}</td>`).join('')}</tr>`).join('');
-  const limitKeys = ['max_users', 'max_cases', 'max_clients', 'max_storage_mb'];
-  const limitRows = limitKeys.map(k => `<tr><td>${t.limitLabels[k] || k}</td>${plans.map(p => { const v = p.limits?.[k]; const val = k === 'max_storage_mb' ? fmtStorage(v) : (v === -1 ? '∞' : v); return `<td><span class="value">${val}</span></td>`; }).join('')}</tr>`).join('');
+  const limitKeys = ['max_users', 'max_cases', 'max_clients', 'max_storage_mb', 'ai_monthly'];
+  const limitRows = limitKeys.map(k => `<tr><td>${t.limitLabels[k] || k}</td>${plans.map(p => { const v = p.limits?.[k]; if (k === 'ai_monthly' && !v) return '<td><span class="cross">×</span></td>'; const val = k === 'max_storage_mb' ? fmtStorage(v) : (v === -1 ? '∞' : v); return `<td><span class="value">${val}</span></td>`; }).join('')}</tr>`).join('');
   table.querySelector('tbody').innerHTML = featureRows + limitRows;
 }
 

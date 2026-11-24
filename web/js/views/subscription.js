@@ -151,6 +151,7 @@ function renderPlanCard(plan, currentPlan) {
         <div>📁 ${maxCases} قضية</div>
         <div>👤 ${maxClients} موكل</div>
         <div>💾 ${fmtStorage(limits.max_storage_mb)} تخزين</div>
+        ${limits.ai_monthly ? `<div>🤖 ${limits.ai_monthly} طلب ذكاء اصطناعي / شهر</div>` : ''}
       </div>
 
       ${isCurrent ? `
@@ -209,6 +210,15 @@ function renderUsage(sub) {
         </div>
         <div class="usage-num">${fmtStorage(u.storage_mb || 0)} / ${fmtStorage(l.max_storage_mb)}</div>
       </div>
+
+      ${sub.ai?.monthly_limit ? `
+      <div class="usage-row">
+        <div class="usage-label">الذكاء الاصطناعي ${sub.ai.trial ? '(التجربة)' : '(الشهر ده)'}</div>
+        <div class="usage-bar">
+          <div class="usage-fill" style="width:${pct(sub.ai.used_month, sub.ai.monthly_limit)}%"></div>
+        </div>
+        <div class="usage-num">${sub.ai.used_month} / ${sub.ai.monthly_limit}</div>
+      </div>` : ''}
     </div>
   `;
 }

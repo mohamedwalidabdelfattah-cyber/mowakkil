@@ -1,7 +1,6 @@
 // worker/routes/chat.js
 import { ok, fail, cors } from '../lib/response.js';
 import { requireFeature } from '../middleware/feature-gate.js';
-import { checkAiQuota } from '../lib/ai-quota.js';
 import { chatWithAgent } from '../services/agent.js';
 import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { createMasker } from '../lib/redact.js';
@@ -25,9 +24,6 @@ const MAX_LAST_MSG_CHARS = 12000; // آخر رسالة (ممكن فيها ملف
 async function chatHandler({ request, env, officeId, userId }) {
   const gate = await requireFeature(env, officeId, 'ai');
   if (gate) return cors(gate, env, request);
-
-  const quota = await checkAiQuota(env, officeId);
-  if (quota) return cors(quota, env, request);
 
   let b;
   try {

@@ -5,12 +5,19 @@ import { legalSearch, generateDocument } from '../services/legal-search.js';
 import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { isStr, safeJson } from '../lib/validation.js';
 import { requireFeature } from '../middleware/feature-gate.js';
+import { getAiUsage } from '../lib/ai-quota.js';
 
 export const routes = [
   { method: 'POST', path: '/api/fee-calc',         handler: feeCalc },
+  { method: 'GET',  path: '/api/ai/usage',         handler: aiUsage },
   { method: 'POST', path: '/api/legal-search',     handler: search },
   { method: 'POST', path: '/api/generate-doc',     handler: generateDoc },
 ];
+
+// رصيد الذكاء الاصطناعي للمكتب (للعدّاد في الواجهة)
+async function aiUsage({ env, officeId }) {
+  return ok(env, await getAiUsage(env, officeId));
+}
 
 async function feeCalc({ request, env }) {
   const b = await safeJson(request);

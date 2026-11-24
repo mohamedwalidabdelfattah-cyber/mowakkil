@@ -8,6 +8,7 @@ import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
 import { can } from '../access.js';
 import { openWhatsAppComposer, localDateStr } from '../whatsapp.js';
+import { mountAiMeter } from '../ai-usage.js';
 
 let currentFilters = {
   archived: false,
@@ -503,6 +504,7 @@ function renderAiTab(el, c, documents = []) {
     : '<div class="meta">مفيش مرفقات للقضية لسه — ارفع ملف القضية من هنا.</div>';
 
   el.innerHTML = `
+    <div class="ai-meter-slot" style="margin-bottom:10px"></div>
     <div class="card" style="background:var(--gray-50)">
       <div style="font-size:13px;color:var(--text-soft);margin-bottom:10px">
         التحليل بيقرا <strong>مرفقات القضية</strong> وبياناتها وجلساتها تلقائياً، ويستخدم مهارة قانونية حسب نوع القضية ومواد من قاعدة البيانات القانونية.
@@ -545,6 +547,7 @@ function renderAiTab(el, c, documents = []) {
     <div id="ai-result"></div>
     <div id="ai-history" style="margin-top:12px"></div>
   `;
+  mountAiMeter(el.querySelector('.ai-meter-slot'), { compact: true });
 
   const val = sel => el.querySelector(sel).value.trim();
   const collect = () => ({

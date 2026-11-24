@@ -1,7 +1,6 @@
 // worker/routes/analyze.js
 import { ok, fail, cors } from '../lib/response.js';
 import { requireFeature } from '../middleware/feature-gate.js';
-import { checkAiQuota } from '../lib/ai-quota.js';
 import { extractJson } from '../lib/json-extract.js';
 import { chatCompletion } from '../services/llm.js';
 import { findRelevantArticles } from '../services/legal-search.js';
@@ -185,8 +184,6 @@ async function analyzeDocument({ request, env, officeId, userId }) {
 async function runAnalysis(env, officeId, userId, type, request) {
   const gate = await requireFeature(env, officeId, 'ai');
   if (gate) return cors(gate, env, request);
-  const quota = await checkAiQuota(env, officeId);
-  if (quota) return cors(quota, env, request);
   // النص الملصوق ده مستند موكل → موافقة + خصوصية حسب إعداد المكتب
   const privacy = await requireClientDataAi(env, officeId);
   if (privacy.block) return cors(privacy.block, env, request);
@@ -268,8 +265,6 @@ const CASE_ANALYSIS_PROMPT = `حلل القضية التالية تحليلاً 
 async function analyzeSavedCase({ request, env, officeId, userId, params }) {
   const gate = await requireFeature(env, officeId, 'ai');
   if (gate) return gate;
-  const quota = await checkAiQuota(env, officeId);
-  if (quota) return quota;
   const privacy = await requireClientDataAi(env, officeId);
   if (privacy.block) return privacy.block;
 

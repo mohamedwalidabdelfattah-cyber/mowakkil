@@ -10,6 +10,7 @@ import {
   getUsage,
   getUsageDetails,
 } from '../middleware/feature-gate.js';
+import { AI_MONTHLY_LIMITS, getAiUsage } from '../lib/ai-quota.js';
 
 export const publicRoutes = [
   { method: 'GET', path: '/api/subscription/plans', handler: getPlans },
@@ -34,7 +35,7 @@ async function getPlans({ env }) {
     display_name_en: p.display_name_en,
     price_egp: p.price_egp,
     features: JSON.parse(p.features || '{}'),
-    limits: JSON.parse(p.limits || '{}'),
+    limits: { ...JSON.parse(p.limits || '{}'), ai_monthly: AI_MONTHLY_LIMITS[p.plan] ?? 0 },
     billing_type: p.billing_type || 'monthly', // ✅ الحقل الجديد
   })));
 }
@@ -57,6 +58,7 @@ async function getMySubscription({ env, officeId }) {
   }
 
   const usage = await getUsage(env, officeId);
+  const ai = await getAiUsage(env, officeId, sub);
 
   return ok(env, {
     plan: sub.plan,
@@ -66,8 +68,9 @@ async function getMySubscription({ env, officeId }) {
     expires_at: sub.expires_at,
     days_remaining: daysRemaining,
     features,
-    limits,
+    limits: { ...limits, ai_monthly: ai.monthly_limit },
     usage,
+    ai,
   });
 }
 

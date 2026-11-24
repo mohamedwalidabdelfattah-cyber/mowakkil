@@ -32,6 +32,7 @@ import * as analyzeRoutes         from './routes/analyze.js';
 import * as chatRoutes            from './routes/chat.js';  // ✅ جديد
 import * as teamRoutes            from './routes/team.js';
 import { getAccess, permissionFor, can, canAccessCase } from './lib/permissions.js';
+import { isAiRequest, checkAiQuota, recordAiUse } from './lib/ai-quota.js';
 
 const PUBLIC_ROUTES = [
   ...authRoutes.publicRoutes,
@@ -148,7 +149,14 @@ async function handleFetch(request, env) {
       }
     }
 
-    return await hit.route.handler({
+    // رصيد الذكاء الاصطناعي: نتحقق قبل الطلب، ونعدّ بعده لو نجح بس
+    const aiReq = isAiRequest(method, path);
+    if (aiReq) {
+      const quota = await checkAiQuota(env, officeId);
+      if (quota) return cors(quota, env, request);
+    }
+
+    const res = await hit.route.handler({
       request, env, url, path, method,
       params: hit.params,
       authUser,
@@ -156,6 +164,8 @@ async function handleFetch(request, env) {
       userId: authUser.user_id,
       officeId,
     });
+    if (aiReq && res && res.status < 400) await recordAiUse(env, officeId);
+    return res;
   } catch (err) {
     console.error('unhandled error', err);
     return fail(env, 'حصل خطأ في السيرفر، جرب تاني', 500, {}, request);

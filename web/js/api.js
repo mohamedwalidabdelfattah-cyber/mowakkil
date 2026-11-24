@@ -111,6 +111,15 @@ async function handle(res) {
     }
   }
 
+  // رصيد الذكاء الاصطناعي خلص (شهري حسب الباقة أو يومي)
+  if (res.status === 429) {
+    const body = await res.clone().json().catch(() => ({}));
+    if (body?.code === 'AI_MONTHLY_LIMIT' || body?.code === 'AI_DAILY_LIMIT') {
+      import('./ai-usage.js').then(m => m.showAiLimitModal(body)).catch(() => {});
+      throw new Error(body.error || 'رصيد الذكاء الاصطناعي خلص');
+    }
+  }
+
   if (res.status === 403) {
     const cloned = res.clone();
     try {
@@ -205,6 +214,11 @@ export async function apiJson(path, opts = {}) {
   }
 
   const data = await res.json();
+
+  // طلب ذكاء اصطناعي نجح → العدّاد ينقص
+  if (!isGet && /^\/api\/(chat|legal-search|generate-doc|analyze\/(contract|case|document)|cases\/\d+\/analyze)$/.test(path.split('?')[0])) {
+    import('./ai-usage.js').then(m => m.notifyAiUsed()).catch(() => {});
+  }
 
   if (isGet) {
     setCache(path, data);
