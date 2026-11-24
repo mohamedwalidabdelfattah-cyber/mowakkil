@@ -2,6 +2,7 @@
 // Client Portal — بوابة الموكل
 
 import { ok, fail } from '../lib/response.js';
+import { buildStatement } from '../services/client-statement.js';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
 import { signJWT, verifyJWT } from '../lib/jwt.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
@@ -27,6 +28,7 @@ export const protectedRoutes = [
   { method: 'GET', path: '/api/client-portal/cases',                 handler: myCases },
   { method: 'GET', path: /^\/api\/client-portal\/cases\/(\d+)$/,     handler: myCaseDetail },
   { method: 'GET', path: '/api/client-portal/fees',                  handler: myFees },
+  { method: 'GET', path: '/api/client-portal/statement',             handler: myStatement },
   { method: 'GET', path: '/api/client-portal/invoices',              handler: myInvoices },
   { method: 'GET', path: '/api/client-portal/agenda',                handler: myAgenda },
 ];
@@ -640,4 +642,14 @@ export async function getAccountStatus({ request, env, officeId, url }) {
     last_login_at: user.last_login_at,
     created_at: user.created_at,
   });
+}
+
+// كشف حسابي (نفس كشف الحساب اللي المكتب بيشوفه)
+async function myStatement({ request, env }) {
+  const user = await getClientUser(request, env);
+  if (!user) return fail(env, 'محتاج تسجيل دخول', 401);
+  const s = await buildStatement(env, user.office_id, user.client_id);
+  if (!s) return fail(env, 'مش موجود', 404);
+  const st = await env.DB.prepare('SELECT currency FROM office_settings WHERE office_id = ?').bind(user.office_id).first();
+  return ok(env, { lines: s.lines.map(({ ref, ...l }) => l), totals: s.totals, currency: st?.currency || 'EGP' });
 }

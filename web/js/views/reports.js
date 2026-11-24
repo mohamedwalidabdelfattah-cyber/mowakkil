@@ -33,7 +33,7 @@ export async function render(host) {
   mountExportMenu(host.querySelector('#report-export'), () => {
     if (!lastReport) throw new Error('استنى لحد ما التقرير يحمّل');
     const { d, month } = lastReport;
-    const monthLabel = new Date(month + '-01').toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
+    const monthLabel = new Date(month + '-01').toLocaleDateString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' });
     return {
       title: 'التقرير المالي الشهري',
       subtitle: monthLabel,

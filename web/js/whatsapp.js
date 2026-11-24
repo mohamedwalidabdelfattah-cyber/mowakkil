@@ -170,7 +170,7 @@ export async function openWhatsAppComposer(ctx = {}) {
   document.body.appendChild(m);
 
   const ta = m.querySelector('#wa-text');
-  const fill = () => { ta.value = fillTemplate(st.templates[kind], varsFor(ctx, st.office)); };
+  const fill = () => { ta.value = ctx.presetText && kind === kinds[0] ? ctx.presetText : fillTemplate(st.templates[kind], varsFor(ctx, st.office)); };
   fill();
   setTimeout(() => ta.focus(), 50);
 

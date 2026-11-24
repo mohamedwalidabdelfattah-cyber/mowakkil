@@ -95,25 +95,25 @@ export async function repairOffice(env, officeId) {
 
   // 4) مصروفات قيدها ضاع
   for (const e of await all(
-    `SELECT e.id, e.total_amount, e.amount, e.expense_date, e.description, e.payment_method, a.code AS account_code
+    `SELECT e.id, e.total_amount, e.amount, e.expense_date, e.description, e.payment_method, e.is_reimbursable, a.code AS account_code
      FROM expenses e LEFT JOIN accounts a ON a.id = e.account_id
      WHERE e.office_id = ? AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.office_id = e.office_id AND je.reference_type = 'expense' AND je.reference_id = e.id)`, officeId)) {
     const amt = Number(e.total_amount) || Number(e.amount) || 0;
     if (amt > 0 && await autoEntryExpense(env, { officeId, expenseId: e.id, amount: amt, date: e.expense_date, description: e.description,
-      accountCode: e.account_code || '5406', method: e.payment_method, refType: REF.expense })) report.restored_expenses++;
+      accountCode: e.account_code || '5406', method: e.payment_method, refType: REF.expense, billable: !!e.is_reimbursable })) report.restored_expenses++;
   }
   for (const se of await all(
-    `SELECT se.id, se.amount, se.description, se.created_at FROM session_expenses se
+    `SELECT se.id, se.amount, se.description, se.created_at, se.billable FROM session_expenses se
      JOIN sessions s ON s.id = se.session_id JOIN cases c ON c.id = s.case_id
      WHERE c.office_id = ? AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.office_id = c.office_id AND je.reference_type = 'session_expense' AND je.reference_id = se.id)`, officeId)) {
     if (Number(se.amount) > 0 && await autoEntryExpense(env, { officeId, expenseId: se.id, amount: Number(se.amount), date: String(se.created_at || '').slice(0, 10),
-      description: se.description || 'مصروف جلسة', accountCode: '5301', refType: REF.session_expense })) report.restored_expenses++;
+      description: se.description || 'مصروف جلسة', accountCode: '5301', refType: REF.session_expense, billable: !!se.billable })) report.restored_expenses++;
   }
   for (const te of await all(
-    `SELECT te.id, te.amount, te.description, te.created_at FROM task_expenses te
+    `SELECT te.id, te.amount, te.description, te.created_at, te.billable FROM task_expenses te
      WHERE te.office_id = ? AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.office_id = te.office_id AND je.reference_type = 'task_expense' AND je.reference_id = te.id)`, officeId)) {
     if (Number(te.amount) > 0 && await autoEntryExpense(env, { officeId, expenseId: te.id, amount: Number(te.amount), date: String(te.created_at || '').slice(0, 10),
-      description: te.description || 'مصروف مهمة', accountCode: '5301', refType: REF.task_expense })) report.restored_expenses++;
+      description: te.description || 'مصروف مهمة', accountCode: '5301', refType: REF.task_expense, billable: !!te.billable })) report.restored_expenses++;
   }
 
   // 5) المدفوع من الدفعات

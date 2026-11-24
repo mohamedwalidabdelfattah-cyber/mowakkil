@@ -166,14 +166,14 @@ export async function prefetchAll(fetchJson, { force = false } = {}) {
     const from = iso(new Date(now - 60 * 86400000));
     const to = iso(new Date(now + 120 * 86400000));
     try {
-      const events = await fetchJson(`/api/calendar/events?from=${from}&to=${to}`, { skipCache: true });
+      const events = await fetchJson(`/api/calendar/events?from=${from}&to=${to}`, { skipCache: true, silent: true });
       await putKey('responses', WIDE_KEY, { data: Array.isArray(events) ? events : [], at: Date.now() });
     } catch {}
     // القوايم (اللي مش مسموحة للدور ده بترجع 403 وبتتجاهل) + التقرير الشهري للشهر ده واللي قبله
     const ym = d => d.toISOString().slice(0, 7);
     const thisMonth = new Date(); const lastMonth = new Date(); lastMonth.setMonth(lastMonth.getMonth() - 1);
     const reports = [ym(thisMonth), ym(lastMonth)].map(m => `/api/reports/monthly?month=${m}`);
-    await pool([...LISTS, ...reports], 4, p => fetchJson(p, { skipCache: true }));
+    await pool([...LISTS, ...reports], 4, p => fetchJson(p, { skipCache: true, silent: true }));
 
     // ملفات القضايا والموكلين والمهام — مرة في اليوم عشان منتقلش على السيرفر
     const last = await meta.get('profiles_at');
@@ -181,7 +181,7 @@ export async function prefetchAll(fetchJson, { force = false } = {}) {
       const cases = (await listOf('/api/cases')).slice(0, 200).map(c => `/api/cases/${c.id}/profile`);
       const clients = (await listOf('/api/clients')).slice(0, 300).map(c => `/api/clients/${c.id}/profile`);
       const tasks = (await listOf('/api/tasks')).filter(t => t.status !== 'منجزة').slice(0, 150).map(t => `/api/tasks/${t.id}/profile`);
-      await pool([...cases, ...clients, ...tasks], 3, p => fetchJson(p, { skipCache: true }));
+      await pool([...cases, ...clients, ...tasks], 3, p => fetchJson(p, { skipCache: true, silent: true }));
       await meta.set('profiles_at', Date.now());
     }
     await meta.set('last_sync', Date.now());

@@ -1,5 +1,7 @@
 // web/js/views/clients.js
 import { apiJson } from '../api.js';
+import { can as canDo } from '../access.js';
+import { openStatement } from '../statement.js';
 import { esc, empty, waLink, toast, fmtMoney, fmtDate, skeleton, bindPanels, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { setClients } from '../state.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
@@ -166,6 +168,8 @@ export async function render(host) {
       const res  = e.target.closest('[data-resend-invite]');
       const dacc = e.target.closest('[data-delete-account]');
 
+      const stb = e.target.closest('[data-statement]');
+      if (stb) return openStatement(stb.dataset.statement);
       const wa = e.target.closest('[data-wa-client]');
       if (wa) return openWhatsAppComposer({ kind: 'general', phone: wa.dataset.waPhone, client_name: wa.dataset.waName });
       if (view) return showProfile(view.dataset.viewClient);
@@ -220,6 +224,7 @@ function clientItem(c, status) {
       </div>
       ${accountBadge ? `<div style="margin-top:6px">${accountBadge}</div>` : ''}
       <div class="acts">
+        ${canSeeMoney() ? `<button class="ghost" data-statement="${c.id}">📄 كشف حساب</button>` : ''}
         ${c.phone ? `<button class="ghost wa-ghost" data-wa-client="${c.id}" data-wa-phone="${esc(c.phone)}" data-wa-name="${esc(c.name)}">💬 واتساب</button>` : ''}
         ${!hasAccount || cancelledInvite ? `
           <button class="ghost" data-invite-client="${c.id}" style="color:var(--ok)">📱 إرسال دعوة</button>
@@ -638,4 +643,9 @@ async function showProfile(id) {
   } catch (e) {
     document.getElementById('client-profile-content').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
+}
+
+// كشف الحساب للي عندهم صلاحية الأتعاب
+function canSeeMoney() {
+  return canDo('fees.view');
 }

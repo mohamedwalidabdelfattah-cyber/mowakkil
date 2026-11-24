@@ -1027,3 +1027,68 @@ footer::before { content: none !important; display: none !important; }
 @keyframes gsIn { from { opacity: 0; transform: translateY(-8px) scale(.99); } to { opacity: 1; transform: none; } }
 body .search-result-item.selected, body .search-result-item:hover { background: color-mix(in srgb, var(--gold-400, #d4af37) 12%, var(--surface)) !important; }
 .view-page { display: contents; }
+
+/* ==========================================================
+   23) الإدارة المالية — الوضع المبسط + كشف حساب الموكل
+   ========================================================== */
+.ms-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ms-top h2 { margin: 0 0 6px; }
+.ms-month { display: flex; align-items: center; gap: 8px; }
+.ms-month strong { font-size: 15px; color: var(--gold-600); min-width: 120px; text-align: center; }
+.ms-acc { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer;
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.ms-acc input { width: auto; accent-color: var(--navy-900); }
+.ms-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+.ms-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: grid; gap: 6px; }
+.ms-card span { font-size: 13px; font-weight: 700; color: var(--text-2); }
+.ms-card strong { font-size: 26px; font-weight: 800; color: var(--navy-900); font-variant-numeric: tabular-nums; }
+.ms-card small { font-size: 12px; color: var(--text-3); line-height: 1.6; }
+.ms-card.in { border-top: 4px solid #12B76A; }
+.ms-card.out { border-top: 4px solid #F79009; }
+.ms-card.net.pos { border-top: 4px solid var(--gold-400); background: color-mix(in srgb, var(--gold-400) 6%, var(--surface)); }
+.ms-card.net.neg { border-top: 4px solid var(--c-danger, #d92d20); }
+.ms-card.net.neg strong { color: var(--c-danger, #d92d20); }
+.ms-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; }
+.ms-have-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.ms-have-grid div { background: var(--surface-2, #f8fafc); border-radius: 12px; padding: 12px; display: grid; gap: 4px; }
+.ms-have-grid span { font-size: 12.5px; color: var(--text-3); }
+.ms-have-grid strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.ms-quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ms-debtors { display: grid; gap: 4px; }
+.ms-debtor { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.ms-debtor:last-child { border-bottom: 0; }
+.ms-debtor-info { display: grid; min-width: 0; }
+.ms-debtor-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-debtor-amt { font-weight: 800; color: var(--c-danger, #d92d20); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ms-debtor-acts { display: flex; gap: 6px; }
+.exp-who { font-weight: 700; }
+.exp-who.client { color: #6172F3; }
+.exp-who.office { color: var(--text-3); }
+.st-card { max-width: 780px; width: calc(100vw - 32px); max-height: 90vh; display: flex; flex-direction: column; }
+.st-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.st-head h3 { margin: 2px 0 0; }
+.st-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.st-totals div { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }
+.st-totals span { font-size: 12px; color: var(--text-3); }
+.st-totals strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.st-totals .ok, .st-table .ok { color: #039855; }
+.st-totals .due { border-color: color-mix(in srgb, var(--c-danger, #d92d20) 40%, var(--border)); }
+.st-totals .due strong { color: var(--c-danger, #d92d20); }
+.st-totals .clear strong { color: #039855; }
+.st-table-wrap { overflow: auto; flex: 1; border: 1px solid var(--border); border-radius: 12px; }
+.st-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.st-table th { position: sticky; top: 0; background: var(--surface-2, #f2f4f7); text-align: right; padding: 8px 10px; font-weight: 700; }
+.st-table td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: top; }
+.st-table td.mono { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.st-kind { display: inline-block; font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 6px; background: var(--surface-2, #f2f4f7); color: var(--text-2); margin-inline-end: 4px; }
+.st-kind.payment { background: #ecfdf3; color: #027a48; }
+.st-kind.expense { background: #eef4ff; color: #3538cd; }
+.st-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+@media (max-width: 760px) {
+  .ms-cards { grid-template-columns: 1fr; }
+  .ms-row { grid-template-columns: 1fr; }
+  .ms-debtor { grid-template-columns: 1fr auto; }
+  .ms-debtor-acts { grid-column: 1 / -1; }
+  .st-totals { grid-template-columns: 1fr 1fr; }
+  .st-totals div:last-child { grid-column: 1 / -1; }
+}

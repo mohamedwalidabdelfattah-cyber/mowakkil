@@ -43,7 +43,7 @@ async function list({ env, officeId, url }) {
 }
 
 async function init({ env, authUser, officeId, request }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const result = await initializeChartOfAccounts(env, officeId);
@@ -59,7 +59,7 @@ async function init({ env, authUser, officeId, request }) {
 }
 
 async function get({ env, officeId, params }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const id = toInt(params[0]);
@@ -71,7 +71,7 @@ async function get({ env, officeId, params }) {
 }
 
 async function create({ request, env, authUser, officeId }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const b = await safeJson(request);
@@ -112,7 +112,7 @@ async function create({ request, env, authUser, officeId }) {
 }
 
 async function update({ request, env, authUser, officeId, params }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const id = toInt(params[0]);
@@ -154,7 +154,7 @@ async function update({ request, env, authUser, officeId, params }) {
 }
 
 async function remove({ request, env, authUser, officeId, params }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const id = toInt(params[0]);

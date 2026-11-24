@@ -98,7 +98,8 @@ export function clearCache() {
 // ============================================================
 // HTTP helpers
 // ============================================================
-async function handle(res) {
+// silent: طلبات الخلفية (التحميل المسبق) متطلّعش نوافذ ترقية/حدود في وش المستخدم
+async function handle(res, silent = false) {
   if (res.status === 401) { onAuthExpired(); throw new Error('انتهت الجلسة'); }
   if (res.status === 402) { onTrialExpired(); throw new Error('انتهت التجربة'); }
 
@@ -126,12 +127,12 @@ async function handle(res) {
       const body = await cloned.json();
 
       if (body?.code === 'UPGRADE_REQUIRED') {
-        showUpgradeModal(body.feature, body.required_plan);
+        if (!silent) showUpgradeModal(body.feature, body.required_plan);
         throw new Error(body.error || 'الميزة دي محتاجة ترقية');
       }
 
       if (body?.code === 'LIMIT_REACHED') {
-        showLimitModal(body);
+        if (!silent) showLimitModal(body);
         throw new Error(body.error || 'وصلت للحد الأقصى');
       }
     } catch (e) {
@@ -178,7 +179,7 @@ export async function api(path, opts = {}) {
   }
   // أي تعديل (إضافة/تعديل/حذف) ناجح → نمسح كاش القراءة عشان القوايم تتحدث فوراً
   if (method !== 'GET' && res.ok) clearCache();
-  return handle(res);
+  return handle(res, !!opts.silent);
 }
 
 export async function apiJson(path, opts = {}) {

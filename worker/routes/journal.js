@@ -33,7 +33,7 @@ export const routes = [
 ];
 
 async function list({ env, officeId, url }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const fromDate = url.searchParams.get('from');
@@ -59,7 +59,7 @@ async function list({ env, officeId, url }) {
 }
 
 async function get({ env, officeId, params }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const id = toInt(params[0]);
@@ -69,7 +69,7 @@ async function get({ env, officeId, params }) {
 }
 
 async function create({ request, env, authUser, officeId }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const b = await safeJson(request);
@@ -101,7 +101,7 @@ async function create({ request, env, authUser, officeId }) {
 }
 
 async function remove({ request, env, authUser, officeId, params }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const id = toInt(params[0]);
@@ -118,7 +118,7 @@ async function remove({ request, env, authUser, officeId, params }) {
 }
 
 async function balance({ env, officeId, params, url }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const id = toInt(params[0]);
@@ -128,7 +128,7 @@ async function balance({ env, officeId, params, url }) {
 }
 
 async function ledger({ env, officeId, params, url }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const id = toInt(params[0]);
@@ -140,7 +140,7 @@ async function ledger({ env, officeId, params, url }) {
 }
 
 async function trialBalance({ env, officeId, url }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const from = url.searchParams.get('from');
@@ -150,7 +150,7 @@ async function trialBalance({ env, officeId, url }) {
 }
 
 async function profitLoss({ env, officeId, url }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const now = new Date();
@@ -181,7 +181,7 @@ async function cashFlow({ env, officeId, url }) {
 }
 
 async function accountingSummary({ env, officeId, url }) {
-  const gate = await requireFeature(env, officeId, 'finance');
+  const gate = await requireFeature(env, officeId, 'accounting');
   if (gate) return gate;
 
   const now = new Date();

@@ -418,12 +418,12 @@ async function renderFees(host) {
       ${data.fees.length ? data.fees.map(f => `
         <div class="item">
           <div class="top">
-            <span class="name">${fmtMoney(f.amount_due)} ج</span>
+            <span class="name">${fmtMoney(f.amount_due)}</span>
             <span class="badge ${f.status === 'مدفوع بالكامل' ? 'active' : 'trial'}">${esc(f.status)}</span>
           </div>
           <div class="meta">
             ${f.case_number ? '📁 ' + esc(f.case_number) + ' · ' : ''}
-            مدفوع: ${fmtMoney(f.amount_paid)} ج · ${esc(f.due_date || '')}
+            مدفوع: ${fmtMoney(f.amount_paid)} · ${esc(f.due_date || '')}
           </div>
           ${f.notes ? `<div class="meta">📝 ${esc(f.notes)}</div>` : ''}
           <div class="progress-bar">
@@ -432,7 +432,20 @@ async function renderFees(host) {
         </div>
       `).join('') : empty('مفيش أتعاب مسجّلة')}
     </div>
+    <div class="card" id="portal-statement"><h3>📄 كشف حسابي</h3><div class="meta">جاري التحميل…</div></div>
   `;
+  // كشف الحساب: الأتعاب + المصاريف اللي على حسابي + دفعاتي
+  try {
+    const s = await api('/api/client-portal/statement');
+    const SYM = { EGP: 'ج', SAR: 'ر.س', AED: 'د.إ', KWD: 'د.ك', QAR: 'ر.ق', BHD: 'د.ب', OMR: 'ر.ع' }[s.currency] || 'ج';
+    const el = host.querySelector('#portal-statement');
+    if (!el) return;
+    el.innerHTML = `<h3>📄 كشف حسابي</h3>
+      <div class="meta" style="margin-bottom:8px">عليك ${fmtMoney(s.totals.charged)} ${SYM} · دفعت ${fmtMoney(s.totals.paid)} ${SYM} · <strong>${s.totals.balance > 0 ? 'الباقي ' + fmtMoney(s.totals.balance) + ' ' + SYM : 'الحساب خالص ✅'}</strong></div>
+      ${s.lines.length ? `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr><th style="text-align:right;padding:6px">التاريخ</th><th style="text-align:right;padding:6px">البيان</th><th style="padding:6px">عليك</th><th style="padding:6px">دفعت</th><th style="padding:6px">الرصيد</th></tr></thead>
+        <tbody>${s.lines.map(l => `<tr style="border-top:1px solid var(--border, #eaecf0)"><td style="padding:6px;white-space:nowrap">${esc(l.date)}</td><td style="padding:6px">${esc(l.description)}</td><td style="padding:6px;white-space:nowrap">${l.charge ? fmtMoney(l.charge) : ''}</td><td style="padding:6px;white-space:nowrap;color:#027a48">${l.paid ? fmtMoney(l.paid) : ''}</td><td style="padding:6px;white-space:nowrap">${fmtMoney(l.balance)}</td></tr>`).join('')}</tbody></table></div>` : empty('مفيش حركات')}`;
+  } catch { host.querySelector('#portal-statement')?.remove(); }
 }
 
 async function renderInvoices(host) {

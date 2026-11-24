@@ -6,6 +6,7 @@ import { caseTypeOptions, degreeOptions } from '../case-types.js';
 import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
+import { openModal } from '../modal.js';
 import { can } from '../access.js';
 import { openWhatsAppComposer, localDateStr } from '../whatsapp.js';
 import { mountAiMeter } from '../ai-usage.js';
@@ -429,17 +430,40 @@ async function showCaseDetail(id, initialTab = 'overview') {
       }
 
       if (tab === 'expenses') {
-        el.innerHTML = expenses.length
-          ? expenses.map(x => `
+        const SRC = { session: 'جلسة', task: 'مهمة', general: 'مصروف' };
+        const onClient = expenses.filter(x => x.billable).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+        el.innerHTML = `
+          ${can('expenses.create') ? `<button class="btn btn-primary btn-sm" data-add-case-expense style="margin-bottom:10px">➕ مصروف على القضية</button>` : ''}
+          ${onClient ? `<div class="meta" style="margin-bottom:8px">على حساب الموكل: <strong>${fmtMoney(onClient)} ${cur()}</strong> (بتظهر في كشف حسابه)</div>` : ''}
+          ${expenses.length ? expenses.map(x => `
               <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
                 <div class="top">
                   <span class="name">${esc(x.description || 'مصروف')}</span>
                   <span class="num mono" style="color:var(--danger)">${fmtMoney(x.amount)} ${cur()}</span>
                 </div>
-                <div class="meta">📅 ${esc(x.session_date || x.created_at?.slice(0,10) || '')}</div>
+                <div class="meta">📅 ${esc(x.session_date || x.date || '')} · ${SRC[x.source] || ''} · <span class="exp-who ${x.billable ? 'client' : 'office'}">${x.billable ? 'على الموكل' : 'على المكتب'}</span></div>
               </div>
-            `).join('')
-          : empty('مفيش مصاريف', '💸');
+            `).join('') : empty('مفيش مصاريف', '💸')}`;
+        el.querySelector('[data-add-case-expense]')?.addEventListener('click', async () => {
+          const res = await openModal({
+            title: '➕ مصروف على القضية',
+            submitText: 'حفظ',
+            initialData: { expense_date: localISO(), is_reimbursable: c.client_id ? '1' : '0', payment_method: 'نقدي' },
+            fields: [
+              { name: 'description', label: 'الوصف', required: true, placeholder: 'رسوم قيد الدعوى / دمغات / انتقالات' },
+              { name: 'amount', label: `المبلغ (${cur()})`, type: 'number', required: true },
+              { name: 'expense_date', label: 'التاريخ', type: 'date', required: true },
+              { name: 'is_reimbursable', label: 'مين هيتحمّله؟', type: 'select', options: [
+                ...(c.client_id ? [{ value: '1', label: 'الموكل (يتضاف لحسابه وكشف حسابه)' }] : []),
+                { value: '0', label: 'المكتب' }] },
+              { name: 'payment_method', label: 'اتدفع إزاي', type: 'select', options: ['نقدي', 'تحويل بنكي', 'إنستاباي', 'فودافون كاش', 'شيك'] },
+            ],
+            onSubmit: async (d) => {
+              await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, amount: Number(d.amount), case_id: c.id, client_id: c.client_id || null, is_reimbursable: d.is_reimbursable === '1' ? 1 : 0 }) });
+            },
+          });
+          if (res) { toast('✓ اتسجل المصروف', 'ok'); showCaseDetail(c.id, 'expenses'); }
+        });
       }
 
       if (tab === 'docs') {
@@ -474,6 +498,7 @@ async function showCaseDetail(id, initialTab = 'overview') {
     };
 
     renderTab(initialTab);
+    modal.querySelectorAll('.case-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === initialTab));
 
     modal.querySelectorAll('.case-tab').forEach(btn => {
       btn.addEventListener('click', () => {

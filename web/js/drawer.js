@@ -2,7 +2,7 @@
 // القائمة الجانبية
 
 import { showView, getCurrentView } from './router.js';
-import { getRoleFromToken, getNameFromToken } from './api.js';
+import { getRoleFromToken, getNameFromToken, hasFeature } from './api.js';
 import { canView, getAccessState } from './access.js';
 
 const ICONS = {
@@ -143,9 +143,13 @@ function renderMenu() {
   const isAdmin = role === 'admin';
 
   // كل قسم بيظهر حسب صلاحيات المستخدم (web/js/access.js)
+  // دفتر اليومية ودليل الحسابات والقوائم المالية: للمحاسب أو لما "وضع المحاسب" يتفعّل من صفحة الإدارة المالية
+  let accMode = false;
+  try { accMode = localStorage.getItem('mowakkil_acc_mode') === '1'; } catch {}
+  const showAccounting = hasFeature('accounting') && (accMode || getAccessState()?.role === 'accountant');
   nav.innerHTML = MENU
     .filter(item => (!item.adminOnly || isAdmin) && canView(item.id))
-    .map(item => ({ ...item, sub: item.sub?.filter(s => canView(s.id)) }))
+    .map(item => ({ ...item, sub: item.sub?.filter(s => canView(s.id) && (showAccounting || !s.id.startsWith('accounting-'))) }))
     .map(item => {
       const hasSub = item.sub && item.sub.length > 0;
       return `

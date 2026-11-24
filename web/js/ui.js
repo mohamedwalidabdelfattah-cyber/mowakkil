@@ -179,6 +179,7 @@ const FEATURE_LABELS = {
   ai: 'الذكاء الاصطناعي',
   advanced_reports: 'التقارير المتقدمة',
   whatsapp: 'تكامل واتساب',
+  accounting: 'المحاسبة الكاملة (القيود والقوائم المالية)',
   multi_office: 'مكاتب متعددة',
   api: 'API Access',
 };

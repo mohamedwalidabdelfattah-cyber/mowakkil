@@ -1,4 +1,6 @@
 import { ok, fail } from '../lib/response.js';
+import { buildStatement } from '../services/client-statement.js';
+import { can } from '../lib/permissions.js';
 import { audit } from '../lib/audit.js';
 import { isStr, toInt, safeJson } from '../lib/validation.js';
 import {
@@ -16,6 +18,7 @@ export const routes = [
   { method: 'GET',    path: '/api/clients',                     handler: list },
   { method: 'POST',   path: '/api/clients',                     handler: create },
   { method: 'GET',    path: /^\/api\/clients\/(\d+)\/profile$/, handler: profile },
+  { method: 'GET',    path: /^\/api\/clients\/(\d+)\/statement$/, handler: statement },
   { method: 'DELETE', path: /^\/api\/clients\/(\d+)$/,          handler: remove },
 
   // Client Portal management
@@ -198,4 +201,16 @@ async function remove({ env, authUser, officeId, params }) {
     action: 'delete', entity: 'client', entity_id: id,
   });
   return ok(env, { deleted: true });
+}
+
+// ============================================================
+// كشف حساب الموكل (اللي عليه، اللي دفعه، الرصيد)
+// ============================================================
+async function statement({ env, officeId, params, access }) {
+  if (!(access?.role === 'admin' || can(access, 'fees.view'))) return fail(env, 'مش عندك صلاحية تشوف الحسابات', 403, { code: 'PERMISSION_DENIED' });
+  const s = await buildStatement(env, officeId, Number(params[0]));
+  if (!s) return fail(env, 'الموكل مش موجود', 404);
+  const office = await env.DB.prepare('SELECT name, name_ar FROM offices WHERE id = ?').bind(officeId).first();
+  const st = await env.DB.prepare('SELECT currency FROM office_settings WHERE office_id = ?').bind(officeId).first();
+  return ok(env, { ...s, office: office || {}, currency: st?.currency || 'EGP' });
 }

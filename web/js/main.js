@@ -229,6 +229,8 @@ loginView.bindForm();
 
 async function initSubscription() {
   const sub = await fetchSubscription(true);
+  // القايمة الجانبية تتظبط على ميزات الباقة (مثلاً المحاسبة الكاملة)
+  document.dispatchEvent(new CustomEvent('mowakkil:access-changed'));
   if (sub) {
     if (sub.status === 'trial' && sub.days_remaining <= 7) {
       showTrialBanner(sub.days_remaining, sub.plan);

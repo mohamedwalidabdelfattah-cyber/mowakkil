@@ -8,11 +8,11 @@ let plansData = [];
 
 // ✅ بيانات تجريبية للاختبار المحلي
 const MOCK_PLANS = [
-  { plan: 'starter', display_name: 'الأساسية', display_name_en: 'Starter', price_egp: 199, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true }, limits: { max_users: 3, max_cases: -1, max_clients: -1, max_storage_mb: 500 } },
-  { plan: 'pro', display_name: 'الاحترافية', display_name_en: 'Pro', price_egp: 399, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true }, limits: { max_users: 5, max_cases: -1, max_clients: -1, max_storage_mb: 2000, ai_monthly: 300 } },
-  { plan: 'plus', display_name: 'المتقدمة', display_name_en: 'Plus', price_egp: 799, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true, whatsapp: true, multi_office: true, api: true }, limits: { max_users: 20, max_cases: -1, max_clients: -1, max_storage_mb: 5000, ai_monthly: 1000 } },
-  { plan: 'lifetime_basic', display_name: 'التأسيس (مدى الحياة)', display_name_en: 'Lifetime Basic', price_egp: 4999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true }, limits: { max_users: 3, max_cases: -1, max_clients: -1, max_storage_mb: 500 } },
-  { plan: 'lifetime_pro', display_name: 'المكتب المتكامل (مدى الحياة)', display_name_en: 'Lifetime Pro', price_egp: 9999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, ai: true, advanced_reports: true, whatsapp: true, api: true }, limits: { max_users: 10, max_cases: -1, max_clients: -1, max_storage_mb: 2000, ai_monthly: 300 } },
+  { plan: 'starter', display_name: 'الأساسية', display_name_en: 'Starter', price_egp: 199, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, accounting: false }, limits: { max_users: 3, max_cases: -1, max_clients: -1, max_storage_mb: 500 } },
+  { plan: 'pro', display_name: 'الاحترافية', display_name_en: 'Pro', price_egp: 399, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, accounting: true, ai: true, advanced_reports: true }, limits: { max_users: 5, max_cases: -1, max_clients: -1, max_storage_mb: 2000, ai_monthly: 300 } },
+  { plan: 'plus', display_name: 'المتقدمة', display_name_en: 'Plus', price_egp: 799, billing_type: 'monthly', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, accounting: true, ai: true, advanced_reports: true, whatsapp: true, multi_office: true, api: true }, limits: { max_users: 20, max_cases: -1, max_clients: -1, max_storage_mb: 5000, ai_monthly: 1000 } },
+  { plan: 'lifetime_basic', display_name: 'التأسيس (مدى الحياة)', display_name_en: 'Lifetime Basic', price_egp: 4999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true, finance: true }, limits: { max_users: 3, max_cases: -1, max_clients: -1, max_storage_mb: 500 } },
+  { plan: 'lifetime_pro', display_name: 'المكتب المتكامل (مدى الحياة)', display_name_en: 'Lifetime Pro', price_egp: 9999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, accounting: true, ai: true, advanced_reports: true, whatsapp: true, api: true }, limits: { max_users: 10, max_cases: -1, max_clients: -1, max_storage_mb: 2000, ai_monthly: 300 } },
 ];
 
 const I18N = {
@@ -30,7 +30,7 @@ const I18N = {
     footerHome: 'الرئيسية', footerWa: 'تواصل', login: 'دخول',
     popular: 'الأكثر شعبية', subscribe: '🚀 اشترك الآن', subscribeFree: '🎁 ابدأ مجانًا',
     perMonth: '/ شهر', forever: 'للأبد', once: 'مرة واحدة',
-    featureLabels: { cases: 'إدارة القضايا', clients: 'إدارة الموكلين', agenda: 'الأجندة والجلسات', portal: 'بوابة الموكل', finance: 'الإدارة المالية', invoices: 'الفواتير والضرائب', ai: 'الذكاء الاصطناعي', advanced_reports: 'التقارير المتقدمة', whatsapp: 'تكامل واتساب', multi_office: 'مكاتب متعددة', api: 'API Access' },
+    featureLabels: { cases: 'إدارة القضايا', clients: 'إدارة الموكلين', agenda: 'الأجندة والجلسات', portal: 'بوابة الموكل', finance: 'الأتعاب والتحصيل والمصروفات وكشف الحساب', invoices: 'الفواتير والضرائب', accounting: 'المحاسبة الكاملة (قيود وقوائم مالية)', ai: 'الذكاء الاصطناعي', advanced_reports: 'التقارير المتقدمة', whatsapp: 'تكامل واتساب', multi_office: 'مكاتب متعددة', api: 'API Access' },
     limitLabels: { max_users: 'المستخدمين', max_cases: 'القضايا', max_clients: 'الموكلين', max_storage_mb: 'التخزين', ai_monthly: 'طلبات الذكاء الاصطناعي / شهر' },
     faqs: [
       { q: 'إيه الفرق بين الباقات؟', a: 'الأساسية للمكاتب الصغيرة وفيها المحاسبة والفواتير، الاحترافية تضيف الذكاء الاصطناعي والتقارير المتقدمة، والمتقدمة للمكاتب الكبيرة.' },
@@ -55,7 +55,7 @@ const I18N = {
     footerHome: 'Home', footerWa: 'Contact', login: 'Login',
     popular: 'Most Popular', subscribe: '🚀 Subscribe', subscribeFree: '🎁 Start Free',
     perMonth: '/ month', forever: 'forever', once: 'once',
-    featureLabels: { cases: 'Case Management', clients: 'Client Management', agenda: 'Agenda & Sessions', portal: 'Client Portal', finance: 'Financial Management', invoices: 'Invoices & Tax', ai: 'AI', advanced_reports: 'Advanced Reports', whatsapp: 'WhatsApp', multi_office: 'Multi Offices', api: 'API Access' },
+    featureLabels: { cases: 'Case Management', clients: 'Client Management', agenda: 'Agenda & Sessions', portal: 'Client Portal', finance: 'Fees, collections & expenses', invoices: 'Invoices & Tax', accounting: 'Full accounting (journal & statements)', ai: 'AI', advanced_reports: 'Advanced Reports', whatsapp: 'WhatsApp', multi_office: 'Multi Offices', api: 'API Access' },
     limitLabels: { max_users: 'Users', max_cases: 'Cases', max_clients: 'Clients', max_storage_mb: 'Storage', ai_monthly: 'AI requests / month' },
     faqs: [
       { q: 'What is the difference between plans?', a: 'Starter for small firms (with finance & invoices), Pro adds AI and advanced reports, Plus for large firms.' },

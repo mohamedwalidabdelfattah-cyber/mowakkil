@@ -3,8 +3,10 @@ import { audit } from '../lib/audit.js';
 import { toInt, safeJson } from '../lib/validation.js';
 import { autoEntryFeeCreated, recordPayment, deleteEntriesFor, REF, syncInvoiceEntry } from '../services/accounting.js';
 import { requireFeature } from '../middleware/feature-gate.js';
+import { cashSummary } from '../services/client-statement.js';
 
 export const routes = [
+  { method: 'GET',    path: '/api/fees/cash-summary', handler: cashSummaryRoute },
   { method: 'GET',    path: '/api/fees',                handler: list },
   { method: 'POST',   path: '/api/fees',                handler: create },
   { method: 'PATCH',  path: /^\/api\/fees\/(\d+)$/,     handler: markPaid },
@@ -184,4 +186,16 @@ async function removeFee({ request, env, authUser, officeId, params }) {
   });
 
   return ok(env, { deleted: true });
+}
+
+// ============================================================
+// الوضع المبسط: اللي دخل واللي خرج فعلاً + مين عليه فلوس
+// ============================================================
+async function cashSummaryRoute({ env, officeId, url }) {
+  const gate = await requireFeature(env, officeId, 'finance');
+  if (gate) return gate;
+  const from = url.searchParams.get('from');
+  const to = url.searchParams.get('to');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '')) return fail(env, 'from و to مطلوبين', 400);
+  return ok(env, await cashSummary(env, officeId, from, to));
 }

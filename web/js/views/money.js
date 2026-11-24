@@ -1,7 +1,8 @@
 // web/js/views/money.js
 // الإدارة المالية المبسّطة
 
-import { apiJson } from '../api.js';
+import { apiJson, hasFeature } from '../api.js';
+import { renderSimple } from './money-simple.js';
 import { esc, toast, empty, skeleton, fmtMoney, cur, curName, localISO, monthStartISO, monthEndISO, defaultVat } from '../ui.js';
 import { openModal } from '../modal.js';
 
@@ -28,9 +29,9 @@ export async function render(host, options = {}) {
     switch (currentSub) {
       case 'money-expenses': return await renderExpenses(host);
       case 'money-income':   return await renderIncome(host);
-      case 'money-reports':  return await renderSimpleReports(host);
+      case 'money-reports':  return await renderSimple(host);
       case 'money-invoices': return await renderInvoices(host);
-      default:               return await renderDashboard(host);
+      default:               return await renderSimple(host); // الوضع المبسط (الفلوس اللي دخلت وخرجت فعلاً)
     }
   } catch (e) {
     host.innerHTML = `<div class="card">${empty('خطأ: ' + e.message, '⚠️')}</div>`;
@@ -165,7 +166,7 @@ async function renderDashboard(host) {
 }
 
 function monthName(date) {
-  return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
+  return date.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long' });
 }
 
 function renderExpenseBreakdown(groups) {
@@ -217,7 +218,7 @@ async function drawMoneyOverviewChart() {
       const from = localISO(d);
       const to = monthEndISO(d);
 
-      months.push(d.toLocaleDateString('ar-EG', { month: 'short' }));
+      months.push(d.toLocaleDateString('ar-EG-u-nu-latn', { month: 'short' }));
 
       try {
         const summary = await apiJson(`/api/reports/accounting-summary?from=${from}&to=${to}`);
@@ -349,6 +350,8 @@ async function renderExpenses(host) {
   `;
 
   host.querySelector('#add-expense').addEventListener('click', async () => {
+    let casesList = [];
+    try { const cs = await apiJson('/api/cases'); casesList = Array.isArray(cs) ? cs : (cs.items || []); } catch {}
     const accountOpts = expenseAccounts.map(a => ({ value: a.id, label: a.name }));
     const result = await openModal({
       title: '➕ إضافة مصروف',
@@ -363,11 +366,14 @@ async function renderExpenses(host) {
         { name: 'payment_method', label: '💳 طريقة الدفع', type: 'datalist',
           placeholder: 'نقدي',
           options: ['نقدي', 'تحويل بنكي', 'شيك', 'فودافون كاش', 'إنستاباي'] },
+        { name: 'case_id', label: '📁 القضية (لو المصروف خاص بقضية)', type: 'select', options: [{ value: '', label: '— مصروف عام على المكتب —' }, ...casesList.map(c => ({ value: c.id, label: (c.case_number || 'قضية #' + c.id) + (c.client_name ? ' — ' + c.client_name : '') }))] },
+        { name: 'is_reimbursable', label: '👤 مين هيتحمّله؟', type: 'select', options: [{ value: '0', label: 'المكتب (مصروف على المكتب)' }, { value: '1', label: 'الموكل (يتضاف لحسابه وكشف حسابه)' }] },
         { name: 'vendor', label: '🏢 الجهة / المورد', placeholder: 'مالك العقار' },
         { name: 'notes', label: '📝 ملاحظات', type: 'textarea' },
       ],
       onSubmit: async (d) => {
-        await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify(d) });
+        if (d.is_reimbursable === '1' && !d.case_id) throw new Error('اختار القضية عشان نعرف الموكل اللي هيتحمّل المصروف');
+        await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, case_id: d.case_id || null, is_reimbursable: d.is_reimbursable === '1' ? 1 : 0 }) });
       },
     });
     if (result) { toast('اتحفظ ✓', 'ok'); render(host, { subView: 'money-expenses' }); }
@@ -391,30 +397,33 @@ async function renderIncome(host) {
   const from = monthStartISO(now);
   const to = localISO(now);
 
-  const pl = await apiJson(`/api/reports/profit-loss?from=${from}&to=${to}`);
+  const pl = hasFeature('accounting')
+    ? await apiJson(`/api/reports/profit-loss?from=${from}&to=${to}`).catch(() => ({ revenues: [] }))
+    : { revenues: [], hidden: true };
   const payments = await apiJson('/api/payments');
 
-  const monthPayments = payments.filter(p => p.payment_date?.startsWith(now.toISOString().slice(0, 7)));
+  const monthPayments = payments.filter(p => p.payment_date?.startsWith(localISO(now).slice(0, 7)));
   const monthTotal = monthPayments.reduce((s, p) => s + (p.amount || 0), 0);
 
   host.innerHTML = `
     <div class="card">
-      <h3>💰 الإيرادات — ${esc(monthName(now))}</h3>
+      <h3>💰 اللي اتحصّل فعلاً — ${esc(monthName(now))}</h3>
       <div style="text-align:center;padding:16px 0">
         <div style="font-size:32px;font-weight:900;color:var(--success)">${fmtMoney(monthTotal)} ${cur()}</div>
         <div style="font-size:12px;color:var(--text-soft);margin-top:4px">إجمالي الشهر</div>
       </div>
     </div>
 
-    <div class="card">
-      <h3>📊 مصادر الدخل</h3>
+    ${pl.hidden ? '' : `<div class="card">
+      <h3>📊 الأتعاب والإيرادات المسجلة</h3>
+      <div class="meta" style="margin:-4px 0 8px">ده إجمالي اللي اتفقت عليه أو فوترته الشهر ده — مش كله اتحصّل. اللي اتحصّل فعلاً فوق.</div>
       ${pl.revenues.length ? pl.revenues.map(r => `
         <div class="report-row">
           <span>💵 ${esc(r.name)}</span>
           <span style="color:var(--success);font-weight:700">${fmtMoney(r.amount)} ${cur()}</span>
         </div>
       `).join('') : empty('مفيش إيرادات الشهر ده', '💰')}
-    </div>
+    </div>`}
 
     <div class="card">
       <h3>📋 آخر التحصيلات</h3>

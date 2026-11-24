@@ -1,7 +1,7 @@
 // web/js/views/dashboard.js
 // لوحة التحكم — تصميم v7
 
-import { apiJson } from '../api.js';
+import { apiJson, hasFeature, fetchSubscription } from '../api.js';
 import { esc, empty, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { icon } from '../icons.js';
 import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
@@ -25,15 +25,17 @@ export async function render(host) {
 
   const loadAndRender = async () => {
     // 1) ملخص مالي — لو 403 يبقى الباقة مش فيها finance
-    let hasFinance = true;
+    await fetchSubscription().catch(() => {}); // نعرف الباقة قبل ما نطلب حاجة مش فيها
+    let hasFinance = hasFeature('finance');
     let summary = {};
     let pl = {};
     const range = getRangeForFilter(currentFilters.period);
 
-    try {
+    // القوائم المحاسبية للباقات اللي فيها المحاسبة الكاملة بس (من غيرها: الأرقام من الفلوس اللي دخلت وخرجت)
+    if (hasFinance && hasFeature('accounting')) try {
       [summary, pl] = await Promise.all([
-        apiJson(`/api/reports/accounting-summary?from=${range.from}&to=${range.to}`),
-        apiJson(`/api/reports/profit-loss?from=${range.from}&to=${range.to}`),
+        apiJson(`/api/reports/accounting-summary?from=${range.from}&to=${range.to}`, { silent: true }),
+        apiJson(`/api/reports/profit-loss?from=${range.from}&to=${range.to}`, { silent: true }),
       ]);
     } catch (e) {
       if (e.message?.includes('🔒') || e.message?.includes('ترقية')) hasFinance = false;
@@ -60,7 +62,12 @@ export async function render(host) {
 
     const revenue = summary.revenue || 0;
     const expenses = summary.expenses || 0;
-    const net = revenue - expenses;
+    // الرقم اللي فوق: الفلوس اللي دخلت فعلاً ناقص اللي اتصرف (زي الوضع المبسط) — مش الأتعاب المتفق عليها
+    let net = revenue - expenses;
+    if (hasFinance) {
+      try { const cs = await apiJson(`/api/fees/cash-summary?from=${range.from}&to=${range.to}`, { skipCache: true }); net = cs.net; } catch {}
+      if (!host.isConnected) return;
+    }
 
     Object.values(charts).forEach(c => c?.destroy?.());
     charts = {};
@@ -86,13 +93,13 @@ export async function render(host) {
         <div style="position:relative;z-index:1">
           <div class="welcome-label">${greeting}</div>
           <div class="welcome-title">${esc(userName)}</div>
-          <div class="welcome-sub">${esc(now.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))}</div>
+          <div class="welcome-sub">${esc(now.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))}</div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1">
           ${hasFinance ? `
             <div class="welcome-badge">
-              <div class="badge-label">${net >= 0 ? 'صافي الربح' : 'صافي الخسارة'} · ${PERIODS.find(p => p[0] === currentFilters.period)?.[1]}</div>
-              <div class="badge-value">${fmtMoney(Math.abs(net))} <span style="font-size:13px;font-weight:500">ج.م</span></div>
+              <div class="badge-label">${net >= 0 ? 'اللي فضل معاك' : 'صرفت أكتر من اللي دخل'} · ${PERIODS.find(p => p[0] === currentFilters.period)?.[1]}</div>
+              <div class="badge-value">${fmtMoney(Math.abs(net))} <span style="font-size:13px;font-weight:500">${cur()}</span></div>
             </div>` : ''}
           <div class="welcome-badge">
             <div class="badge-label">جلسات النهارده</div>
@@ -239,7 +246,7 @@ function fmtShortDate(s) {
   if (!s) return '—';
   const d = new Date(s);
   if (isNaN(d)) return s;
-  return d.toLocaleDateString('ar-EG', { weekday: 'short', day: 'numeric', month: 'short' });
+  return d.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 // ============================================================

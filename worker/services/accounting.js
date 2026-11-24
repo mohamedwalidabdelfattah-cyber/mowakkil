@@ -246,12 +246,12 @@ export async function deleteEntriesFor(env, officeId, refType, refId) {
 //   مدين: الصندوق أو البنك (حسب طريقة الدفع)
 //   دائن: العملاء (لو على أتعاب أو فاتورة) — أو دفعات مقدمة (لو لسه مفيش أتعاب)
 // ============================================================
-export async function autoEntryPayment(env, { officeId, paymentId, amount, date, method, description, feeId = null, invoiceId = null, userId }) {
+export async function autoEntryPayment(env, { officeId, paymentId, amount, date, method, description, feeId = null, invoiceId = null, clientId = null, userId }) {
   try {
     const moneyAcc = await getAccountByCode(env, officeId, moneyAccountCode(method))
       || await getAccountByCode(env, officeId, '1101');
     if (!moneyAcc) return null;
-    const creditAcc = await getAccountByCode(env, officeId, (feeId || invoiceId) ? '1103' : '2106');
+    const creditAcc = await getAccountByCode(env, officeId, (feeId || invoiceId || clientId) ? '1103' : '2106');
     if (!creditAcc) return null;
 
     return await createJournalEntry(env, {
@@ -292,12 +292,14 @@ export async function autoEntryFeeCreated(env, { officeId, feeId, amount, date, 
 //   refType: 'expense' | 'session_expense' | 'task_expense'
 //   الدائن: الصندوق أو البنك حسب طريقة الدفع
 // ============================================================
-export async function autoEntryExpense(env, { officeId, expenseId, amount, date, description, accountCode = '5406', method = null, refType = REF.expense, userId }) {
+export async function autoEntryExpense(env, { officeId, expenseId, amount, date, description, accountCode = '5406', method = null, refType = REF.expense, billable = false, userId }) {
   try {
     const moneyAcc = await getAccountByCode(env, officeId, moneyAccountCode(method))
       || await getAccountByCode(env, officeId, '1101');
-    const expenseAcc = await getAccountByCode(env, officeId, accountCode)
-      || await getAccountByCode(env, officeId, '5406');
+    // على حساب الموكل: الفلوس خرجت من المكتب بس الموكل هو اللي مديون بيها (مش مصروف على المكتب)
+    const expenseAcc = billable
+      ? await getAccountByCode(env, officeId, '1103')
+      : (await getAccountByCode(env, officeId, accountCode) || await getAccountByCode(env, officeId, '5406'));
     if (!moneyAcc || !expenseAcc) return null;
 
     return await createJournalEntry(env, {
@@ -385,7 +387,7 @@ export async function recordPayment(env, { officeId, userId = null, amount, meth
   await autoEntryPayment(env, {
     officeId, paymentId, amount, date: day, method,
     description: `تحصيل دفعة - ${receipt}${inv ? ' - فاتورة ' + inv.invoice_number : ''}`,
-    feeId, invoiceId, userId,
+    feeId, invoiceId, clientId: client, userId,
   });
   return { id: paymentId, receipt_number: receipt, client_id: client, fee, invoice: inv };
 }

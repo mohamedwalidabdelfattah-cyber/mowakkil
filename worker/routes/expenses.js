@@ -173,6 +173,11 @@ async function create({ request, env, authUser, officeId }) {
 
   const tax = Number(b.tax_amount) || 0;
   const total = amount + tax;
+  if (b.case_id && !b.client_id) {
+    const c = await env.DB.prepare('SELECT client_id FROM cases WHERE id = ? AND office_id = ?').bind(b.case_id, officeId).first();
+    if (c?.client_id) b.client_id = c.client_id;
+  }
+  if (b.is_reimbursable && !b.client_id) return fail(env, 'المصروف على حساب الموكل محتاج قضية أو موكل', 400);
 
   let accountId = b.account_id || null;
   if (accountId) {
@@ -231,6 +236,7 @@ async function create({ request, env, authUser, officeId }) {
       accountCode,
       method: b.payment_method || null,
       refType: REF.expense,
+      billable: !!b.is_reimbursable,
       userId: authUser.user_id,
     });
   } catch (e) {
@@ -273,6 +279,7 @@ async function update({ request, env, authUser, officeId, params }) {
     const binds = [];
     if (b.description !== undefined) { fields.push('description = ?'); binds.push(b.description); }
     if (b.amount !== undefined)      { fields.push('amount = ?'); binds.push(Number(b.amount)); }
+    if (b.billable !== undefined)    { fields.push('billable = ?'); binds.push(b.billable ? 1 : 0); }
 
     if (!fields.length) return fail(env, 'مفيش تغييرات', 400);
     binds.push(id);
@@ -296,6 +303,7 @@ async function update({ request, env, authUser, officeId, params }) {
     const binds = [];
     if (b.description !== undefined) { fields.push('description = ?'); binds.push(b.description); }
     if (b.amount !== undefined)      { fields.push('amount = ?'); binds.push(Number(b.amount)); }
+    if (b.billable !== undefined)    { fields.push('billable = ?'); binds.push(b.billable ? 1 : 0); }
 
     if (!fields.length) return fail(env, 'مفيش تغييرات', 400);
     binds.push(id);
@@ -328,6 +336,7 @@ async function update({ request, env, authUser, officeId, params }) {
   if (b.case_id !== undefined)            { fields.push('case_id = ?'); binds.push(b.case_id || null); }
   if (b.client_id !== undefined)          { fields.push('client_id = ?'); binds.push(b.client_id || null); }
   if (b.notes !== undefined)              { fields.push('notes = ?'); binds.push(b.notes); }
+  if (b.is_reimbursable !== undefined)    { fields.push('is_reimbursable = ?'); binds.push(b.is_reimbursable ? 1 : 0); }
 
   if (!fields.length) return fail(env, 'مفيش تغييرات', 400);
   binds.push(id, officeId);
@@ -341,7 +350,7 @@ async function update({ request, env, authUser, officeId, params }) {
   if (e2) {
     await deleteEntriesFor(env, officeId, REF.expense, id);
     await autoEntryExpense(env, { officeId, expenseId: id, amount: Number(e2.total_amount) || Number(e2.amount) || 0, date: e2.expense_date,
-      description: e2.description, accountCode: e2.account_code || '5406', method: e2.payment_method, refType: REF.expense, userId: authUser.user_id });
+      description: e2.description, accountCode: e2.account_code || '5406', method: e2.payment_method, refType: REF.expense, billable: !!e2.is_reimbursable, userId: authUser.user_id });
   }
 
   return ok(env, { updated: true });
@@ -350,12 +359,12 @@ async function update({ request, env, authUser, officeId, params }) {
 // إعادة قيد مصروف جلسة/مهمة بعد التعديل
 async function repostSimpleExpense(env, officeId, refType, id, userId) {
   const row = refType === REF.session_expense
-    ? await env.DB.prepare('SELECT se.amount, se.description, se.created_at FROM session_expenses se WHERE se.id = ?').bind(id).first()
-    : await env.DB.prepare('SELECT amount, description, created_at FROM task_expenses WHERE id = ? AND office_id = ?').bind(id, officeId).first();
+    ? await env.DB.prepare('SELECT se.amount, se.description, se.created_at, se.billable FROM session_expenses se WHERE se.id = ?').bind(id).first()
+    : await env.DB.prepare('SELECT amount, description, created_at, billable FROM task_expenses WHERE id = ? AND office_id = ?').bind(id, officeId).first();
   await deleteEntriesFor(env, officeId, refType, id);
   if (row && Number(row.amount) > 0) {
     await autoEntryExpense(env, { officeId, expenseId: id, amount: Number(row.amount), date: String(row.created_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
-      description: row.description || (refType === REF.session_expense ? 'مصروف جلسة' : 'مصروف مهمة'), accountCode: '5301', refType, userId });
+      description: row.description || (refType === REF.session_expense ? 'مصروف جلسة' : 'مصروف مهمة'), accountCode: '5301', refType, billable: !!row.billable, userId });
   }
 }
 

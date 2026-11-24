@@ -512,6 +512,11 @@ function openExpenseModal(taskId, parentModal) {
       <input id="exp-desc" class="input" placeholder="مثال: رسوم تحرير محضر">
       <label class="label" style="margin-top:10px">المبلغ (${cur()})</label>
       <input id="exp-amount" class="input" type="number" placeholder="500" min="1">
+      <label class="label" style="margin-top:10px">مين هيتحمّله؟</label>
+      <select id="exp-billable" class="input">
+        <option value="1">الموكل (يتضاف لحسابه — لو المهمة على قضية)</option>
+        <option value="0">المكتب</option>
+      </select>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-ghost" style="flex:1" data-action="cancel">إلغاء</button>
         <button class="btn btn-primary" style="flex:1" data-action="save">حفظ</button>
@@ -543,7 +548,7 @@ function openExpenseModal(taskId, parentModal) {
       try {
         await apiJson(`/api/tasks/${taskId}/expense`, {
           method: 'POST',
-          body: JSON.stringify({ amount, description: desc || null }),
+          body: JSON.stringify({ amount, description: desc || null, billable: expModal.querySelector('#exp-billable')?.value === '1' }),
         });
         toast('✅ اتحفظ المصروف', 'ok');
         expModal.remove();

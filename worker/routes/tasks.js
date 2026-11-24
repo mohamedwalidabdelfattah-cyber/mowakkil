@@ -281,9 +281,9 @@ async function addExpense({ request, env, authUser, officeId, params }) {
   const description = b.description || `مصروف مهمة: ${task.title}`;
 
   const r = await env.DB.prepare(
-    `INSERT INTO task_expenses (office_id, task_id, description, amount, created_by)
-     VALUES (?,?,?,?,?)`
-  ).bind(officeId, taskId, description, b.amount, authUser.user_id).run();
+    `INSERT INTO task_expenses (office_id, task_id, description, amount, created_by, billable)
+     VALUES (?,?,?,?,?,?)`
+  ).bind(officeId, taskId, description, b.amount, authUser.user_id, b.billable && task.case_id ? 1 : 0).run();
 
   try {
     await autoEntryExpense(env, {
@@ -294,6 +294,7 @@ async function addExpense({ request, env, authUser, officeId, params }) {
       description,
       accountCode: '5301',
       refType: 'task_expense',
+      billable: !!(b.billable && task.case_id),
       userId: authUser.user_id,
     });
   } catch (e) {

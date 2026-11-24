@@ -136,13 +136,18 @@ async function profile({ env, officeId, params, access }) {
     `SELECT * FROM sessions WHERE case_id = ? ORDER BY session_date DESC`
   ).bind(id).all();
 
+  // كل مصاريف القضية: جلسات + مهام + مصروفات عامة متسجلة على القضية (ومين بيتحمّلها)
   const { results: expenses } = await env.DB.prepare(
-    `SELECT se.*, s.session_date
-     FROM session_expenses se
-     JOIN sessions s ON s.id = se.session_id
-     WHERE s.case_id = ?
-     ORDER BY se.created_at DESC`
-  ).bind(id).all();
+    `SELECT 'session' AS source, se.id, se.description, se.amount, se.billable, s.session_date, substr(se.created_at, 1, 10) AS date
+       FROM session_expenses se JOIN sessions s ON s.id = se.session_id WHERE s.case_id = ?1
+     UNION ALL
+     SELECT 'task', te.id, te.description, te.amount, te.billable, NULL, substr(te.created_at, 1, 10)
+       FROM task_expenses te JOIN tasks t ON t.id = te.task_id WHERE t.case_id = ?1 AND te.office_id = ?2
+     UNION ALL
+     SELECT 'general', e.id, e.description, e.total_amount, e.is_reimbursable, NULL, e.expense_date
+       FROM expenses e WHERE e.case_id = ?1 AND e.office_id = ?2
+     ORDER BY date DESC`
+  ).bind(id, officeId).all();
 
   const { results: fees } = await env.DB.prepare(
     `SELECT * FROM fees WHERE case_id = ? AND office_id = ? ORDER BY created_at DESC`

@@ -76,8 +76,8 @@ async function createExpense({ request, env, authUser, officeId }) {
   if (!s) return fail(env, 'الجلسة مش موجودة', 400);
 
   const r = await env.DB.prepare(
-    `INSERT INTO session_expenses (session_id, description, amount) VALUES (?,?,?)`
-  ).bind(b.session_id, b.description ?? null, b.amount).run();
+    `INSERT INTO session_expenses (session_id, description, amount, billable) VALUES (?,?,?,?)`
+  ).bind(b.session_id, b.description ?? null, b.amount, b.billable ? 1 : 0).run();
 
   try {
     await autoEntryExpense(env, {
@@ -88,6 +88,7 @@ async function createExpense({ request, env, authUser, officeId }) {
       description: b.description || 'مصروف جلسة',
       accountCode: '5301',
       refType: 'session_expense',
+      billable: !!b.billable,
       userId: authUser.user_id,
     });
   } catch (e) {
