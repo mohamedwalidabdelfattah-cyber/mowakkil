@@ -32,6 +32,7 @@ import * as settingsRoutes        from './routes/settings.js';
 import * as analyzeRoutes         from './routes/analyze.js';
 import * as chatRoutes            from './routes/chat.js';  // ✅ جديد
 import * as teamRoutes            from './routes/team.js';
+import * as followupRoutes        from './routes/followup.js';
 import { getAccess, permissionFor, can, canAccessCase } from './lib/permissions.js';
 import { isAiRequest, checkAiQuota, recordAiUse } from './lib/ai-quota.js';
 import { ensureFinanceRepaired } from './services/finance-repair.js';
@@ -48,6 +49,7 @@ const PUBLIC_ROUTES = [
 const SUPERADMIN_ROUTES = [
   ...superadminRoutes.protectedRoutes,
   ...paymentRequestsRoutes.superadminRoutes,
+  ...followupRoutes.superadminRoutes,
 ];
 
 const CLIENT_PORTAL_ROUTES = [

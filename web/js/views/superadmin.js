@@ -5,6 +5,7 @@ import { API_BASE } from '../config.js';
 import { saApiJson, setSAToken, clearSAToken } from '../api.js';
 import { esc, toast, fmtMoney, fmtDate } from '../ui.js';
 import { waLinkFor } from '../phone.js';
+import { mountFollowup } from './sa-followup.js';
 
 let currentFilter = { search: '', plan: '', status: '' };
 let currentOfficeId = null;
@@ -137,6 +138,9 @@ async function renderSABody() {
       <div id="sa-payment-requests"></div>
     </div>
 
+    <!-- 📣 متابعة الفترة التجريبية -->
+    <div class="card" id="sa-followup" style="margin-bottom:20px"></div>
+
     <!-- 🏢 المكاتب -->
     <div class="card">
       <div class="section-header" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
@@ -192,7 +196,7 @@ async function renderSABody() {
     loadPaymentRequests();
   });
 
-  await Promise.all([loadStats(), loadOffices(), loadPaymentRequests()]);
+  await Promise.all([loadStats(), loadOffices(), loadPaymentRequests(), mountFollowup(host.querySelector('#sa-followup'))]);
 }
 
 // ============================================================
