@@ -1,6 +1,6 @@
 // web/js/views/fees.js
 import { apiJson } from '../api.js';
-import { esc, empty, toast, fmtMoney, skeleton } from '../ui.js';
+import { esc, empty, toast, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { openModal } from '../modal.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
 import { getClients, getCases } from '../state.js';
@@ -65,12 +65,12 @@ export async function render(host) {
       <div class="welcome-hero">
         <div>
           <div class="welcome-label">💰 التحصيل</div>
-          <div class="welcome-title">${fmtMoney(totalPaid)} ج</div>
-          <div class="welcome-sub">من إجمالي ${fmtMoney(totalDue)} ج</div>
+          <div class="welcome-title">${fmtMoney(totalPaid)} ${cur()}</div>
+          <div class="welcome-sub">من إجمالي ${fmtMoney(totalDue)} ${cur()}</div>
         </div>
         <div class="welcome-badge">
           <div class="badge-label">المتبقي</div>
-          <div class="badge-value">${fmtMoney(totalRemaining)} ج</div>
+          <div class="badge-value">${fmtMoney(totalRemaining)} ${cur()}</div>
         </div>
       </div>
 
@@ -353,7 +353,7 @@ function drawCollectionChart(daily) {
           padding: 12,
           cornerRadius: 8,
           callbacks: {
-            label: (c) => ` ${Number(c.parsed.y).toLocaleString('ar-EG')} ج`,
+            label: (c) => ` ${Number(c.parsed.y).toLocaleString('en-US')} ${cur()}`,
           },
         },
       },
@@ -371,7 +371,7 @@ function drawCollectionChart(daily) {
           ticks: {
             font: { family: 'IBM Plex Mono', size: 10 },
             color: '#9CA3AF',
-            callback: (v) => Number(v).toLocaleString('ar-EG'),
+            callback: (v) => Number(v).toLocaleString('en-US'),
           },
         },
       },
@@ -395,9 +395,9 @@ function renderFeeItem(f) {
       </div>
 
       <div class="meta">
-        إجمالي: <strong>${fmtMoney(f.amount_due)} ج</strong>
-        · مدفوع: <strong style="color:var(--success)">${fmtMoney(f.amount_paid)} ج</strong>
-        · باقي: <strong style="color:var(--danger)">${fmtMoney(remaining)} ج</strong>
+        إجمالي: <strong>${fmtMoney(f.amount_due)} ${cur()}</strong>
+        · مدفوع: <strong style="color:var(--success)">${fmtMoney(f.amount_paid)} ${cur()}</strong>
+        · باقي: <strong style="color:var(--danger)">${fmtMoney(remaining)} ${cur()}</strong>
       </div>
 
       ${f.due_date ? `<div class="meta">📅 ${esc(f.due_date)}</div>` : ''}
@@ -426,7 +426,7 @@ function renderPaymentItem(p) {
   return `
     <div class="item">
       <div class="top">
-        <span class="name">${fmtMoney(p.amount)} ج</span>
+        <span class="name">${fmtMoney(p.amount)} ${cur()}</span>
         <span class="num mono">${esc(p.receipt_number || '')}</span>
       </div>
       <div class="meta">
@@ -454,7 +454,7 @@ function openAddFeeModal(host, clients, cases, onDone) {
         options: [{ value: '', label: '— بدون —' }, ...clientOpts], required: true },
       { name: 'case_id', label: 'القضية (اختياري)', type: 'select',
         options: [{ value: '', label: '— بدون —' }, ...caseOpts] },
-      { name: 'amount_due', label: 'المبلغ المستحق (ج)', type: 'number', required: true, placeholder: '15000' },
+      { name: 'amount_due', label: `المبلغ المستحق (${cur()})`, type: 'number', required: true, placeholder: '15000' },
       { name: 'due_date', label: 'تاريخ الاستحقاق', type: 'date' },
       { name: 'notes', label: 'ملاحظات', type: 'textarea', placeholder: 'تفاصيل الأتعاب...' },
     ],
@@ -498,9 +498,9 @@ function attachFeeEvents(host, fees, onDone) {
       submitText: 'تسجيل',
       initialData: { amount: remaining },
       fields: [
-        { name: 'amount', label: 'المبلغ (ج)', type: 'number', required: true },
+        { name: 'amount', label: `المبلغ (${cur()})`, type: 'number', required: true },
         { name: 'payment_date', label: 'تاريخ الدفعة', type: 'date', required: true,
-          default: new Date().toISOString().slice(0, 10) },
+          default: localISO() },
         { name: 'method', label: 'طريقة الدفع', type: 'datalist',
           placeholder: 'نقدي',
           options: ['نقدي', 'تحويل بنكي', 'شيك', 'فودافون كاش', 'إنستاباي'] },
@@ -566,16 +566,16 @@ function showFeePaymentsModal(data) {
       </div>
       <div class="modal-body">
         <div class="info-grid">
-          <div class="info-item"><div class="info-label">إجمالي</div><div class="info-value">${fmtMoney(fee.amount_due)} ج</div></div>
-          <div class="info-item"><div class="info-label">مدفوع</div><div class="info-value" style="color:var(--success)">${fmtMoney(total_paid)} ج</div></div>
-          <div class="info-item"><div class="info-label">باقي</div><div class="info-value" style="color:var(--danger)">${fmtMoney(remaining)} ج</div></div>
+          <div class="info-item"><div class="info-label">إجمالي</div><div class="info-value">${fmtMoney(fee.amount_due)} ${cur()}</div></div>
+          <div class="info-item"><div class="info-label">مدفوع</div><div class="info-value" style="color:var(--success)">${fmtMoney(total_paid)} ${cur()}</div></div>
+          <div class="info-item"><div class="info-label">باقي</div><div class="info-value" style="color:var(--danger)">${fmtMoney(remaining)} ${cur()}</div></div>
         </div>
 
         <h4 style="margin:14px 0 8px; font-size:13px">الدفعات (${payments.length})</h4>
         ${payments.length ? payments.map(p => `
           <div class="item">
             <div class="top">
-              <span class="name">${fmtMoney(p.amount)} ج</span>
+              <span class="name">${fmtMoney(p.amount)} ${cur()}</span>
               <span class="num mono">${esc(p.receipt_number || '')}</span>
             </div>
             <div class="meta">${esc(p.payment_date)}${p.method ? ' · ' + esc(p.method) : ''}</div>
@@ -662,13 +662,13 @@ function showReceipt(host, payment, fee) {
         <div class="info-row"><span class="label">التاريخ</span><span class="value">${esc(payment.payment_date)}</span></div>
         <div class="info-row"><span class="label">الموكل</span><span class="value">${esc(payment.client_name || '—')}</span></div>
         ${payment.case_number ? `<div class="info-row"><span class="label">القضية</span><span class="value">${esc(payment.case_number)}</span></div>` : ''}
-        ${fee ? `<div class="info-row"><span class="label">إجمالي الأتعاب</span><span class="value">${fmtMoney(fee.amount_due)} ج</span></div>` : ''}
-        ${fee ? `<div class="info-row"><span class="label">الباقي بعد الدفعة</span><span class="value">${fmtMoney((fee.amount_due||0) - (fee.amount_paid||0))} ج</span></div>` : ''}
+        ${fee ? `<div class="info-row"><span class="label">إجمالي الأتعاب</span><span class="value">${fmtMoney(fee.amount_due)} ${cur()}</span></div>` : ''}
+        ${fee ? `<div class="info-row"><span class="label">الباقي بعد الدفعة</span><span class="value">${fmtMoney((fee.amount_due||0) - (fee.amount_paid||0))} ${cur()}</span></div>` : ''}
         ${payment.method ? `<div class="info-row"><span class="label">طريقة الدفع</span><span class="value">${esc(payment.method)}</span></div>` : ''}
 
         <div class="amount-box">
           <div class="label">المبلغ المدفوع</div>
-          <div class="amount">${fmtMoney(payment.amount)} <span class="currency">جنيه</span></div>
+          <div class="amount">${fmtMoney(payment.amount)} <span class="currency">${curName()}</span></div>
         </div>
 
         ${payment.notes ? `<div class="info-row"><span class="label">ملاحظات</span><span class="value">${esc(payment.notes)}</span></div>` : ''}
@@ -706,7 +706,7 @@ function renderAllPayments(host, payments) {
         ${payments.length ? payments.map(p => `
           <div class="item">
             <div class="top">
-              <span class="name">${fmtMoney(p.amount)} ج</span>
+              <span class="name">${fmtMoney(p.amount)} ${cur()}</span>
               <span class="num mono">${esc(p.receipt_number || '')}</span>
             </div>
             <div class="meta">${esc(p.client_name || '—')} · ${esc(p.payment_date)}${p.method ? ' · ' + esc(p.method) : ''}</div>

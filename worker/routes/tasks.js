@@ -170,10 +170,10 @@ async function removeTask({ env, authUser, officeId, params }) {
       try {
         await env.DB.prepare(
           `DELETE FROM journal_lines WHERE entry_id IN
-            (SELECT id FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?)`
+            (SELECT id FROM journal_entries WHERE reference_type = 'task_expense' AND reference_id = ? AND office_id = ?)`
         ).bind(ex.id, officeId).run();
         await env.DB.prepare(
-          `DELETE FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?`
+          `DELETE FROM journal_entries WHERE reference_type = 'task_expense' AND reference_id = ? AND office_id = ?`
         ).bind(ex.id, officeId).run();
       } catch (e) {
         console.error('delete journal failed:', e.message);
@@ -293,6 +293,7 @@ async function addExpense({ request, env, authUser, officeId, params }) {
       date: new Date().toISOString().slice(0, 10),
       description,
       accountCode: '5301',
+      refType: 'task_expense',
       userId: authUser.user_id,
     });
   } catch (e) {
@@ -320,10 +321,10 @@ async function removeExpense({ env, authUser, officeId, params }) {
   try {
     await env.DB.prepare(
       `DELETE FROM journal_lines WHERE entry_id IN
-        (SELECT id FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?)`
+        (SELECT id FROM journal_entries WHERE reference_type = 'task_expense' AND reference_id = ? AND office_id = ?)`
     ).bind(id, officeId).run();
     await env.DB.prepare(
-      `DELETE FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?`
+      `DELETE FROM journal_entries WHERE reference_type = 'task_expense' AND reference_id = ? AND office_id = ?`
     ).bind(id, officeId).run();
   } catch (e) {
     console.error('delete journal failed:', e.message);

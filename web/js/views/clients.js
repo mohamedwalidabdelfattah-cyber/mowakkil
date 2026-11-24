@@ -1,6 +1,6 @@
 // web/js/views/clients.js
 import { apiJson } from '../api.js';
-import { esc, empty, waLink, toast, fmtMoney, fmtDate, skeleton, bindPanels } from '../ui.js';
+import { esc, empty, waLink, toast, fmtMoney, fmtDate, skeleton, bindPanels, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { setClients } from '../state.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
 import { waLinkFor } from '../phone.js';
@@ -519,23 +519,23 @@ async function showProfile(id) {
               <span>عدد القضايا:</span><strong>${stats.total_cases}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px">
-              <span>إجمالي الأتعاب:</span><strong>${fmtMoney(stats.total_fees)} ج</strong>
+              <span>إجمالي الأتعاب:</span><strong>${fmtMoney(stats.total_fees)} ${cur()}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px">
-              <span>المدفوع:</span><strong style="color:var(--success)">${fmtMoney(stats.total_paid)} ج</strong>
+              <span>المدفوع:</span><strong style="color:var(--success)">${fmtMoney(stats.total_paid)} ${cur()}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px">
-              <span>المتبقي:</span><strong style="color:var(--danger)">${fmtMoney(stats.total_remaining)} ج</strong>
+              <span>المتبقي:</span><strong style="color:var(--danger)">${fmtMoney(stats.total_remaining)} ${cur()}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px;padding-top:8px;border-top:1px solid var(--border)">
               <span>جلسات قادمة:</span><strong>${stats.upcoming_count}</strong>
             </div>
             ${stats.total_invoices > 0 ? `
               <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-                <span>فواتير:</span><strong>${fmtMoney(stats.total_invoices)} ج</strong>
+                <span>فواتير:</span><strong>${fmtMoney(stats.total_invoices)} ${cur()}</strong>
               </div>
               <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
-                <span>متبقي فواتير:</span><strong style="color:var(--danger)">${fmtMoney(stats.total_invoices_remaining)} ج</strong>
+                <span>متبقي فواتير:</span><strong style="color:var(--danger)">${fmtMoney(stats.total_invoices_remaining)} ${cur()}</strong>
               </div>
             ` : ''}
           </div>
@@ -564,7 +564,7 @@ async function showProfile(id) {
                   <span class="name">${f.case_number ? '📁 ' + esc(f.case_number) : 'أتعاب'}</span>
                   <span class="badge ${f.status === 'مدفوع بالكامل' ? 'active' : f.status === 'متأخر' ? 'suspended' : 'trial'}">${esc(f.status)}</span>
                 </div>
-                <div class="meta">مستحق: ${fmtMoney(f.amount_due)} ج · مدفوع: ${fmtMoney(f.amount_paid)} ج</div>
+                <div class="meta">مستحق: ${fmtMoney(f.amount_due)} ${cur()} · مدفوع: ${fmtMoney(f.amount_paid)} ${cur()}</div>
                 ${f.due_date ? `<div class="meta" style="font-size:12px">📅 ${esc(f.due_date)}</div>` : ''}
               </div>
             `).join('')
@@ -577,7 +577,7 @@ async function showProfile(id) {
               <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
                 <div class="top">
                   <span class="name">${esc(p.receipt_number || 'دفعة')}</span>
-                  <span class="num mono" style="color:var(--success);font-weight:700">${fmtMoney(p.amount)} ج</span>
+                  <span class="num mono" style="color:var(--success);font-weight:700">${fmtMoney(p.amount)} ${cur()}</span>
                 </div>
                 <div class="meta">📅 ${esc(p.payment_date)} ${p.method ? '· 💳 ' + esc(p.method) : ''}</div>
               </div>
@@ -615,8 +615,8 @@ async function showProfile(id) {
                   </div>
                   <div class="meta">📅 ${esc(inv.issue_date)} ${inv.case_number ? '· 📁 ' + esc(inv.case_number) : ''}</div>
                   <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:13.5px">
-                    <span style="font-weight:700;color:var(--primary)">${fmtMoney(inv.total)} ج</span>
-                    ${remaining > 0 ? `<span style="color:var(--danger)">متبقي: ${fmtMoney(remaining)} ج</span>` : '<span style="color:var(--success)">✅ مدفوعة</span>'}
+                    <span style="font-weight:700;color:var(--primary)">${fmtMoney(inv.total)} ${cur()}</span>
+                    ${remaining > 0 ? `<span style="color:var(--danger)">متبقي: ${fmtMoney(remaining)} ${cur()}</span>` : '<span style="color:var(--success)">✅ مدفوعة</span>'}
                   </div>
                 </div>
               `;

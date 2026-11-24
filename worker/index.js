@@ -33,6 +33,7 @@ import * as chatRoutes            from './routes/chat.js';  // ✅ جديد
 import * as teamRoutes            from './routes/team.js';
 import { getAccess, permissionFor, can, canAccessCase } from './lib/permissions.js';
 import { isAiRequest, checkAiQuota, recordAiUse } from './lib/ai-quota.js';
+import { ensureFinanceRepaired } from './services/finance-repair.js';
 
 const PUBLIC_ROUTES = [
   ...authRoutes.publicRoutes,
@@ -147,6 +148,11 @@ async function handleFetch(request, env) {
       if (caseId && !(await canAccessCase(env, access, authUser, caseId))) {
         return fail(env, 'القضية مش موجودة', 404, {}, request);
       }
+    }
+
+    // تصليح البيانات المالية القديمة (مرة واحدة لكل مكتب، أول ما يفتح أي شاشة مالية)
+    if (/^\/api\/(fees|payments|invoices|expenses|journal|accounts|reports|dashboard)/.test(path)) {
+      await ensureFinanceRepaired(env, officeId);
     }
 
     // رصيد الذكاء الاصطناعي: نتحقق قبل الطلب، ونعدّ بعده لو نجح بس

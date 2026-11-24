@@ -2,7 +2,7 @@
 // الإدارة المالية المبسّطة
 
 import { apiJson } from '../api.js';
-import { esc, toast, empty, skeleton, fmtMoney } from '../ui.js';
+import { esc, toast, empty, skeleton, fmtMoney, cur, curName, localISO, monthStartISO, monthEndISO, defaultVat } from '../ui.js';
 import { openModal } from '../modal.js';
 
 let currentSub = 'money';
@@ -42,8 +42,8 @@ export async function render(host, options = {}) {
 // ============================================================
 async function renderDashboard(host) {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const to = now.toISOString().slice(0, 10);
+  const from = monthStartISO(now);
+  const to = localISO(now);
 
   const [summary, pl, invStats] = await Promise.all([
     apiJson(`/api/reports/accounting-summary?from=${from}&to=${to}`),
@@ -62,7 +62,7 @@ async function renderDashboard(host) {
       </div>
       <div class="welcome-badge">
         <div class="badge-label">الصافي</div>
-        <div class="badge-value">${fmtMoney(Math.abs(summary.net_profit))} ج</div>
+        <div class="badge-value">${fmtMoney(Math.abs(summary.net_profit))} ${cur()}</div>
       </div>
     </div>
 
@@ -121,13 +121,13 @@ async function renderDashboard(host) {
       ${pl.revenues.length ? pl.revenues.map(r => `
         <div class="report-row">
           <span>${esc(r.name)}</span>
-          <span style="color:var(--success);font-weight:700">${fmtMoney(r.amount)} ج</span>
+          <span style="color:var(--success);font-weight:700">${fmtMoney(r.amount)} ${cur()}</span>
         </div>
       `).join('') : empty('مفيش دخل الشهر ده', '💰')}
       ${pl.revenues.length ? `
         <div class="report-row total">
           <span>الإجمالي</span>
-          <span>${fmtMoney(pl.total_revenue)} ج</span>
+          <span>${fmtMoney(pl.total_revenue)} ${cur()}</span>
         </div>
       ` : ''}
     </div>
@@ -184,7 +184,7 @@ function renderExpenseBreakdown(groups) {
       <div style="margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13.5px">
           <span>${r.icon} ${r.label}</span>
-          <span style="font-weight:700">${fmtMoney(r.value)} ج</span>
+          <span style="font-weight:700">${fmtMoney(r.value)} ${cur()}</span>
         </div>
         <div class="progress-bar">
           <div class="progress-fill" style="width:${percent}%"></div>
@@ -214,8 +214,8 @@ async function drawMoneyOverviewChart() {
 
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const from = d.toISOString().slice(0, 10);
-      const to = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const from = localISO(d);
+      const to = monthEndISO(d);
 
       months.push(d.toLocaleDateString('ar-EG', { month: 'short' }));
 
@@ -274,7 +274,7 @@ async function drawMoneyOverviewChart() {
             padding: 12,
             cornerRadius: 8,
             callbacks: {
-              label: (c) => ` ${c.dataset.label}: ${Number(c.parsed.y).toLocaleString('ar-EG')} ج`,
+              label: (c) => ` ${c.dataset.label}: ${Number(c.parsed.y).toLocaleString('en-US')} ${cur()}`,
             },
           },
         },
@@ -289,7 +289,7 @@ async function drawMoneyOverviewChart() {
             ticks: {
               font: { family: 'IBM Plex Mono', size: 10 },
               color: '#9CA3AF',
-              callback: (v) => Number(v).toLocaleString('ar-EG'),
+              callback: (v) => Number(v).toLocaleString('en-US'),
             },
           },
         },
@@ -319,7 +319,7 @@ async function renderExpenses(host) {
     <div class="card">
       <h3>💸 المصاريف — ${esc(monthName(now))}</h3>
       <div style="text-align:center;padding:16px 0">
-        <div style="font-size:32px;font-weight:900;color:var(--danger)">${fmtMoney(monthTotal)} ج</div>
+        <div style="font-size:32px;font-weight:900;color:var(--danger)">${fmtMoney(monthTotal)} ${cur()}</div>
         <div style="font-size:12px;color:var(--text-soft);margin-top:4px">إجمالي الشهر</div>
       </div>
       <button class="btn btn-primary btn-block" id="add-expense">
@@ -332,7 +332,7 @@ async function renderExpenses(host) {
         <div class="item">
           <div class="top">
             <span class="name">${esc(e.description)}</span>
-            <span class="num mono" style="color:var(--danger);font-weight:700">${fmtMoney(e.amount)} ج</span>
+            <span class="num mono" style="color:var(--danger);font-weight:700">${fmtMoney(e.amount)} ${cur()}</span>
           </div>
           <div class="meta">
             ${e.source === 'session' ? '⚖️ مصروف قضية' : '🏢 مصروف عام'}
@@ -353,13 +353,13 @@ async function renderExpenses(host) {
     const result = await openModal({
       title: '➕ إضافة مصروف',
       submitText: 'حفظ',
-      initialData: { expense_date: new Date().toISOString().slice(0, 10) },
+      initialData: { expense_date: localISO() },
       fields: [
         { name: 'expense_date', label: '📅 تاريخ المصروف', type: 'date', required: true },
         { name: 'description', label: '📝 وصف المصروف', required: true, placeholder: 'إيجار المكتب - أكتوبر' },
         { name: 'account_id', label: '🗂️ نوع المصروف', type: 'select',
           options: [{ value: '', label: '— اختر النوع —' }, ...accountOpts] },
-        { name: 'amount', label: '💰 المبلغ (ج)', type: 'number', required: true, placeholder: '5000' },
+        { name: 'amount', label: `💰 المبلغ (${cur()})`, type: 'number', required: true, placeholder: '5000' },
         { name: 'payment_method', label: '💳 طريقة الدفع', type: 'datalist',
           placeholder: 'نقدي',
           options: ['نقدي', 'تحويل بنكي', 'شيك', 'فودافون كاش', 'إنستاباي'] },
@@ -388,8 +388,8 @@ async function renderExpenses(host) {
 // ============================================================
 async function renderIncome(host) {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const to = now.toISOString().slice(0, 10);
+  const from = monthStartISO(now);
+  const to = localISO(now);
 
   const pl = await apiJson(`/api/reports/profit-loss?from=${from}&to=${to}`);
   const payments = await apiJson('/api/payments');
@@ -401,7 +401,7 @@ async function renderIncome(host) {
     <div class="card">
       <h3>💰 الإيرادات — ${esc(monthName(now))}</h3>
       <div style="text-align:center;padding:16px 0">
-        <div style="font-size:32px;font-weight:900;color:var(--success)">${fmtMoney(monthTotal)} ج</div>
+        <div style="font-size:32px;font-weight:900;color:var(--success)">${fmtMoney(monthTotal)} ${cur()}</div>
         <div style="font-size:12px;color:var(--text-soft);margin-top:4px">إجمالي الشهر</div>
       </div>
     </div>
@@ -411,7 +411,7 @@ async function renderIncome(host) {
       ${pl.revenues.length ? pl.revenues.map(r => `
         <div class="report-row">
           <span>💵 ${esc(r.name)}</span>
-          <span style="color:var(--success);font-weight:700">${fmtMoney(r.amount)} ج</span>
+          <span style="color:var(--success);font-weight:700">${fmtMoney(r.amount)} ${cur()}</span>
         </div>
       `).join('') : empty('مفيش إيرادات الشهر ده', '💰')}
     </div>
@@ -422,7 +422,7 @@ async function renderIncome(host) {
         <div class="item">
           <div class="top">
             <span class="name">${esc(p.client_name || 'موكل')}</span>
-            <span class="num mono" style="color:var(--success);font-weight:700">${fmtMoney(p.amount)} ج</span>
+            <span class="num mono" style="color:var(--success);font-weight:700">${fmtMoney(p.amount)} ${cur()}</span>
           </div>
           <div class="meta">📅 ${esc(p.payment_date)}${p.method ? ' · 💳 ' + esc(p.method) : ''}</div>
         </div>
@@ -436,8 +436,8 @@ async function renderIncome(host) {
 // ============================================================
 async function renderSimpleReports(host) {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const to = now.toISOString().slice(0, 10);
+  const from = monthStartISO(now);
+  const to = localISO(now);
 
   const [summary, pl] = await Promise.all([
     apiJson(`/api/reports/accounting-summary?from=${from}&to=${to}`),
@@ -454,7 +454,7 @@ async function renderSimpleReports(host) {
     <div class="card" style="background:${isProfit ? 'var(--success-50)' : 'var(--danger-50)'}">
       <h3>${isProfit ? '✅ ربح' : '⚠️ خسارة'}</h3>
       <div style="font-size:32px;font-weight:900;color:${isProfit ? 'var(--success)' : 'var(--danger)'};text-align:center;margin:14px 0">
-        ${fmtMoney(Math.abs(summary.net_profit))} ج
+        ${fmtMoney(Math.abs(summary.net_profit))} ${cur()}
       </div>
       <p style="font-size:13px;text-align:center;color:var(--text-soft);margin:0">
         ${isProfit ? 'مبروك! الشهر ده ربحان' : 'للأسف، الشهر ده خسران'}
@@ -465,16 +465,16 @@ async function renderSimpleReports(host) {
       <h3>📊 ملخص الشهر</h3>
       <div class="report-row">
         <span>💰 إجمالي الدخل</span>
-        <span style="color:var(--success);font-weight:700">+${fmtMoney(summary.revenue)} ج</span>
+        <span style="color:var(--success);font-weight:700">+${fmtMoney(summary.revenue)} ${cur()}</span>
       </div>
       <div class="report-row">
         <span>💸 إجمالي المصاريف</span>
-        <span style="color:var(--danger);font-weight:700">-${fmtMoney(summary.expenses)} ج</span>
+        <span style="color:var(--danger);font-weight:700">-${fmtMoney(summary.expenses)} ${cur()}</span>
       </div>
       <div class="report-row total">
         <span>صافي الربح</span>
         <span style="color:${isProfit ? 'var(--success)' : 'var(--danger)'}">
-          ${isProfit ? '+' : '-'}${fmtMoney(Math.abs(summary.net_profit))} ج
+          ${isProfit ? '+' : '-'}${fmtMoney(Math.abs(summary.net_profit))} ${cur()}
         </span>
       </div>
     </div>
@@ -483,15 +483,15 @@ async function renderSimpleReports(host) {
       <h3>💵 الوضع الحالي</h3>
       <div class="report-row">
         <span>💵 النقدية في الصندوق</span>
-        <span style="font-weight:700">${fmtMoney(summary.cash_balance)} ج</span>
+        <span style="font-weight:700">${fmtMoney(summary.cash_balance)} ${cur()}</span>
       </div>
       <div class="report-row">
         <span>🏦 البنك</span>
-        <span style="font-weight:700">${fmtMoney(summary.bank_balance)} ج</span>
+        <span style="font-weight:700">${fmtMoney(summary.bank_balance)} ${cur()}</span>
       </div>
       <div class="report-row total">
         <span>إجمالي السيولة</span>
-        <span>${fmtMoney(summary.cash_balance + summary.bank_balance)} ج</span>
+        <span>${fmtMoney(summary.cash_balance + summary.bank_balance)} ${cur()}</span>
       </div>
     </div>
 
@@ -710,8 +710,8 @@ function renderInvoiceItem(inv) {
         · 📅 ${esc(inv.issue_date)}
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;align-items:center">
-        <span style="font-weight:900;font-size:16px;color:var(--primary)">${fmtMoney(inv.total)} ج</span>
-        ${remaining > 0 ? `<span style="font-size:12px;color:var(--danger)">متبقي: ${fmtMoney(remaining)} ج</span>` : '<span style="font-size:12px;color:var(--success)">✅ مدفوعة</span>'}
+        <span style="font-weight:900;font-size:16px;color:var(--primary)">${fmtMoney(inv.total)} ${cur()}</span>
+        ${remaining > 0 ? `<span style="font-size:12px;color:var(--danger)">متبقي: ${fmtMoney(remaining)} ${cur()}</span>` : '<span style="font-size:12px;color:var(--success)">✅ مدفوعة</span>'}
       </div>
       <div class="acts" onclick="event.stopPropagation()">
         <button class="btn btn-ghost" data-del-invoice="${inv.id}" style="color:var(--danger);font-size:11px;padding:4px 8px">🗑 حذف</button>
@@ -766,9 +766,9 @@ function openInvoiceModal(host, clients, cases, onDone) {
     const taxAmount = (subtotal - discount) * (taxRate / 100);
     const total = subtotal - discount + taxAmount;
 
-    backdrop.querySelector('#sum-subtotal').textContent = fmtMoney(subtotal) + ' ج';
-    backdrop.querySelector('#sum-tax').textContent = fmtMoney(taxAmount) + ' ج';
-    backdrop.querySelector('#sum-total').textContent = fmtMoney(total) + ' ج';
+    backdrop.querySelector('#sum-subtotal').textContent = fmtMoney(subtotal) + ' ' + cur();
+    backdrop.querySelector('#sum-tax').textContent = fmtMoney(taxAmount) + ' ' + cur();
+    backdrop.querySelector('#sum-total').textContent = fmtMoney(total) + ' ' + cur();
 
     lines.forEach((l, i) => {
       const amountEl = backdrop.querySelector(`[data-line-amount="${i}"]`);
@@ -788,7 +788,7 @@ function openInvoiceModal(host, clients, cases, onDone) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
             <label class="label">📅 تاريخ الإصدار *</label>
-            <input class="input" type="date" id="issue-date" value="${new Date().toISOString().slice(0, 10)}" required>
+            <input class="input" type="date" id="issue-date" value="${localISO()}" required>
           </div>
           <div>
             <label class="label">📅 تاريخ الاستحقاق</label>
@@ -807,6 +807,14 @@ function openInvoiceModal(host, clients, cases, onDone) {
           <option value="">— بدون قضية —</option>
         </select>
 
+        <div class="inv-fee-link" id="fee-link-box" hidden>
+          <label class="label" style="margin-top:12px">🔗 الفاتورة دي عن أتعاب متسجلة؟</label>
+          <select class="select" id="fee-id">
+            <option value="">— لأ، فاتورة لشغل جديد —</option>
+          </select>
+          <div class="meta" style="margin-top:6px;line-height:1.7">لو اخترت الأتعاب، الفاتورة بتتربط بيها: الإيراد ميتحسبش مرتين، وأي دفعة على الأتعاب أو الفاتورة بتظهر في الاتنين.</div>
+        </div>
+
         <div style="margin-top:16px">
           <h4 style="font-size:14px;margin:0 0 10px">📋 البنود</h4>
           ${renderLines()}
@@ -815,10 +823,10 @@ function openInvoiceModal(host, clients, cases, onDone) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
           <div>
             <label class="label">💰 نسبة الضريبة %</label>
-            <input class="input" type="number" id="tax-rate" value="14" min="0" max="100" step="0.01">
+            <input class="input" type="number" id="tax-rate" value="${defaultVat()}" min="0" max="100" step="0.01">
           </div>
           <div>
-            <label class="label">🏷️ الخصم (ج)</label>
+            <label class="label">🏷️ الخصم (${cur()})</label>
             <input class="input" type="number" id="discount" value="0" min="0" step="0.01">
           </div>
         </div>
@@ -869,7 +877,34 @@ function openInvoiceModal(host, clients, cases, onDone) {
     caseSelect.innerHTML = '<option value="">— بدون قضية —</option>' +
       filtered.map(c => `<option value="${c.id}">${esc(c.case_number || 'قضية #' + c.id)} — ${esc(c.court || '')}</option>`).join('');
   };
-  backdrop.querySelector('#client-id').addEventListener('change', updateCases);
+  backdrop.querySelector('#client-id').addEventListener('change', () => { updateCases(); updateFees(); });
+
+  // الأتعاب المتسجلة للموكل (والقضية لو اختارها) — للربط
+  let feesCache = null;
+  const updateFees = async () => {
+    const box = backdrop.querySelector('#fee-link-box');
+    const sel = backdrop.querySelector('#fee-id');
+    const clientId = backdrop.querySelector('#client-id').value;
+    const caseId = backdrop.querySelector('#case-id').value;
+    if (!clientId) { box.hidden = true; sel.value = ''; return; }
+    if (!feesCache) {
+      try { const r = await apiJson('/api/fees', { skipCache: true }); feesCache = Array.isArray(r) ? r : (r.items || []); } catch { feesCache = []; }
+    }
+    const list = feesCache.filter(f => String(f.client_id) === String(clientId) && (!caseId || String(f.case_id) === String(caseId)));
+    box.hidden = !list.length;
+    sel.innerHTML = '<option value="">— لأ، فاتورة لشغل جديد —</option>' + list.map(f =>
+      `<option value="${f.id}">${esc(f.case_number ? 'قضية ' + f.case_number : (f.notes || 'أتعاب #' + f.id))} — ${fmtMoney(f.amount_due)} ${cur()}${f.amount_paid ? ' (اتدفع ' + fmtMoney(f.amount_paid) + ')' : ''}</option>`).join('');
+  };
+  backdrop.querySelector('#case-id').addEventListener('change', updateFees);
+  backdrop.querySelector('#fee-id').addEventListener('change', () => {
+    const f = (feesCache || []).find(x => String(x.id) === backdrop.querySelector('#fee-id').value);
+    if (!f) return;
+    // البند = الأتعاب
+    lines.splice(0, lines.length, { description: f.case_number ? `أتعاب قضية ${f.case_number}` : (f.notes || 'أتعاب'), quantity: 1, rate: Number(f.amount_due) || 0 });
+    if (f.case_id) backdrop.querySelector('#case-id').value = String(f.case_id);
+    backdrop.querySelector('#lines-container').outerHTML = renderLines();
+    bindLineEvents(); rebindAddLine(); updateTotals();
+  });
 
   const bindLineEvents = () => {
     backdrop.querySelectorAll('[data-line-desc]').forEach(inp => {
@@ -942,6 +977,7 @@ function openInvoiceModal(host, clients, cases, onDone) {
       due_date: backdrop.querySelector('#due-date').value || null,
       client_id: clientId,
       case_id: backdrop.querySelector('#case-id').value || null,
+      fee_id: backdrop.querySelector('#fee-id').value || null,
       tax_rate: parseFloat(backdrop.querySelector('#tax-rate').value) || 0,
       discount: parseFloat(backdrop.querySelector('#discount').value) || 0,
       notes: backdrop.querySelector('#notes').value.trim() || null,

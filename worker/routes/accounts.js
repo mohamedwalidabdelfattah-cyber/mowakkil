@@ -153,7 +153,7 @@ async function update({ request, env, authUser, officeId, params }) {
   return ok(env, { updated: true });
 }
 
-async function remove({ env, authUser, officeId, params }) {
+async function remove({ request, env, authUser, officeId, params }) {
   const gate = await requireFeature(env, officeId, 'finance');
   if (gate) return gate;
 

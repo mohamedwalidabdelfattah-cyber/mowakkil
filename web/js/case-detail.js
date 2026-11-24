@@ -2,7 +2,7 @@
 // صفحة تفاصيل القضية الكاملة
 
 import { apiJson, uploadDocument, downloadDocument } from './api.js';
-import { esc, toast, empty, skeleton, fmtMoney, waLink } from '../ui.js';
+import { esc, toast, empty, skeleton, fmtMoney, waLink, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { openModal } from '../modal.js';
 
 export async function renderCaseDetail(host, caseId) {
@@ -99,7 +99,7 @@ export async function renderCaseDetail(host, caseId) {
           ? data.fees.map(f => `
             <div class="item">
               <div class="top">
-                <span class="name">${fmtMoney(f.amount_due)} ج</span>
+                <span class="name">${fmtMoney(f.amount_due)} ${cur()}</span>
                 <span class="badge ${f.status === 'مدفوع بالكامل' ? 'active' : 'trial'}">${esc(f.status)}</span>
               </div>
               <div class="meta">مدفوع: ${fmtMoney(f.amount_paid)} · ${esc(f.due_date || '')}</div>
@@ -163,7 +163,7 @@ export async function renderCaseDetail(host, caseId) {
             <div class="item">
               <div class="top">
                 <span class="name">${esc(x.description || 'مصروف')}</span>
-                <span class="num mono">${fmtMoney(x.amount)} ج</span>
+                <span class="num mono">${fmtMoney(x.amount)} ${cur()}</span>
               </div>
             </div>`).join('')
           : empty('مفيش مصاريف')}
@@ -240,7 +240,7 @@ export async function renderCaseDetail(host, caseId) {
     const result = await openModal({
       title: 'إضافة أتعاب',
       fields: [
-        { name: 'amount_due', label: 'المبلغ المستحق (ج)', type: 'number', required: true },
+        { name: 'amount_due', label: `المبلغ المستحق (${cur()})`, type: 'number', required: true },
         { name: 'due_date', label: 'تاريخ الاستحقاق', type: 'date' },
         { name: 'notes', label: 'ملاحظات', type: 'textarea' },
       ],

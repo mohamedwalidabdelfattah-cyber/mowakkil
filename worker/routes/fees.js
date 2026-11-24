@@ -1,7 +1,7 @@
 import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson } from '../lib/validation.js';
-import { autoEntryFeeCreated } from '../services/accounting.js';
+import { autoEntryFeeCreated, recordPayment, deleteEntriesFor, REF, syncInvoiceEntry } from '../services/accounting.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 
 export const routes = [
@@ -96,11 +96,18 @@ async function markPaid({ request, env, authUser, officeId, params }) {
   const b = await safeJson(request);
   if (!b || b.amount_paid == null) return fail(env, 'amount_paid مطلوب', 400);
 
-  const r = await env.DB.prepare(
-    `UPDATE fees SET amount_paid = ?, status = ? WHERE id = ? AND office_id = ?`
-  ).bind(b.amount_paid, b.status ?? 'مدفوع جزئياً', id, officeId).run();
-
-  if (r.meta.changes === 0) return fail(env, 'not found', 404);
+  // "المدفوع" بيتحسب من الدفعات — الزيادة بتتسجل كدفعة حقيقية (بتدخل الصندوق/البنك وبيطلعلها إيصال)
+  const fee = await env.DB.prepare('SELECT * FROM fees WHERE id = ? AND office_id = ?').bind(id, officeId).first();
+  if (!fee) return fail(env, 'not found', 404);
+  const target = Number(b.amount_paid) || 0;
+  const current = Number(fee.amount_paid) || 0;
+  if (target + 0.01 < current) return fail(env, 'لتقليل المدفوع احذف الدفعة من سجل الدفعات', 400);
+  if (target - current > 0.009) {
+    try {
+      await recordPayment(env, { officeId, userId: authUser.user_id, amount: target - current, method: b.method || 'نقدي',
+        date: b.payment_date || new Date().toISOString().slice(0, 10), feeId: id });
+    } catch (e) { return fail(env, e.message, 400); }
+  }
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,
     action: 'update', entity: 'fee', entity_id: id, request,
@@ -122,7 +129,7 @@ async function removeFee({ request, env, authUser, officeId, params }) {
 
   try {
     const { results: payments } = await env.DB.prepare(
-      `SELECT id FROM payments WHERE fee_id = ? AND office_id = ?`
+      `SELECT id FROM payments WHERE fee_id = ? AND office_id = ? AND invoice_id IS NULL`
     ).bind(id, officeId).all();
 
     for (const p of payments || []) {
@@ -140,7 +147,7 @@ async function removeFee({ request, env, authUser, officeId, params }) {
     }
 
     await env.DB.prepare(
-      `DELETE FROM payments WHERE fee_id = ? AND office_id = ?`
+      `DELETE FROM payments WHERE fee_id = ? AND office_id = ? AND invoice_id IS NULL`
     ).bind(id, officeId).run();
 
     try {
@@ -155,9 +162,15 @@ async function removeFee({ request, env, authUser, officeId, params }) {
       console.error('delete fee journal failed:', e.message);
     }
 
+    // الفواتير اللي كانت مربوطة بالأتعاب دي بتبقى فواتير مستقلة (وقيدها بيتظبط)
+    const { results: linkedInv } = await env.DB.prepare('SELECT id FROM invoices WHERE fee_id = ? AND office_id = ?').bind(id, officeId).all();
+    await env.DB.prepare('UPDATE invoices SET fee_id = NULL WHERE fee_id = ? AND office_id = ?').bind(id, officeId).run();
+    await env.DB.prepare('UPDATE payments SET fee_id = NULL WHERE fee_id = ? AND office_id = ? AND invoice_id IS NOT NULL').bind(id, officeId).run();
+
     await env.DB.prepare(
       `DELETE FROM fees WHERE id = ? AND office_id = ?`
     ).bind(id, officeId).run();
+    for (const li of linkedInv || []) await syncInvoiceEntry(env, officeId, li.id, authUser.user_id).catch(() => {});
 
   } catch (e) {
     console.error('remove fee failed:', e.message);

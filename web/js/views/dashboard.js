@@ -2,7 +2,7 @@
 // لوحة التحكم — تصميم v7
 
 import { apiJson } from '../api.js';
-import { esc, empty, fmtMoney, skeleton } from '../ui.js';
+import { esc, empty, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { icon } from '../icons.js';
 import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
 import { PALETTE, SERIES, areaGradient } from '../chart-theme.js';
@@ -247,20 +247,20 @@ function fmtShortDate(s) {
 // ============================================================
 function getRangeForFilter(period) {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = localISO(now);
   switch (period) {
     case '7d':  return { from: new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), to: today };
     case '30d': return { from: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), to: today };
     case '3m':  return { from: new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10), to: today };
     case 'year': return { from: new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10), to: today };
-    default:    return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10), to: today };
+    default:    return { from: monthStartISO(now), to: today };
   }
 }
 
 // ============================================================
 // Charts — الألوان والخطوط من chart-theme.js
 // ============================================================
-const money = v => `${Number(v || 0).toLocaleString('ar-EG')} ج`;
+const money = v => `${Number(v || 0).toLocaleString('en-US')} ${cur()}`;
 
 function drawMonthlyChart(data) {
   const ctx = document.getElementById('chart-monthly');
@@ -288,7 +288,7 @@ function drawMonthlyChart(data) {
       },
       scales: {
         x: { grid: { display: false } },
-        y: { beginAtZero: true, ticks: { callback: v => Number(v).toLocaleString('ar-EG') } },
+        y: { beginAtZero: true, ticks: { callback: v => Number(v).toLocaleString('en-US') } },
       },
     },
   });
@@ -341,7 +341,7 @@ function drawRevenueChart(revenues) {
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${money(c.parsed.y)}` } } },
       scales: {
         x: { grid: { display: false } },
-        y: { beginAtZero: true, ticks: { callback: v => Number(v).toLocaleString('ar-EG') } },
+        y: { beginAtZero: true, ticks: { callback: v => Number(v).toLocaleString('en-US') } },
       },
     },
   });

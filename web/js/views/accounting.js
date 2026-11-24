@@ -2,7 +2,7 @@
 // المحاسبة الاحترافية — للمحاسب
 
 import { apiJson } from '../api.js';
-import { esc, toast, empty, skeleton, fmtMoney } from '../ui.js';
+import { esc, toast, empty, skeleton, fmtMoney, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { openModal } from '../modal.js';
 
 export async function render(host, options = {}) {
@@ -81,7 +81,7 @@ async function renderJournal(host) {
         <div class="item" data-open-entry="${e.id}" style="cursor:pointer">
           <div class="top">
             <span class="name">${esc(e.entry_number)}</span>
-            <span class="num mono">${fmtMoney(e.total_debit)} ج</span>
+            <span class="num mono">${fmtMoney(e.total_debit)} ${cur()}</span>
           </div>
           <div class="meta">${esc(e.entry_date)} · ${esc(e.description || '—')}</div>
           <div class="meta">
@@ -226,8 +226,8 @@ function renderAccountNode(account, depth) {
 // ============================================================
 async function renderPL(host) {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const to = now.toISOString().slice(0, 10);
+  const from = monthStartISO(now);
+  const to = localISO(now);
 
   const pl = await apiJson(`/api/reports/profit-loss?from=${from}&to=${to}`);
 
@@ -244,12 +244,12 @@ async function renderPL(host) {
       ${pl.revenues.length ? pl.revenues.map(r => `
         <div class="report-row">
           <span>${esc(r.name)} (${esc(r.code)})</span>
-          <span>${fmtMoney(r.amount)} ج</span>
+          <span>${fmtMoney(r.amount)} ${cur()}</span>
         </div>
       `).join('') : '<div class="empty">مفيش إيرادات</div>'}
       <div class="report-row total">
         <span>إجمالي الإيرادات</span>
-        <span>${fmtMoney(pl.total_revenue)} ج</span>
+        <span>${fmtMoney(pl.total_revenue)} ${cur()}</span>
       </div>
     </div>
 
@@ -258,12 +258,12 @@ async function renderPL(host) {
       ${pl.expenses.length ? pl.expenses.map(e => `
         <div class="report-row">
           <span>${esc(e.name)} (${esc(e.code)})</span>
-          <span>${fmtMoney(e.amount)} ج</span>
+          <span>${fmtMoney(e.amount)} ${cur()}</span>
         </div>
       `).join('') : '<div class="empty">مفيش مصاريف</div>'}
       <div class="report-row total">
         <span>إجمالي المصاريف</span>
-        <span>${fmtMoney(pl.total_expenses)} ج</span>
+        <span>${fmtMoney(pl.total_expenses)} ${cur()}</span>
       </div>
     </div>
 
@@ -271,7 +271,7 @@ async function renderPL(host) {
       <div class="report-row total" style="border:none;padding:0">
         <span style="font-size:17px">${pl.is_profit ? '✅ صافي الربح' : '⚠️ صافي الخسارة'}</span>
         <span style="font-size:24px;color:${pl.is_profit ? 'var(--ok)' : 'var(--bad)'}">
-          ${fmtMoney(Math.abs(pl.net_profit))} ج
+          ${fmtMoney(Math.abs(pl.net_profit))} ${cur()}
         </span>
       </div>
       ${pl.total_revenue > 0 ? `
@@ -287,7 +287,7 @@ async function renderPL(host) {
 // المركز المالي
 // ============================================================
 async function renderBS(host) {
-  const now = new Date().toISOString().slice(0, 10);
+  const now = localISO();
   const bs = await apiJson(`/api/reports/balance-sheet?as_of=${now}`);
 
   host.innerHTML = `
@@ -304,12 +304,12 @@ async function renderBS(host) {
       ${bs.assets.length ? bs.assets.map(a => `
         <div class="report-row">
           <span>${esc(a.name)}</span>
-          <span>${fmtMoney(a.balance)} ج</span>
+          <span>${fmtMoney(a.balance)} ${cur()}</span>
         </div>
       `).join('') : '<div class="empty">مفيش أصول</div>'}
       <div class="report-row total">
         <span>إجمالي الأصول</span>
-        <span>${fmtMoney(bs.total_assets)} ج</span>
+        <span>${fmtMoney(bs.total_assets)} ${cur()}</span>
       </div>
     </div>
 
@@ -318,12 +318,12 @@ async function renderBS(host) {
       ${bs.liabilities.length ? bs.liabilities.map(l => `
         <div class="report-row">
           <span>${esc(l.name)}</span>
-          <span>${fmtMoney(l.balance)} ج</span>
+          <span>${fmtMoney(l.balance)} ${cur()}</span>
         </div>
       `).join('') : '<div class="empty">مفيش التزامات 🎉</div>'}
       <div class="report-row total">
         <span>إجمالي الالتزامات</span>
-        <span>${fmtMoney(bs.total_liabilities)} ج</span>
+        <span>${fmtMoney(bs.total_liabilities)} ${cur()}</span>
       </div>
     </div>
 
@@ -332,16 +332,16 @@ async function renderBS(host) {
       ${bs.equity.length ? bs.equity.map(e => `
         <div class="report-row">
           <span>${esc(e.name)}</span>
-          <span>${fmtMoney(e.balance)} ج</span>
+          <span>${fmtMoney(e.balance)} ${cur()}</span>
         </div>
       `).join('') : ''}
       <div class="report-row">
         <span>صافي الربح المحتجز</span>
-        <span>${fmtMoney(bs.net_profit)} ج</span>
+        <span>${fmtMoney(bs.net_profit)} ${cur()}</span>
       </div>
       <div class="report-row total">
         <span>إجمالي حقوق الملكية</span>
-        <span>${fmtMoney(bs.total_equity)} ج</span>
+        <span>${fmtMoney(bs.total_equity)} ${cur()}</span>
       </div>
     </div>
   `;
@@ -352,8 +352,8 @@ async function renderBS(host) {
 // ============================================================
 async function renderCF(host) {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const to = now.toISOString().slice(0, 10);
+  const from = monthStartISO(now);
+  const to = localISO(now);
 
   const cf = await apiJson(`/api/reports/cash-flow?from=${from}&to=${to}`);
 
@@ -387,7 +387,7 @@ async function renderCF(host) {
       ${cf.inflow_details.length ? cf.inflow_details.map(m => `
         <div class="report-row">
           <span>${esc(m.description || m.entry_number)}</span>
-          <span style="color:var(--ok)">+${fmtMoney(m.amount)} ج</span>
+          <span style="color:var(--ok)">+${fmtMoney(m.amount)} ${cur()}</span>
         </div>
       `).join('') : '<div class="empty">مفيش تدفقات داخلة</div>'}
     </div>
@@ -397,7 +397,7 @@ async function renderCF(host) {
       ${cf.outflow_details.length ? cf.outflow_details.map(m => `
         <div class="report-row">
           <span>${esc(m.description || m.entry_number)}</span>
-          <span style="color:var(--bad)">-${fmtMoney(m.amount)} ج</span>
+          <span style="color:var(--bad)">-${fmtMoney(m.amount)} ${cur()}</span>
         </div>
       `).join('') : '<div class="empty">مفيش تدفقات خارجة</div>'}
     </div>

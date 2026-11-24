@@ -2,7 +2,7 @@
 import { apiJson, api, uploadDocument, downloadDocument } from '../api.js';
 import { renderAttachments } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
-import { esc, empty, toast, waLink, fmtMoney, skeleton, bindPanels } from '../ui.js';
+import { esc, empty, toast, waLink, fmtMoney, skeleton, bindPanels, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { getLawyers, getCases } from '../state.js';
 
 // حالة الفلاتر
@@ -426,7 +426,7 @@ async function showTaskModal(id) {
               <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
                 <div class="top">
                   <span class="name">${esc(x.description || 'مصروف')}</span>
-                  <span class="num mono" style="color:var(--danger);font-weight:700">${fmtMoney(x.amount)} ج</span>
+                  <span class="num mono" style="color:var(--danger);font-weight:700">${fmtMoney(x.amount)} ${cur()}</span>
                 </div>
                 <div class="meta" style="font-size:12px">
                   📅 ${esc((x.created_at || '').slice(0, 10))}
@@ -510,7 +510,7 @@ function openExpenseModal(taskId, parentModal) {
       <h3 style="margin:0 0 16px">💸 إضافة مصروف للمهمة</h3>
       <label class="label">الوصف</label>
       <input id="exp-desc" class="input" placeholder="مثال: رسوم تحرير محضر">
-      <label class="label" style="margin-top:10px">المبلغ (ج)</label>
+      <label class="label" style="margin-top:10px">المبلغ (${cur()})</label>
       <input id="exp-amount" class="input" type="number" placeholder="500" min="1">
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-ghost" style="flex:1" data-action="cancel">إلغاء</button>

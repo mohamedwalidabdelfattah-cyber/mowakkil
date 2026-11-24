@@ -1,6 +1,6 @@
 // web/js/views/reports.js
 import { apiJson } from '../api.js';
-import { fmtMoney, esc, skeleton } from '../ui.js';
+import { fmtMoney, esc, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { mountExportMenu } from '../exporter.js';
 
 let reportChart = null;
@@ -91,24 +91,24 @@ async function load(host) {
         <h4 style="margin:0 0 12px;font-size:14px">📋 التفاصيل</h4>
         <div class="report-row">
           <span>الأتعاب المستحقة</span>
-          <span style="font-weight:700">${fmtMoney(d.fees_due)} ج</span>
+          <span style="font-weight:700">${fmtMoney(d.fees_due)} ${cur()}</span>
         </div>
         <div class="report-row">
           <span>الأتعاب المتحصّلة</span>
-          <span style="font-weight:700;color:var(--success)">${fmtMoney(d.fees_paid)} ج</span>
+          <span style="font-weight:700;color:var(--success)">${fmtMoney(d.fees_paid)} ${cur()}</span>
         </div>
         <div class="report-row">
           <span>إجمالي المرتبات</span>
-          <span style="font-weight:700;color:var(--danger)">${fmtMoney(d.salaries)} ج</span>
+          <span style="font-weight:700;color:var(--danger)">${fmtMoney(d.salaries)} ${cur()}</span>
         </div>
         <div class="report-row">
           <span>مصاريف الجلسات</span>
-          <span style="font-weight:700;color:var(--danger)">${fmtMoney(d.expenses)} ج</span>
+          <span style="font-weight:700;color:var(--danger)">${fmtMoney(d.expenses)} ${cur()}</span>
         </div>
         <div class="report-row total" style="border-top:2px solid var(--primary);margin-top:8px;padding-top:12px">
           <span>الصافي</span>
           <span style="color:${isProfit ? 'var(--success)' : 'var(--danger)'};font-weight:900">
-            ${isProfit ? '+' : ''}${fmtMoney(d.net)} ج
+            ${isProfit ? '+' : ''}${fmtMoney(d.net)} ${cur()}
           </span>
         </div>
       </div>
@@ -126,7 +126,7 @@ async function load(host) {
         data: {
           labels: ['مستحقة', 'محصّلة', 'مرتبات', 'مصاريف', 'الصافي'],
           datasets: [{
-            label: 'المبلغ (ج)',
+            label: `المبلغ (${cur()})`,
             data: [
               d.fees_due || 0,
               d.fees_paid || 0,
@@ -150,7 +150,7 @@ async function load(host) {
               padding: 12,
               cornerRadius: 8,
               callbacks: {
-                label: (c) => ` ${Number(c.parsed.y).toLocaleString('ar-EG')} ج`,
+                label: (c) => ` ${Number(c.parsed.y).toLocaleString('en-US')} ${cur()}`,
               },
             },
           },
@@ -165,7 +165,7 @@ async function load(host) {
               ticks: {
                 font: { family: 'IBM Plex Mono', size: 10 },
                 color: '#9CA3AF',
-                callback: (v) => Number(v).toLocaleString('ar-EG'),
+                callback: (v) => Number(v).toLocaleString('en-US'),
               },
             },
           },

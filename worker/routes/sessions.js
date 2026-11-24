@@ -87,6 +87,7 @@ async function createExpense({ request, env, authUser, officeId }) {
       date: new Date().toISOString().slice(0, 10),
       description: b.description || 'مصروف جلسة',
       accountCode: '5301',
+      refType: 'session_expense',
       userId: authUser.user_id,
     });
   } catch (e) {

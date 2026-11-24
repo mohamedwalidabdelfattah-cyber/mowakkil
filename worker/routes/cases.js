@@ -210,7 +210,7 @@ async function updateStatus({ request, env, authUser, officeId, params }) {
   return ok(env, { updated: true });
 }
 
-async function remove({ env, authUser, officeId, params }) {
+async function remove({ request, env, authUser, officeId, params }) {
   const id = toInt(params[0]);
   const c = await env.DB.prepare(
     `SELECT id FROM cases WHERE id = ? AND office_id = ?`

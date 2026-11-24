@@ -2,7 +2,7 @@
 // صفحة تفاصيل الفاتورة
 
 import { apiJson } from '../api.js';
-import { esc, toast, fmtMoney } from '../ui.js';
+import { esc, toast, fmtMoney, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { openModal } from '../modal.js';
 
 export async function showInvoiceDetail(invoiceId, onBack) {
@@ -17,7 +17,7 @@ export async function showInvoiceDetail(invoiceId, onBack) {
     return;
   }
 
-  const { invoice: inv, lines, office } = data;
+  const { invoice: inv, lines, office, payments = [] } = data;
   const remaining = (inv.total || 0) - (inv.paid_amount || 0);
   const officeName = office.name_ar || office.name || 'مُوكِّل';
 
@@ -90,7 +90,7 @@ export async function showInvoiceDetail(invoiceId, onBack) {
           </tr>
           <tr style="background:#f3efe2">
             <td colspan="3" style="padding:12px;text-align:left;font-weight:900;font-size:15px">الإجمالي النهائي</td>
-            <td style="padding:12px;text-align:left;font-weight:900;font-size:16px;color:var(--brass-deep)">${fmtMoney(inv.total)} ج</td>
+            <td style="padding:12px;text-align:left;font-weight:900;font-size:16px;color:var(--brass-deep)">${fmtMoney(inv.total)} ${cur()}</td>
           </tr>
         </tbody>
       </table>
@@ -109,6 +109,17 @@ export async function showInvoiceDetail(invoiceId, onBack) {
         <p style="font-size:13.5px;line-height:1.7">${esc(inv.terms)}</p>
       </div>
     ` : ''}
+
+    <!-- الدفعات -->
+    ${payments.length ? `
+      <div class="card">
+        <h3>🧾 الدفعات${inv.fee_id ? ' (على الفاتورة أو الأتعاب المربوطة بيها)' : ''}</h3>
+        ${payments.map(p => `
+          <div class="item" style="padding:10px 0;border-bottom:1px solid var(--border-soft)">
+            <div class="top"><span class="name">${fmtMoney(p.amount)} ${cur()}</span><span class="meta">${esc(p.payment_date || '')}</span></div>
+            <div class="meta">${esc(p.method || 'نقدي')} · إيصال ${esc(p.receipt_number || '—')}${p.notes ? ' · ' + esc(p.notes) : ''}</div>
+          </div>`).join('')}
+      </div>` : ''}
 
     <!-- تسجيل دفعة -->
     ${remaining > 0 ? `
@@ -137,31 +148,43 @@ export async function showInvoiceDetail(invoiceId, onBack) {
   });
 
   host.querySelector('#status-btn')?.addEventListener('click', async () => {
-    const status = prompt('اختر الحالة الجديدة:\n(مسودة / مرسلة / مدفوعة / متأخرة)', inv.status);
-    if (!status) return;
-    await apiJson(`/api/invoices/${invoiceId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
+    // "مدفوعة" مش من هنا — بتيجي لوحدها من الدفعات
+    const result = await openModal({
+      title: '🔄 حالة الفاتورة',
+      submitText: 'حفظ',
+      initialData: { status: ['مدفوعة', 'مدفوعة جزئياً'].includes(inv.status) ? 'مرسلة' : inv.status },
+      fields: [
+        { name: 'status', label: 'الحالة', type: 'select', options: [
+          { value: 'مسودة', label: 'مسودة (لسه ما اتبعتتش — ملهاش أثر في الحسابات)' },
+          { value: 'مرسلة', label: 'مرسلة للموكل' },
+          { value: 'متأخرة', label: 'متأخرة' },
+          { value: 'ملغاة', label: 'ملغاة' },
+        ] },
+      ],
+      onSubmit: async (d) => {
+        await apiJson(`/api/invoices/${invoiceId}`, { method: 'PATCH', body: JSON.stringify({ status: d.status }) });
+      },
     });
-    toast('اتحدّثت', 'ok');
-    showInvoiceDetail(invoiceId, onBack);
+    if (result) { toast('اتحدّثت', 'ok'); showInvoiceDetail(invoiceId, onBack); }
   });
 
   host.querySelector('#record-payment')?.addEventListener('click', async () => {
     const result = await openModal({
       title: '💵 تسجيل دفعة',
       submitText: 'تسجيل',
-      initialData: { amount: remaining },
+      initialData: { amount: remaining, payment_date: localISO(), method: 'نقدي' },
       fields: [
-        { name: 'amount', label: 'المبلغ (ج)', type: 'number', required: true },
+        { name: 'amount', label: `المبلغ (${cur()})`, type: 'number', required: true },
+        { name: 'payment_date', label: 'تاريخ الدفعة', type: 'date', required: true },
+        { name: 'method', label: 'طريقة الدفع', type: 'select', options: ['نقدي', 'تحويل بنكي', 'إنستاباي', 'فودافون كاش', 'شيك'] },
+        { name: 'notes', label: 'ملاحظات', type: 'textarea' },
       ],
       onSubmit: async (d) => {
-        const newPaid = (inv.paid_amount || 0) + Number(d.amount);
-        const newStatus = newPaid >= inv.total ? 'مدفوعة' : inv.status;
-        await apiJson(`/api/invoices/${invoiceId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ paid_amount: newPaid, status: newStatus }),
-        });
+        // دفعة حقيقية: بتدخل الصندوق (نقدي) أو البنك، وبتحدّث الفاتورة والأتعاب المربوطة
+        if (!(Number(d.amount) > 0)) throw new Error('اكتب المبلغ');
+        await apiJson('/api/payments', { method: 'POST', body: JSON.stringify({
+          invoice_id: invoiceId, amount: Number(d.amount), payment_date: d.payment_date, method: d.method, notes: d.notes || null,
+        }) });
       },
     });
     if (result) {
@@ -277,27 +300,27 @@ function printInvoice(inv, lines, office) {
               <tr>
                 <td>${esc(l.description)}</td>
                 <td style="text-align:center">${l.quantity}</td>
-                <td class="num">${fmtMoney(l.rate)} ج</td>
-                <td class="num"><strong>${fmtMoney(l.amount)} ج</strong></td>
+                <td class="num">${fmtMoney(l.rate)} ${cur()}</td>
+                <td class="num"><strong>${fmtMoney(l.amount)} ${cur()}</strong></td>
               </tr>
             `).join('')}
           </tbody>
         </table>
 
         <div class="totals">
-          <div class="row"><span>المجموع الفرعي</span><span>${fmtMoney(inv.subtotal)} ج</span></div>
-          ${inv.discount > 0 ? `<div class="row discount"><span>الخصم</span><span>-${fmtMoney(inv.discount)} ج</span></div>` : ''}
-          <div class="row"><span>الضريبة (${inv.tax_rate}%)</span><span>${fmtMoney(inv.tax_amount)} ج</span></div>
-          <div class="row total"><span>الإجمالي</span><span>${fmtMoney(inv.total)} ج</span></div>
+          <div class="row"><span>المجموع الفرعي</span><span>${fmtMoney(inv.subtotal)} ${cur()}</span></div>
+          ${inv.discount > 0 ? `<div class="row discount"><span>الخصم</span><span>-${fmtMoney(inv.discount)} ${cur()}</span></div>` : ''}
+          <div class="row"><span>الضريبة (${inv.tax_rate}%)</span><span>${fmtMoney(inv.tax_amount)} ${cur()}</span></div>
+          <div class="row total"><span>الإجمالي</span><span>${fmtMoney(inv.total)} ${cur()}</span></div>
           
           ${paid > 0 ? `
             <div class="row" style="margin-top:8px;border-top:1px dashed #ccc;padding-top:8px">
               <span>المدفوع</span>
-              <span style="color:#2f6b4f;font-weight:700">${fmtMoney(paid)} ج</span>
+              <span style="color:#2f6b4f;font-weight:700">${fmtMoney(paid)} ${cur()}</span>
             </div>
             <div class="row" style="font-weight:900;color:#a13d2f;font-size:16px">
               <span>المتبقي</span>
-              <span>${fmtMoney(remaining)} ج</span>
+              <span>${fmtMoney(remaining)} ${cur()}</span>
             </div>
           ` : ''}
         </div>

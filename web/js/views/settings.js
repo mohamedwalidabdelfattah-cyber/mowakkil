@@ -3,7 +3,7 @@
 
 import { apiJson, getRole, clearCache } from '../api.js';
 import { can } from '../access.js';
-import { toast } from '../ui.js';
+import { toast, setOfficeMoneyPrefs } from '../ui.js';
 import { pickerHTML, bindPicker } from '../ai-privacy.js';
 import { deviceSupported, getRootFolder, pickRootFolder, getDeviceLabel, setDeviceLabel } from '../device-storage.js';
 import { WA_KINDS, WA_DEFAULTS, WA_PLACEHOLDERS, fillTemplate, resetWaSettings } from '../whatsapp.js';
@@ -843,13 +843,17 @@ function bindTabEvents(host, tab, settings) {
 
   // 3. المحاسبة
   if (tab === 'accounting') {
-    save('save-accounting', 's-acc2-status', () => ({
+    save('save-accounting', 's-acc2-status', () => {
+      const d = {
       currency: val('s-currency'),
       vat_rate: num('s-vat'),
       invoice_prefix: val('s-inv-prefix'),
       fiscal_year_start: num('s-fiscal'),
       invoice_terms: val('s-inv-terms'),
-    }), 'تم حفظ إعدادات المحاسبة');
+      };
+      setOfficeMoneyPrefs(d); // الشاشات المالية تاخد العملة والضريبة الجديدة على طول
+      return d;
+    }, 'تم حفظ إعدادات المحاسبة');
   }
 
   // 4. الإشعارات: ليها ربط خاص في renderNotifTab

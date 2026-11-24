@@ -136,8 +136,35 @@ export function onTrialExpired() {
 
 // ============ Formatters ============
 export function fmtMoney(n) {
-  return Number(n || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
+  // أرقام إنجليزي زي باقي النظام
+  return Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
+
+// ============ عملة المكتب (من الإعدادات) ============
+const CURRENCY_SYMBOLS = { EGP: 'ج', SAR: 'ر.س', AED: 'د.إ', KWD: 'د.ك', QAR: 'ر.ق', BHD: 'د.ب', OMR: 'ر.ع', JOD: 'د.أ', USD: '$', EUR: '€' };
+const CURRENCY_NAMES = { EGP: 'جنيه', SAR: 'ريال', AED: 'درهم', KWD: 'دينار', QAR: 'ريال', BHD: 'دينار', OMR: 'ريال', JOD: 'دينار', USD: 'دولار', EUR: 'يورو' };
+export function currencyCode() {
+  try { return localStorage.getItem('mowakkil_currency') || 'EGP'; } catch { return 'EGP'; }
+}
+export function cur() { return CURRENCY_SYMBOLS[currencyCode()] || currencyCode(); }
+export function curName() { return CURRENCY_NAMES[currencyCode()] || currencyCode(); }
+export function setOfficeMoneyPrefs(s = {}) {
+  try {
+    if (s.currency) localStorage.setItem('mowakkil_currency', s.currency);
+    if (s.vat_rate !== undefined && s.vat_rate !== null) localStorage.setItem('mowakkil_vat', String(s.vat_rate));
+  } catch {}
+}
+export function defaultVat() {
+  try { const v = localStorage.getItem('mowakkil_vat'); return v === null ? 14 : Number(v) || 0; } catch { return 14; }
+}
+
+// ============ تواريخ بالتوقيت المحلي (toISOString بيرجّع يوم لورا في مصر) ============
+export function localISO(d = new Date()) {
+  const x = d instanceof Date ? d : new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+export function monthStartISO(d = new Date()) { return localISO(new Date(d.getFullYear(), d.getMonth(), 1)); }
+export function monthEndISO(d = new Date()) { return localISO(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
 export function fmtDate(s) {
   if (!s) return '';
   try { return new Date(s).toLocaleDateString('ar-EG'); } catch { return s; }

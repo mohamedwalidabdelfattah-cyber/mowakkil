@@ -1,7 +1,7 @@
 // web/js/main.js
 import { getToken, getRoleFromToken, clearSession, fetchSubscription } from './api.js';
 import { registerView, showView, prefetchViews } from './router.js';
-import { toast, showTrialBanner } from './ui.js';
+import { toast, showTrialBanner, setOfficeMoneyPrefs } from './ui.js';
 import { initDrawer } from './drawer.js';
 import { startNotifications, openNotifications } from './notifications.js';
 import { openSearch, initSearch } from './search.js';
@@ -260,6 +260,7 @@ if (getToken()) {
     import('./ai-privacy.js').catch(() => {});
   }, 6000);
   initSubscription();
+  apiJson('/api/settings').then(setOfficeMoneyPrefs).catch(() => {}); // عملة المكتب ونسبة الضريبة
   startNotifications();
   initBottomNav();
 

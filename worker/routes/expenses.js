@@ -4,7 +4,7 @@
 import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson, isStr } from '../lib/validation.js';
-import { autoEntryExpense } from '../services/accounting.js';
+import { autoEntryExpense, deleteEntriesFor, REF } from '../services/accounting.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 
 export const routes = [
@@ -229,6 +229,8 @@ async function create({ request, env, authUser, officeId }) {
       date: b.expense_date,
       description: b.description,
       accountCode,
+      method: b.payment_method || null,
+      refType: REF.expense,
       userId: authUser.user_id,
     });
   } catch (e) {
@@ -278,6 +280,7 @@ async function update({ request, env, authUser, officeId, params }) {
     await env.DB.prepare(
       `UPDATE session_expenses SET ${fields.join(', ')} WHERE id = ?`
     ).bind(...binds).run();
+    await repostSimpleExpense(env, officeId, REF.session_expense, id, authUser.user_id);
 
     return ok(env, { updated: true });
   }
@@ -300,6 +303,7 @@ async function update({ request, env, authUser, officeId, params }) {
     await env.DB.prepare(
       `UPDATE task_expenses SET ${fields.join(', ')} WHERE id = ?`
     ).bind(...binds).run();
+    await repostSimpleExpense(env, officeId, REF.task_expense, id, authUser.user_id);
 
     return ok(env, { updated: true });
   }
@@ -332,7 +336,27 @@ async function update({ request, env, authUser, officeId, params }) {
     `UPDATE expenses SET ${fields.join(', ')} WHERE id = ? AND office_id = ?`
   ).bind(...binds).run();
 
+  // القيد يتحدّث بالمبلغ/الحساب/طريقة الدفع الجديدة
+  const e2 = await env.DB.prepare('SELECT e.*, a.code AS account_code FROM expenses e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.id = ? AND e.office_id = ?').bind(id, officeId).first();
+  if (e2) {
+    await deleteEntriesFor(env, officeId, REF.expense, id);
+    await autoEntryExpense(env, { officeId, expenseId: id, amount: Number(e2.total_amount) || Number(e2.amount) || 0, date: e2.expense_date,
+      description: e2.description, accountCode: e2.account_code || '5406', method: e2.payment_method, refType: REF.expense, userId: authUser.user_id });
+  }
+
   return ok(env, { updated: true });
+}
+
+// إعادة قيد مصروف جلسة/مهمة بعد التعديل
+async function repostSimpleExpense(env, officeId, refType, id, userId) {
+  const row = refType === REF.session_expense
+    ? await env.DB.prepare('SELECT se.amount, se.description, se.created_at FROM session_expenses se WHERE se.id = ?').bind(id).first()
+    : await env.DB.prepare('SELECT amount, description, created_at FROM task_expenses WHERE id = ? AND office_id = ?').bind(id, officeId).first();
+  await deleteEntriesFor(env, officeId, refType, id);
+  if (row && Number(row.amount) > 0) {
+    await autoEntryExpense(env, { officeId, expenseId: id, amount: Number(row.amount), date: String(row.created_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+      description: row.description || (refType === REF.session_expense ? 'مصروف جلسة' : 'مصروف مهمة'), accountCode: '5301', refType, userId });
+  }
 }
 
 // ============================================================
@@ -355,13 +379,7 @@ async function remove({ env, authUser, officeId, params, url }) {
     ).bind(id, officeId).first();
     if (!s) return fail(env, 'not found', 404);
 
-    await env.DB.prepare(
-      `DELETE FROM journal_lines WHERE entry_id IN
-        (SELECT id FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?)`
-    ).bind(id, officeId).run();
-    await env.DB.prepare(
-      `DELETE FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?`
-    ).bind(id, officeId).run();
+    await deleteEntriesFor(env, officeId, REF.session_expense, id);
 
     await env.DB.prepare(`DELETE FROM session_expenses WHERE id = ?`).bind(id).run();
 
@@ -379,13 +397,7 @@ async function remove({ env, authUser, officeId, params, url }) {
     ).bind(id, officeId).first();
     if (!ex) return fail(env, 'not found', 404);
 
-    await env.DB.prepare(
-      `DELETE FROM journal_lines WHERE entry_id IN
-        (SELECT id FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?)`
-    ).bind(id, officeId).run();
-    await env.DB.prepare(
-      `DELETE FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?`
-    ).bind(id, officeId).run();
+    await deleteEntriesFor(env, officeId, REF.task_expense, id);
 
     await env.DB.prepare(`DELETE FROM task_expenses WHERE id = ?`).bind(id).run();
 

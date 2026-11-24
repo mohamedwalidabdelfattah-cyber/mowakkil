@@ -1,6 +1,6 @@
 // web/js/views/cases.js
 import { apiJson, api, uploadDocument, downloadDocument } from '../api.js';
-import { esc, empty, toast, skeleton, fmtMoney, fmtDate } from '../ui.js';
+import { esc, empty, toast, skeleton, fmtMoney, fmtDate, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { getClients, setCases } from '../state.js';
 import { caseTypeOptions, degreeOptions } from '../case-types.js';
 import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
@@ -416,10 +416,10 @@ async function showCaseDetail(id, initialTab = 'overview') {
           ? fees.map(f => `
               <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
                 <div class="top">
-                  <span class="name">${fmtMoney(f.amount_due)} ج</span>
+                  <span class="name">${fmtMoney(f.amount_due)} ${cur()}</span>
                   <span class="badge ${f.status === 'مدفوع بالكامل' ? 'active' : f.status === 'متأخر' ? 'suspended' : 'trial'}">${esc(f.status)}</span>
                 </div>
-                <div class="meta">مدفوع: ${fmtMoney(f.amount_paid)} ج · ${esc(f.due_date || '')}</div>
+                <div class="meta">مدفوع: ${fmtMoney(f.amount_paid)} ${cur()} · ${esc(f.due_date || '')}</div>
                 ${f.notes ? `<div class="meta">📝 ${esc(f.notes)}</div>` : ''}
                 ${c.client_id && f.status !== 'مدفوع بالكامل' && (f.amount_due || 0) > (f.amount_paid || 0)
                   ? `<button class="btn btn-ghost btn-sm wa-ghost" data-wa="fee" data-wa-id="${f.id}" style="margin-top:6px">💬 تذكير بالأتعاب</button>` : ''}
@@ -434,7 +434,7 @@ async function showCaseDetail(id, initialTab = 'overview') {
               <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
                 <div class="top">
                   <span class="name">${esc(x.description || 'مصروف')}</span>
-                  <span class="num mono" style="color:var(--danger)">${fmtMoney(x.amount)} ج</span>
+                  <span class="num mono" style="color:var(--danger)">${fmtMoney(x.amount)} ${cur()}</span>
                 </div>
                 <div class="meta">📅 ${esc(x.session_date || x.created_at?.slice(0,10) || '')}</div>
               </div>

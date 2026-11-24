@@ -1,7 +1,7 @@
 import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { isStr, toInt, safeJson } from '../lib/validation.js';
-import { autoEntryPayment } from '../services/accounting.js';
+import { recordPayment, removePayment } from '../services/accounting.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 import { createNotification } from './notifications.js';
 
@@ -94,66 +94,25 @@ async function create({ request, env, authUser, officeId }) {
   if (!amount || amount <= 0) return fail(env, 'اكتب مبلغ صحيح', 400);
   if (!b.payment_date) return fail(env, 'اكتب تاريخ الدفعة', 400);
 
-  let fee = null;
-  if (b.fee_id) {
-    fee = await env.DB.prepare(
-      `SELECT * FROM fees WHERE id = ? AND office_id = ?`
-    ).bind(b.fee_id, officeId).first();
-    if (!fee) return fail(env, 'الأتعاب مش موجودة', 400);
-  }
-
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const seqRow = await env.DB.prepare(
-    `SELECT COUNT(*) as c FROM payments WHERE office_id = ? AND substr(created_at, 1, 10) = date('now')`
-  ).bind(officeId).first();
-  const seq = String((seqRow?.c || 0) + 1).padStart(4, '0');
-  const receipt_number = `INV-${today}-${seq}`;
-
-  const client_id = b.client_id ?? fee?.client_id ?? null;
-  const case_id = b.case_id ?? fee?.case_id ?? null;
-
-  const r = await env.DB.prepare(
-    `INSERT INTO payments
-      (office_id, fee_id, client_id, case_id, amount, method, payment_date, receipt_number, notes, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
-  ).bind(
-    officeId, b.fee_id ?? null, client_id, case_id, amount,
-    b.method ?? null, b.payment_date, receipt_number, b.notes ?? null, authUser.user_id
-  ).run();
-
-  if (b.fee_id && fee) {
-    const totals = await env.DB.prepare(
-      `SELECT COALESCE(SUM(amount),0) as total FROM payments WHERE fee_id = ?`
-    ).bind(b.fee_id).first();
-    const new_paid = totals.total || 0;
-    const new_status =
-      new_paid >= (fee.amount_due || 0) ? 'مدفوع بالكامل' :
-      new_paid > 0 ? 'مدفوع جزئياً' : 'مستحق';
-
-    await env.DB.prepare(
-      `UPDATE fees SET amount_paid = ?, status = ? WHERE id = ? AND office_id = ?`
-    ).bind(new_paid, new_status, b.fee_id, officeId).run();
-  }
-
+  // الدفعة ممكن تبقى على أتعاب، أو على فاتورة، أو دفعة مقدمة لموكل
+  let rec;
   try {
-    await autoEntryPayment(env, {
-      officeId,
-      paymentId: r.meta.last_row_id,
-      amount,
-      date: b.payment_date,
-      method: b.method,
-      description: `تحصيل دفعة - ${receipt_number}`,
-      feeId: b.fee_id || null,
-      userId: authUser.user_id,
+    rec = await recordPayment(env, {
+      officeId, userId: authUser.user_id, amount, method: b.method || 'نقدي', date: b.payment_date,
+      feeId: toInt(b.fee_id) || null, invoiceId: toInt(b.invoice_id) || null,
+      clientId: toInt(b.client_id) || null, caseId: toInt(b.case_id) || null, notes: b.notes ?? null,
     });
   } catch (e) {
-    console.error('auto journal entry failed:', e.message);
+    return fail(env, e.message, 400);
   }
+  const receipt_number = rec.receipt_number;
+  const r = { meta: { last_row_id: rec.id } };
+  const fee = rec.fee || (rec.client_id ? { client_id: rec.client_id } : null);
 
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,
-    action: 'create', entity: 'payment', entity_id: r.meta.last_row_id,
-    metadata: { amount, method: b.method, receipt_number }, request,
+    action: 'create', entity: 'payment', entity_id: rec.id,
+    metadata: { amount, method: b.method, receipt_number, invoice_id: b.invoice_id || null }, request,
   });
 
   // 🔔 إشعار فوري
@@ -166,7 +125,7 @@ async function create({ request, env, authUser, officeId }) {
     userId: null,
     type: 'payment_received',
     title: '💰 دفعة جديدة',
-    body: `${amount.toLocaleString('ar-EG')} ج${clientName ? ' · ' + clientName : ''}\nإيصال: ${receipt_number}`,
+    body: `${amount.toLocaleString('en-US')}${clientName ? ' · ' + clientName : ''}\nإيصال: ${receipt_number}`,
     link: '#payments',
     icon: '💰',
     priority: 'normal',
@@ -177,7 +136,7 @@ async function create({ request, env, authUser, officeId }) {
   return ok(env, { id: r.meta.last_row_id, receipt_number }, 201);
 }
 
-async function remove({ env, authUser, officeId, params }) {
+async function remove({ request, env, authUser, officeId, params }) {
   const gate = await requireFeature(env, officeId, 'finance');
   if (gate) return gate;
 
@@ -187,34 +146,8 @@ async function remove({ env, authUser, officeId, params }) {
   ).bind(id, officeId).first();
   if (!p) return fail(env, 'not found', 404);
 
-  await env.DB.prepare(`DELETE FROM payments WHERE id = ? AND office_id = ?`)
-    .bind(id, officeId).run();
-
-  if (p.fee_id) {
-    const fee = await env.DB.prepare(
-      `SELECT * FROM fees WHERE id = ? AND office_id = ?`
-    ).bind(p.fee_id, officeId).first();
-    if (fee) {
-      const totals = await env.DB.prepare(
-        `SELECT COALESCE(SUM(amount),0) as total FROM payments WHERE fee_id = ?`
-      ).bind(p.fee_id).first();
-      const new_paid = totals.total || 0;
-      const new_status =
-        new_paid >= (fee.amount_due || 0) ? 'مدفوع بالكامل' :
-        new_paid > 0 ? 'مدفوع جزئياً' : 'مستحق';
-      await env.DB.prepare(
-        `UPDATE fees SET amount_paid = ?, status = ? WHERE id = ? AND office_id = ?`
-      ).bind(new_paid, new_status, p.fee_id, officeId).run();
-    }
-  }
-
-  await env.DB.prepare(
-    `DELETE FROM journal_lines WHERE entry_id IN
-      (SELECT id FROM journal_entries WHERE reference_type = 'payment' AND reference_id = ? AND office_id = ?)`
-  ).bind(id, officeId).run();
-  await env.DB.prepare(
-    `DELETE FROM journal_entries WHERE reference_type = 'payment' AND reference_id = ? AND office_id = ?`
-  ).bind(id, officeId).run();
+  // بيمسح الدفعة وقيدها، وبيعيد حساب المدفوع على الأتعاب والفاتورة
+  await removePayment(env, officeId, p);
 
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,

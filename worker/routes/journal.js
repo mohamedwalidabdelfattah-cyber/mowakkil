@@ -100,7 +100,7 @@ async function create({ request, env, authUser, officeId }) {
   }
 }
 
-async function remove({ env, authUser, officeId, params }) {
+async function remove({ request, env, authUser, officeId, params }) {
   const gate = await requireFeature(env, officeId, 'finance');
   if (gate) return gate;
 

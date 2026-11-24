@@ -4,7 +4,7 @@
 import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson, isStr } from '../lib/validation.js';
-import { autoEntryInvoice } from '../services/accounting.js';
+import { syncInvoiceEntry, recordPayment } from '../services/accounting.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 import { createNotification } from './notifications.js';
 
@@ -85,7 +85,12 @@ async function get({ env, officeId, params }) {
     `SELECT name, name_ar, logo FROM offices WHERE id = ?`
   ).bind(officeId).first();
 
-  return ok(env, { invoice, lines: lines || [], office: office || {} });
+  // الدفعات: على الفاتورة نفسها، أو على الأتعاب المربوطة بيها
+  const { results: payments } = await env.DB.prepare(
+    `SELECT id, amount, method, payment_date, receipt_number, notes FROM payments
+     WHERE office_id = ? AND (invoice_id = ? OR (? IS NOT NULL AND fee_id = ?)) ORDER BY payment_date, id`
+  ).bind(officeId, id, invoice.fee_id ?? null, invoice.fee_id ?? null).all();
+  return ok(env, { invoice, lines: lines || [], office: office || {}, payments: payments || [] });
 }
 
 async function create({ request, env, authUser, officeId }) {
@@ -99,6 +104,15 @@ async function create({ request, env, authUser, officeId }) {
     return fail(env, 'الفاتورة لازم يكون فيها بند واحد على الأقل', 400);
   }
 
+  // ربط بأتعاب مسجلة (الإيراد اتسجل مع الأتعاب، فالفاتورة متعملش إيراد تاني)
+  let linkedFee = null;
+  if (b.fee_id) {
+    linkedFee = await env.DB.prepare('SELECT * FROM fees WHERE id = ? AND office_id = ?').bind(toInt(b.fee_id), officeId).first();
+    if (!linkedFee) return fail(env, 'الأتعاب مش موجودة', 400);
+    if (!b.client_id) b.client_id = linkedFee.client_id;
+    if (!b.case_id) b.case_id = linkedFee.case_id;
+  }
+
   const subtotal = b.lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const taxRate = Number(b.tax_rate) || 0;
   const discount = Number(b.discount) || 0;
@@ -110,8 +124,8 @@ async function create({ request, env, authUser, officeId }) {
   const r = await env.DB.prepare(
     `INSERT INTO invoices
       (office_id, invoice_number, client_id, case_id, issue_date, due_date,
-       subtotal, tax_rate, tax_amount, discount, total, status, notes, terms, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       subtotal, tax_rate, tax_amount, discount, total, status, notes, terms, created_by, fee_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     officeId,
     invoiceNumber,
@@ -127,7 +141,8 @@ async function create({ request, env, authUser, officeId }) {
     b.status || 'مسودة',
     b.notes || null,
     b.terms || null,
-    authUser.user_id
+    authUser.user_id,
+    linkedFee ? linkedFee.id : null
   ).run();
 
   const invoiceId = r.meta.last_row_id;
@@ -146,18 +161,9 @@ async function create({ request, env, authUser, officeId }) {
     ).run();
   }
 
+  // القيد حسب الحالة: المسودة ملهاش قيد، والمربوطة بأتعاب ضريبتها بس
   try {
-    await autoEntryInvoice(env, {
-      officeId,
-      invoiceId,
-      subtotal,
-      taxAmount,
-      total,
-      discount,
-      date: b.issue_date,
-      description: `فاتورة ${invoiceNumber}`,
-      userId: authUser.user_id,
-    });
+    await syncInvoiceEntry(env, officeId, invoiceId, authUser.user_id);
   } catch (e) {
     console.error('auto journal entry failed:', e.message);
   }
@@ -211,17 +217,50 @@ async function update({ request, env, authUser, officeId, params }) {
   if (b.case_id !== undefined)       { fields.push('case_id = ?'); binds.push(b.case_id || null); }
   if (b.tax_rate !== undefined)      { fields.push('tax_rate = ?'); binds.push(Number(b.tax_rate) || 0); }
   if (b.discount !== undefined)      { fields.push('discount = ?'); binds.push(Number(b.discount) || 0); }
-  if (b.status !== undefined)        { fields.push('status = ?'); binds.push(b.status); }
-  if (b.paid_amount !== undefined)   { fields.push('paid_amount = ?'); binds.push(Number(b.paid_amount) || 0); }
+  // "مدفوعة" و"المدفوع" بيتحسبوا من الدفعات الحقيقية — متتكتبش بإيدك
+  if (b.status !== undefined && !['مدفوعة', 'مدفوعة جزئياً'].includes(b.status)) { fields.push('status = ?'); binds.push(b.status); }
+  if (b.fee_id !== undefined) {
+    const fid = toInt(b.fee_id) || null;
+    if (fid && !(await env.DB.prepare('SELECT id FROM fees WHERE id = ? AND office_id = ?').bind(fid, officeId).first())) return fail(env, 'الأتعاب مش موجودة', 400);
+    fields.push('fee_id = ?'); binds.push(fid);
+  }
+  // لو النسبة أو الخصم اتغيروا نعيد حساب الإجمالي
+  if (b.tax_rate !== undefined || b.discount !== undefined) {
+    const rate = b.tax_rate !== undefined ? (Number(b.tax_rate) || 0) : (Number(existing.tax_rate) || 0);
+    const disc = b.discount !== undefined ? (Number(b.discount) || 0) : (Number(existing.discount) || 0);
+    const taxAmt = ((Number(existing.subtotal) || 0) - disc) * rate / 100;
+    fields.push('tax_amount = ?', 'total = ?'); binds.push(taxAmt, (Number(existing.subtotal) || 0) - disc + taxAmt);
+  }
+
+  // تحصيل: "مدفوعة" أو مبلغ مدفوع أكبر → بيتسجل كدفعة حقيقية (بتدخل الصندوق/البنك)
+  const paidNow = Number(existing.paid_amount) || 0;
+  let collect = 0;
+  if (b.paid_amount !== undefined) {
+    const target = Number(b.paid_amount) || 0;
+    if (target + 0.01 < paidNow) return fail(env, 'لتقليل المدفوع احذف الدفعة من سجل الدفعات', 400);
+    collect = target - paidNow;
+  } else if (b.status === 'مدفوعة') {
+    collect = (Number(existing.total) || 0) - paidNow;
+  }
+  if (collect > 0.009 && existing.status === 'مسودة' && b.status === undefined) { fields.push('status = ?'); binds.push('مرسلة'); }
   if (b.notes !== undefined)         { fields.push('notes = ?'); binds.push(b.notes); }
   if (b.terms !== undefined)         { fields.push('terms = ?'); binds.push(b.terms); }
 
-  if (!fields.length) return fail(env, 'مفيش تغييرات', 400);
-  binds.push(id, officeId);
-
-  await env.DB.prepare(
-    `UPDATE invoices SET ${fields.join(', ')} WHERE id = ? AND office_id = ?`
-  ).bind(...binds).run();
+  if (!fields.length && !(collect > 0.009)) return fail(env, 'مفيش تغييرات', 400);
+  if (fields.length) {
+    binds.push(id, officeId);
+    await env.DB.prepare(
+      `UPDATE invoices SET ${fields.join(', ')} WHERE id = ? AND office_id = ?`
+    ).bind(...binds).run();
+  }
+  if (collect > 0.009) {
+    try {
+      await recordPayment(env, { officeId, userId: authUser.user_id, amount: collect, method: b.method || 'نقدي',
+        date: b.payment_date || new Date().toISOString().slice(0, 10), invoiceId: id });
+    } catch (e) { return fail(env, e.message, 400); }
+  }
+  // القيد يتظبط على الحالة والأرقام الجديدة
+  try { await syncInvoiceEntry(env, officeId, id, authUser.user_id); } catch (e) { console.error('invoice sync failed:', e.message); }
 
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,
@@ -231,7 +270,7 @@ async function update({ request, env, authUser, officeId, params }) {
   return ok(env, { updated: true });
 }
 
-async function remove({ env, authUser, officeId, params }) {
+async function remove({ request, env, authUser, officeId, params }) {
   const gate = await requireFeature(env, officeId, 'invoices');
   if (gate) return gate;
 
@@ -243,6 +282,8 @@ async function remove({ env, authUser, officeId, params }) {
       `SELECT id FROM invoices WHERE id = ? AND office_id = ?`
     ).bind(id, officeId).first();
     if (!existing) return fail(env, 'الفاتورة مش موجودة', 404);
+    const hasPay = await env.DB.prepare('SELECT COUNT(*) AS c FROM payments WHERE invoice_id = ? AND office_id = ?').bind(id, officeId).first();
+    if (hasPay?.c) return fail(env, 'الفاتورة عليها دفعات — احذف الدفعات الأول أو خلّيها "ملغاة"', 400);
 
     const entriesRes = await env.DB.prepare(
       `SELECT id FROM journal_entries WHERE reference_type = 'invoice' AND reference_id = ? AND office_id = ?`
