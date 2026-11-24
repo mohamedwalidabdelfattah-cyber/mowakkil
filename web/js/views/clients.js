@@ -3,6 +3,7 @@ import { apiJson } from '../api.js';
 import { esc, empty, waLink, toast, fmtMoney, fmtDate, skeleton, bindPanels } from '../ui.js';
 import { setClients } from '../state.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
+import { waLinkFor } from '../phone.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 
 // حالة الفلاتر
@@ -285,9 +286,8 @@ async function sendInvite(host, clientId) {
       return;
     }
 
-    const phone = client.phone.replace(/\D/g, '');
-    const prefixed = phone.startsWith('20') ? phone : '2' + phone;
-    const waUrl = `https://wa.me/${prefixed}?text=${encodeURIComponent(message)}`;
+    const waUrl = waLinkFor(client.phone, message);
+    if (!waUrl) { navigator.clipboard.writeText(message).catch(() => {}); toast('رقم الموكل مش مظبوط — اتنسخت الرسالة', 'bad'); showInviteModal(invite, message, host); return; }
     window.open(waUrl, '_blank');
 
     toast('تم فتح WhatsApp ✓', 'ok');
@@ -345,10 +345,9 @@ async function resendInvite(host, clientId) {
     const message = buildMessage(invite, officeName);
 
     if (invite.phone) {
-      const phone = invite.phone.replace(/\D/g, '');
-      const prefixed = phone.startsWith('20') ? phone : '2' + phone;
-      const waUrl = `https://wa.me/${prefixed}?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, '_blank');
+      const waUrl = waLinkFor(invite.phone, message);
+      if (waUrl) window.open(waUrl, '_blank');
+      else navigator.clipboard.writeText(message).catch(() => {});
     } else {
       navigator.clipboard.writeText(message);
     }

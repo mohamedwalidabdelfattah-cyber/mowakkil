@@ -4,6 +4,7 @@
 
 import { apiJson, hasFeature } from './api.js';
 import { esc, toast, showUpgradeModal } from './ui.js';
+import { normalizePhone } from './phone.js';
 
 export const WA_KINDS = {
   session: 'تذكير بجلسة',
@@ -51,19 +52,8 @@ export const WA_DEFAULTS = {
 // ============================================================
 // تحويل الرقم لصيغة دولية (مصر افتراضياً)
 // ============================================================
-export function normalizePhone(phone) {
-  let s = String(phone || '').trim();
-  if (!s) return null;
-  const intl = s.startsWith('+') || s.startsWith('00');
-  let d = s.replace(/\D/g, '');
-  if (intl) d = d.replace(/^00/, '');
-  else if (/^01\d{9}$/.test(d)) d = '20' + d.slice(1);   // 01xxxxxxxxx
-  else if (/^1\d{9}$/.test(d)) d = '20' + d;              // 1xxxxxxxxx
-  else if (/^20\d{10}$/.test(d)) { /* مصري دولي */ }
-  else if (d.startsWith('0')) d = '20' + d.replace(/^0+/, '');
-  if (d.length < 8 || d.length > 15) return null;
-  return d;
-}
+// تحويل الأرقام في مكان واحد (web/js/phone.js)
+export { normalizePhone };
 
 export function waUrl(phone, text = '') {
   const n = normalizePhone(phone);

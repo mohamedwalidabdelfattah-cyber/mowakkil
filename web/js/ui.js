@@ -1,6 +1,7 @@
 // web/js/ui.js
 import { clearSession } from './api.js';
 import { clearState } from './state.js';
+import { normalizePhone } from './phone.js';
 
 // ============ Toast ============
 export function toast(msg, type = '') {
@@ -22,14 +23,8 @@ export function esc(s) {
 
 // ============ WhatsApp ============
 export function waLink(phone) {
-  // نفس منطق normalizePhone في whatsapp.js (مصر افتراضياً، والأرقام الدولية بـ + أو 00 زي ما هي)
-  const s = String(phone || '').trim();
-  let d = s.replace(/\D/g, '');
-  if (s.startsWith('+') || s.startsWith('00')) d = d.replace(/^00/, '');
-  else if (/^01\d{9}$/.test(d)) d = '20' + d.slice(1);
-  else if (/^1\d{9}$/.test(d)) d = '20' + d;
-  else if (!/^20\d{10}$/.test(d) && d.startsWith('0')) d = '20' + d.replace(/^0+/, '');
-  return `https://wa.me/${d}`;
+  // نفس تحويل الأرقام في كل النظام (web/js/phone.js)
+  return `https://wa.me/${normalizePhone(phone) || String(phone || '').replace(/\D/g, '')}`;
 }
 
 // ============ Loading Helpers (Skeletons) ============

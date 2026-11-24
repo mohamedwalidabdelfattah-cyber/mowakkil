@@ -4,6 +4,7 @@ import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { safeJson, toInt, isStr, isValidEmail } from '../lib/validation.js';
 import { hashPassword } from '../lib/crypto.js';
+import { normalizeStoredPhone, phoneVariants } from '../lib/phone.js';
 import { requireLimit, getSubscription } from '../middleware/feature-gate.js';
 import {
   ROLES, CATALOG, ACTION_LABELS, ALL_PERMISSIONS, planAccess, rolesForPlan, clearAccessCache, canAccessCase,
@@ -104,11 +105,13 @@ async function create({ request, env, authUser, officeId }) {
   if (!b) return fail(env, 'JSON غلط', 400);
   const fullName = String(b.full_name || '').trim();
   const email = String(b.email || '').trim().toLowerCase() || null;
-  const phone = String(b.phone || '').replace(/[\s-]/g, '') || null;
+  let phone = String(b.phone || '').replace(/[\s-]/g, '') || null;
   if (!isStr(fullName, 120) || fullName.length < 2) return fail(env, 'اكتب اسم العضو', 400);
   if (!email && !phone) return fail(env, 'لازم إيميل أو رقم موبايل للدخول', 400);
   if (email && !isValidEmail(email)) return fail(env, 'صيغة الإيميل غلط', 400);
   if (phone && !/^(\+?20)?0?1[0125]\d{8}$/.test(phone)) return fail(env, 'رقم الموبايل غلط', 400);
+  const phoneAlts = phone ? phoneVariants(phone) : [];
+  if (phone) phone = normalizeStoredPhone(phone);
   if (!isStr(b.password, 200) || b.password.length < 8) return fail(env, 'كلمة السر لازم 8 حروف على الأقل', 400);
 
   const role = String(b.role || 'lawyer');
@@ -128,7 +131,7 @@ async function create({ request, env, authUser, officeId }) {
     if (dup) return fail(env, 'الإيميل ده مستخدم بالفعل', 409);
   }
   if (phone) {
-    const dup = await env.DB.prepare(`SELECT id FROM users WHERE phone = ?`).bind(phone).first();
+    const dup = await env.DB.prepare(`SELECT id FROM users WHERE phone IN (${phoneAlts.map(() => '?').join(',')})`).bind(...phoneAlts).first();
     if (dup) return fail(env, 'رقم الموبايل ده مستخدم بالفعل', 409);
   }
 

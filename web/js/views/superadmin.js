@@ -4,6 +4,7 @@
 import { API_BASE } from '../config.js';
 import { saApiJson, setSAToken, clearSAToken } from '../api.js';
 import { esc, toast, fmtMoney, fmtDate } from '../ui.js';
+import { waLinkFor } from '../phone.js';
 
 let currentFilter = { search: '', plan: '', status: '' };
 let currentOfficeId = null;
@@ -452,10 +453,7 @@ async function loadOffices() {
 
       let waUrl = '';
       if (o.owner_phone) {
-        const cleanPhone = String(o.owner_phone).replace(/\D/g, '');
-        const prefixed = cleanPhone.startsWith('20') ? cleanPhone : '2' + cleanPhone;
-        const waMessage = encodeURIComponent(`مرحباً ${o.owner_name || ''}، أنا من منصة مُوكِّل. حابب أطمن على تجربتك للمنصة وأجاوب على أي استفسار.`);
-        waUrl = `https://wa.me/${prefixed}?text=${waMessage}`;
+        waUrl = waLinkFor(o.owner_phone, `مرحباً ${o.owner_name || ''}، أنا من منصة مُوكِّل. حابب أطمن على تجربتك للمنصة وأجاوب على أي استفسار.`) || '';
       }
 
       return `
@@ -540,10 +538,7 @@ async function openOfficeModal(officeId) {
 
     let waUrl = '';
     if (office.owner_phone) {
-      const cleanPhone = String(office.owner_phone).replace(/\D/g, '');
-      const prefixed = cleanPhone.startsWith('20') ? cleanPhone : '2' + cleanPhone;
-      const waMessage = encodeURIComponent(`مرحباً ${office.owner_name || ''}، أنا من منصة مُوكِّل. حابب أطمن على تجربتك للمنصة وأجاوب على أي استفسار.`);
-      waUrl = `https://wa.me/${prefixed}?text=${waMessage}`;
+      waUrl = waLinkFor(office.owner_phone, `مرحباً ${office.owner_name || ''}، أنا من منصة مُوكِّل. حابب أطمن على تجربتك للمنصة وأجاوب على أي استفسار.`) || '';
     }
 
     document.getElementById('sa-office-content').innerHTML = `

@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from '../lib/crypto.js';
 import { signJWT } from '../lib/jwt.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
 import { audit } from '../lib/audit.js';
+import { phoneVariants } from '../lib/phone.js';
 import { isValidEmail, isStr, safeJson } from '../lib/validation.js';
 import { requireLimit } from '../middleware/feature-gate.js';
 
@@ -73,9 +74,12 @@ async function login({ request, env }) {
   if (!identifier) return fail(env, 'اكتب الإيميل أو رقم الهاتف', 400);
   if (!isStr(b.password, 200)) return fail(env, 'بيانات الدخول غلط', 401);
 
+  // الرقم ممكن يتكتب بأي شكل (010… / +2010… / 2010…) ويكون اتحفظ بالشكل القديم — بنجرب كل الأشكال
+  const variants = phoneVariants(identifier);
+  const phones = variants.length ? variants : [identifier];
   const user = await env.DB.prepare(
-    `SELECT * FROM users WHERE email = ? OR phone = ?`
-  ).bind(identifier, identifier).first();
+    `SELECT * FROM users WHERE email = ? OR phone IN (${phones.map(() => '?').join(',')}) ORDER BY (email = ?) DESC LIMIT 1`
+  ).bind(identifier, ...phones, identifier).first();
 
   if (!user || !(await verifyPassword(b.password || '', user.password_hash, user.salt))) {
     await audit(env, { action: 'login_failed', entity: 'user', request, metadata: { identifier } });

@@ -7,6 +7,7 @@ import { hashPassword } from '../lib/crypto.js';
 import { signJWT } from '../lib/jwt.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
 import { audit } from '../lib/audit.js';
+import { normalizeStoredPhone, phoneVariants } from '../lib/phone.js';
 import { isValidEmail, isStr, safeJson } from '../lib/validation.js';
 import { initializeChartOfAccounts } from '../services/chart-of-accounts.js';
 
@@ -24,12 +25,8 @@ function isValidPhone(phone) {
   return digits.length >= 10 && digits.length <= 15;
 }
 
-function normalizePhone(phone) {
-  const digits = String(phone).replace(/\D/g, '');
-  if (digits.startsWith('20')) return digits.slice(2); // 20xxx → xxx
-  if (digits.startsWith('0')) return digits;
-  return '0' + digits;
-}
+// صيغة الحفظ الموحّدة (مصري 01… / دولي +…) — worker/lib/phone.js
+const normalizePhone = normalizeStoredPhone;
 
 // ============================================================
 // Signup
@@ -63,9 +60,10 @@ async function signup({ request, env }) {
   const phone = normalizePhone(phoneRaw);
 
   // 2) نتأكد إن مفيش مستخدم بنفس الرقم
+  const variants = phoneVariants(phoneRaw);
   const phoneExists = await env.DB.prepare(
-    `SELECT id FROM users WHERE phone = ?`
-  ).bind(phone).first();
+    `SELECT id FROM users WHERE phone IN (${variants.map(() => '?').join(',')})`
+  ).bind(...variants).first();
   if (phoneExists) {
     return fail(env, 'الرقم ده مستخدم بالفعل — سجّل دخول', 409);
   }
