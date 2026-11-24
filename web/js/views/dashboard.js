@@ -1,7 +1,7 @@
 // web/js/views/dashboard.js
 // لوحة التحكم — تصميم v7
 
-import { apiJson, hasFeature, fetchSubscription, getToken } from '../api.js';
+import { apiJson, hasFeature, fetchSubscription, getToken, getRole } from '../api.js';
 import { esc, empty, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { icon } from '../icons.js';
 import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
@@ -119,6 +119,8 @@ function paint(host, data, reload) {
         </div>
       </div>
 
+      <div id="onb-slot"></div>
+
       <div class="section-header" style="margin-bottom:12px">
         <h3 style="margin:0">${icon('chart')} نظرة عامة</h3>
         <div class="filter-tabs" role="tablist">
@@ -221,6 +223,7 @@ function paint(host, data, reload) {
       </div>
     `;
 
+    mountOnboarding(host.querySelector('#onb-slot'));
     host.querySelector('#wa-tomorrow-btn')?.addEventListener('click', () => openTomorrowReminders(sessions));
     host.querySelectorAll('[data-wa-session]').forEach(b => b.addEventListener('click', () => {
       const s = sessions.find(x => String(x.id) === b.dataset.waSession);
@@ -264,6 +267,95 @@ function fmtShortDate(s) {
   const d = new Date(s);
   if (isNaN(d)) return s;
   return d.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// ============================================================
+// خطوات البداية: كارت لمالك المكتب الجديد لحد ما يضيف أول موكل وقضية وجلسة وأتعاب
+// (كتير بيسجّلوا ومبيعرفوش يبدأوا منين — الكارت بيفتحله الفورم على طول)
+// ============================================================
+const ONB_STEPS = [
+  { key: 'client',  title: 'ضيف أول موكل', hint: 'الاسم ورقم الموبايل بس', view: 'clients', open: '[data-toggle-panel="client-panel"]' },
+  { key: 'case',    title: 'ضيف أول قضية', hint: 'رقم القضية والمحكمة واختار الموكل', view: 'cases', open: '[data-toggle-panel="case-panel"]' },
+  { key: 'session', title: 'سجّل ميعاد الجلسة الجاية', hint: 'هتنزل في الأجندة ويجيلك تذكير قبلها', view: 'cases', open: '[data-toggle-panel="session-panel"]' },
+  { key: 'fee',     title: 'سجّل الأتعاب المتفق عليها', hint: 'وتابع اللي اتدفع واللي فاضل على الموكل', view: 'fees', open: '#add-fee', feature: 'finance' },
+  // الدعوة بتتبعت للموكل على واتساب على طول — فبنوريله الزرار بس ومبنضغطوش بداله
+  { key: 'portal',  title: 'ادعي موكل لبوابة الموكل', hint: 'يتابع قضيته وجلساته من موبايله من غير ما يتصل بيك', view: 'clients', open: '[data-invite-client]', highlight: true, feature: 'portal', needs: 'client' },
+  { key: 'ai',      title: 'اسأل المساعد القانوني بالذكاء الاصطناعي', hint: 'اكتب أي سؤال قانوني وهيرد عليك بالمواد والأحكام', view: 'search', open: '#chat-input', focus: true, feature: 'ai' },
+];
+const onbKey = () => 'mowakkil_onb_hidden_' + getToken().slice(-12);
+const onbGet = (k) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
+const onbSet = (k) => { try { localStorage.setItem(k, '1'); } catch {} };
+
+async function mountOnboarding(slot) {
+  if (!slot || getRole() !== 'admin' || onbGet(onbKey())) return;
+  let d;
+  try { d = await apiJson('/api/office/onboarding', { silent: true }); } catch { return; }
+  if (!slot.isConnected) return;
+  const steps = ONB_STEPS.filter(s => !s.feature || hasFeature(s.feature));
+  const done = steps.filter(s => d.steps?.[s.key]).length;
+  const allDone = done === steps.length;
+  // اللي خلّص كل الخطوات: نهنّيه مرة في أول شهر، والمكاتب القديمة مش محتاجة الكارت أصلاً
+  if (allDone) {
+    const created = d.created_at ? new Date(String(d.created_at).replace(' ', 'T') + 'Z') : null;
+    if (onbGet(onbKey() + '_done') || !created || (Date.now() - created) / 86400000 > 30) return;
+  }
+  const pct = Math.round((done / steps.length) * 100);
+  const nextIdx = steps.findIndex(s => !d.steps?.[s.key]);
+  slot.innerHTML = `
+    <div class="card onb-card">
+      <div class="onb-head">
+        <div>
+          <h3 style="margin:0">${allDone ? '🎉 مكتبك جاهز!' : '🚀 ابدأ مع مُوكِّل خطوة بخطوة'}</h3>
+          <div class="meta" style="margin:4px 0 0">${allDone
+            ? 'كده انت شغّال على مُوكِّل. الجلسات هتفكّرك لوحدها، وتقدر تبعت للموكل تذكير على واتساب من الأجندة.'
+            : `خلّصت ${done} من ${steps.length} — كل خطوة بتفتحلك الفورم على طول`}</div>
+        </div>
+        <button class="icon-btn" data-onb="hide" title="إخفاء" aria-label="إخفاء خطوات البداية">✕</button>
+      </div>
+      <div class="onb-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>
+      <div class="onb-steps">
+        ${steps.map((s, i) => {
+          const ok = !!d.steps?.[s.key];
+          return `<div class="onb-step ${ok ? 'done' : ''} ${i === nextIdx ? 'next' : ''}">
+            <span class="onb-check">${ok ? '✓' : i + 1}</span>
+            <div class="onb-text"><strong>${s.title}</strong><span>${s.hint}</span></div>
+            ${ok ? '' : `<button class="btn ${i === nextIdx ? 'btn-primary' : 'btn-ghost'} btn-sm" data-onb-go="${s.key}">${i === nextIdx ? 'ابدأ' : 'افتح'}</button>`}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  slot.querySelector('[data-onb="hide"]').addEventListener('click', () => {
+    onbSet(onbKey()); if (allDone) onbSet(onbKey() + '_done');
+    slot.innerHTML = '';
+  });
+  slot.querySelectorAll('[data-onb-go]').forEach(b => b.addEventListener('click', async () => {
+    const s = steps.find(x => x.key === b.dataset.onbGo);
+    if (s.needs && !d.steps?.[s.needs]) {
+      const { toast } = await import('../ui.js');
+      return toast('ضيف موكل الأول عشان تقدر تبعتله دعوة', 'bad');
+    }
+    const { showView } = await import('../router.js');
+    await showView(s.view);
+    // نستنى الشاشة تترسم ونفتح فورم الإضافة (أو نوريله الزرار)
+    for (let i = 0; i < 40; i++) {
+      const el = document.querySelector('#view-host ' + s.open);
+      if (el) {
+        if (s.highlight) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('onb-pulse');
+          setTimeout(() => el.classList.remove('onb-pulse'), 6000);
+        } else if (s.focus) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+        } else {
+          const panel = el.dataset.togglePanel && document.getElementById(el.dataset.togglePanel);
+          if (!panel || panel.hidden) el.click();
+        }
+        break;
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }));
 }
 
 // ============================================================
