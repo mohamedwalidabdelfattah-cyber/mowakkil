@@ -29,6 +29,7 @@ const KIND_BY_CAL = Object.fromEntries(AGENDA_KINDS.map(k => [k.cal, k]));
 const HIDDEN_KEY = 'mowakkil_agenda_hidden';
 const VIEW_KEY = 'mowakkil_agenda_view';
 const DAY_NAMES = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const SHORT_DAY_NAMES = ['أحد', 'إتنين', 'تلات', 'أربع', 'خميس', 'جمعة', 'سبت'];
 
 let calendar = null;
 let hostEl = null;
@@ -232,6 +233,12 @@ function initCalendar(host, kinds) {
       monthGridHeaderExceed(n) { return `<span class="ag-more">+${n} كمان</span>`; },
       weekGridFooterExceed(n) { return `+${n} كمان`; },
       alldayTitle() { return '<span class="ag-allday-title">طول اليوم</span>'; },
+      // رأس الأسبوع/اليوم: الرقم فوق واسم اليوم تحته في النص (على الشاشات الضيقة بيظهر الاسم المختصر)
+      weekDayName(m) {
+        const d = m.dateInstance?.toDate?.(); const isToday = d ? d.toDateString() === new Date().toDateString() : false;
+        return `<span class="ag-wdn${isToday ? ' today' : ''}"><b>${esc(String(m.date))}</b>`
+          + `<small><span class="ag-wdn-long">${esc(m.dayName)}</span><span class="ag-wdn-short">${esc(SHORT_DAY_NAMES[m.day] || m.dayName)}</span></small></span>`;
+      },
       timegridDisplayPrimaryTime({ time }) {
         const d = time.toDate ? time.toDate() : new Date(time);
         return d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric' });

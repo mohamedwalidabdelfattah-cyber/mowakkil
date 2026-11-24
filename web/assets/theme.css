@@ -1135,3 +1135,27 @@ body .search-result-item.selected, body .search-result-item:hover { background: 
   background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 999px;
   padding: 0 8px; font-weight: 700; font-size: 11px; line-height: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.12); z-index: 2;
 }
+
+/* رأس أيام الأسبوع: الرقم فوق واسم اليوم تحته في نص العمود — من غير ما الأسامي تدخل في بعض */
+.calendar-host .toastui-calendar-day-name-item {
+  text-align: center !important; padding: 0 2px !important; overflow: hidden; display: flex; align-items: center; justify-content: center;
+}
+.calendar-host .toastui-calendar-day-names { overflow: hidden !important; }
+.calendar-host .toastui-calendar-template-weekDayName { line-height: normal !important; height: 100%; display: flex; align-items: center; justify-content: center; }
+.calendar-host .toastui-calendar-day-name-item > span { height: 100%; display: flex; align-items: center; justify-content: center; line-height: normal; }
+.ag-wdn { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; gap: 1px; padding: 2px 7px; border-radius: 9px; }
+.ag-wdn b { font-size: 14px; font-weight: 800; color: var(--text); }
+.ag-wdn small { font-size: 10.5px; font-weight: 600; color: var(--text-soft); white-space: nowrap; }
+.ag-wdn.today { background: var(--primary, #0B1222); }
+.ag-wdn.today b, .ag-wdn.today small { color: #fff; }
+.ag-wdn-short { display: none; }
+@media (max-width: 900px) {
+  .ag-wdn-long { display: none; }
+  .ag-wdn-short { display: inline; }
+  .ag-wdn b { font-size: 14px; }
+}
+@media (max-width: 480px) {
+  .ag-wdn { padding: 2px 1px; }
+  .ag-wdn b { font-size: 13px; }
+  .ag-wdn small { font-size: 10px; }
+}
