@@ -78,8 +78,10 @@ export async function dashboard(env, officeId, options = {}) {
 // ============================================================
 export async function monthlyTrend(env, officeId, months = 12) {
   const now = new Date();
+  // مفتاح الشهر بيتحسب بالأرقام (مش toISOString) عشان ميتأثرش بالتوقيت ويطلع الشهر اللي قبله
+  const ym = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const startDate = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
-  const startMonth = startDate.toISOString().slice(0, 7);
+  const startMonth = ym(startDate);
 
   const revResult = await env.DB.prepare(
     `SELECT
@@ -118,7 +120,7 @@ export async function monthlyTrend(env, officeId, months = 12) {
   const months_data = [];
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = d.toISOString().slice(0, 7);
+    const key = ym(d);
     const label = d.toLocaleDateString('ar-EG', { month: 'short', year: '2-digit' });
 
     months_data.push({

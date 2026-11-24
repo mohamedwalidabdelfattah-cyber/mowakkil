@@ -83,12 +83,17 @@ export async function doLogin() {
 
 export function doLogout() {
   clearSAToken();
+  // قبل كده كنا بنخفي الشاشات بإيدينا وكارت "دخول المكتب" كان بيفضل مخفي → صفحة الدخول تبان فاضية/معلّقة.
+  // دلوقتي بنرجّع كل حاجة لأصلها وبنفتح صفحة الدخول من جديد (من غير بقايا السوبر أدمن)
   document.body.classList.remove('sa-mode');
-  document.getElementById('sa-body').hidden = true;
-  document.getElementById('sa-gate').hidden = true;
-  document.getElementById('landing-view').hidden = false;
-  document.getElementById('login-gate-view').hidden = true;
-  document.getElementById('app-body').hidden = true;
+  const saBody = document.getElementById('sa-body');
+  if (saBody) { saBody.hidden = true; saBody.innerHTML = ''; }
+  const saGate = document.getElementById('sa-gate');
+  if (saGate) saGate.hidden = true;
+  const card = document.getElementById('lawyer-login-card');
+  if (card) card.hidden = false;
+  location.replace(location.pathname + '#login');
+  location.reload();
 }
 
 // ============================================================

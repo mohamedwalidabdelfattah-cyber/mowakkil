@@ -119,6 +119,8 @@ async function load(host) {
     if (chartCard && chartCtx && typeof Chart !== 'undefined') {
       chartCard.hidden = false;
 
+      window.Chart?.getChart?.(chartCtx)?.destroy();
+
       reportChart = new Chart(chartCtx, {
         type: 'bar',
         data: {

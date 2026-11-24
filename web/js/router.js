@@ -28,7 +28,12 @@ export function prefetchViews(names) {
 
 export function getCurrentView() { return currentView; }
 
+// كل تنقّل ليه رقم: لو المستخدم راح لشاشة تانية قبل ما الأولى تخلّص تحميل،
+// الأولى متكتبش فوق الجديدة (ده كان بيعلّق الرسوم ويخلّي الصفحة تتلخبط لحد الريفريش)
+let navSeq = 0;
+
 export async function showView(name) {
+  const seq = ++navSeq;
   let realName = name;
   const aliases = {
     'cases-open':           'cases',
@@ -73,6 +78,7 @@ export async function showView(name) {
     host.innerHTML = `<div class="card"><div class="empty">تعذر تحميل الصفحة — تأكد من الاتصال وجرّب تاني</div></div>`;
     return;
   }
+  if (seq !== navSeq) return; // المستخدم راح لشاشة تانية أثناء التحميل
   if (module.adminOnly && getRole() !== 'admin') return;
 
   currentView = name;
@@ -81,10 +87,14 @@ export async function showView(name) {
     detail: { name: realName, subView: name },
   }));
 
+  // كل شاشة بتترسم في صفحة جديدة جوه الحاوية — لو اتنقلنا، الرسمة القديمة بتكتب في صفحة اتشالت (من غير ما تأثر على الجديدة)
+  const page = document.createElement('div');
+  page.className = 'view-page';
+  host.replaceChildren(page);
   try {
-    await module.render(host, { subView: name });
+    await module.render(page, { subView: name });
   } catch (e) {
-    host.innerHTML = `<div class="card"><div class="empty">خطأ: ${e.message}</div></div>`;
+    if (page.isConnected) page.innerHTML = `<div class="card"><div class="empty">خطأ: ${e.message}</div></div>`;
   }
 }
 

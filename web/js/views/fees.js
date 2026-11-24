@@ -274,6 +274,8 @@ function drawFeesStatusChart(paid, pending, late) {
     return;
   }
 
+  window.Chart?.getChart?.(ctx)?.destroy();
+
   charts.status = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -324,6 +326,8 @@ function drawCollectionChart(daily) {
   }
 
   const data = daily.slice(0, 15).reverse();
+
+  window.Chart?.getChart?.(ctx)?.destroy();
 
   charts.collection = new Chart(ctx, {
     type: 'line',

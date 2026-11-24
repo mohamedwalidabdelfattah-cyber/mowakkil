@@ -229,6 +229,8 @@ async function drawMoneyOverviewChart() {
       }
     }
 
+    window.Chart?.getChart?.(ctx)?.destroy();
+
     moneyCharts.overview = new Chart(ctx, {
       type: 'line',
       data: {

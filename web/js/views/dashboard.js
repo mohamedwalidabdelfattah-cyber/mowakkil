@@ -50,6 +50,7 @@ export async function render(host) {
       promises.push(apiJson(`/api/reports/monthly-trend?months=${months}`).catch(() => []));
     }
     const [dashboard, sessions, trendData] = await Promise.all(promises);
+    if (!host.isConnected) return; // المستخدم راح لشاشة تانية
 
     const monthlyData = {
       months: (trendData || []).map(t => t.label),
@@ -223,6 +224,7 @@ export async function render(host) {
 
     if (hasFinance) {
       requestAnimationFrame(() => {
+        if (!host.isConnected) return;
         drawMonthlyChart(monthlyData);
         drawExpensesChart(pl.expense_groups || {});
         drawRevenueChart(pl.revenues || []);
@@ -268,6 +270,7 @@ function drawMonthlyChart(data) {
     return;
   }
   const c2d = ctx.getContext('2d');
+  window.Chart?.getChart?.(ctx)?.destroy();
   charts.monthly = new Chart(ctx, {
     type: 'line',
     data: {
@@ -302,6 +305,7 @@ function drawExpensesChart(groups) {
     ctx.parentElement.innerHTML = empty('مفيش مصاريف في الفترة دي', '💸');
     return;
   }
+  window.Chart?.getChart?.(ctx)?.destroy();
   charts.expenses = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -322,6 +326,7 @@ function drawRevenueChart(revenues) {
     ctx.parentElement.innerHTML = empty('مفيش إيرادات في الفترة دي', '💰');
     return;
   }
+  window.Chart?.getChart?.(ctx)?.destroy();
   charts.revenue = new Chart(ctx, {
     type: 'bar',
     data: {
