@@ -28,7 +28,7 @@
                   ],
     "generatorApp":  "bubblewrap-cli",
     "webManifestUrl":  "https://mowakkil-2026.pages.dev/assets/site.webmanifest",
-    "fallbackType":  "customtabs",
+    "fallbackType":  "webview",
     "features":  {
 
                  },
