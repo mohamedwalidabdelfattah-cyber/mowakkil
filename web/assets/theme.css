@@ -1105,3 +1105,33 @@ body .search-result-item.selected, body .search-result-item:hover { background: 
 .exp-pending { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--warn, #d97706) 15%, transparent); color: var(--warn, #b45309); }
 .exp-rejected { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--danger, #dc2626) 12%, transparent); color: var(--danger, #b91c1c); }
 .exp-branch { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 11px; background: var(--surface-2, var(--bg)); border: 1px solid var(--border); color: var(--muted, inherit); }
+
+/* ===== الأجندة: المكتبة بتحسب الأماكن من الشمال لليمين =====
+   لو اتجاه الحاوية rtl عمود الساعات بيتنقل فوق يوم الجمعة.
+   فالهيكل يفضل ltr، والكلام جوّه بس هو اللي rtl */
+.calendar-host .toastui-calendar-layout,
+.calendar-host .toastui-calendar-week,
+.calendar-host .toastui-calendar-day,
+.calendar-host .toastui-calendar-month,
+.calendar-host .toastui-calendar-month-weekday,
+.calendar-host .toastui-calendar-weekday,
+.calendar-host .toastui-calendar-daygrid,
+.calendar-host .toastui-calendar-timegrid,
+.calendar-host .toastui-calendar-panel,
+.calendar-host .toastui-calendar-grid-cell,
+.calendar-host .toastui-calendar-daynames,
+.calendar-host .toastui-calendar-day-names { direction: ltr !important; }
+.calendar-host .toastui-calendar-weekday-event,
+.calendar-host .toastui-calendar-time-event,
+.calendar-host .toastui-calendar-weekday-event-title,
+.calendar-host .toastui-calendar-event-title,
+.calendar-host .toastui-calendar-day-name-item,
+.calendar-host .toastui-calendar-timegrid-time,
+.calendar-host .toastui-calendar-panel-title,
+.calendar-host .toastui-calendar-weekday-exceed-in-week,
+.calendar-host .toastui-calendar-weekday-exceed-in-month { direction: rtl; }
+/* "+N" يبقى زرار واضح لوحده مش فوق كلام موعد */
+.calendar-host .toastui-calendar-weekday-exceed-in-week {
+  background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 999px;
+  padding: 0 8px; font-weight: 700; font-size: 11px; line-height: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.12); z-index: 2;
+}

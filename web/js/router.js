@@ -32,7 +32,7 @@ export function getCurrentView() { return currentView; }
 // الأولى متكتبش فوق الجديدة (ده كان بيعلّق الرسوم ويخلّي الصفحة تتلخبط لحد الريفريش)
 let navSeq = 0;
 
-export async function showView(name) {
+export async function showView(name, opts = {}) {
   const seq = ++navSeq;
   let realName = name;
   const aliases = {
@@ -83,6 +83,7 @@ export async function showView(name) {
   if (module.adminOnly && getRole() !== 'admin') return;
 
   currentView = name;
+  rememberInHistory(name, opts);
 
   document.dispatchEvent(new CustomEvent('mowakkil:view-changed', {
     detail: { name: realName, subView: name },
@@ -98,6 +99,24 @@ export async function showView(name) {
     if (page.isConnected) page.innerHTML = `<div class="card"><div class="empty">خطأ: ${e.message}</div></div>`;
   }
 }
+
+// زرار الرجوع (الموبايل والمتصفح): كل تنقّل بيتسجل في تاريخ المتصفح من غير ما نغيّر العنوان،
+// فالرجوع بيفتح الشاشة اللي قبلها بدل ما يطلّع المستخدم برا البرنامج
+function rememberInHistory(name, opts) {
+  if (opts.fromHistory) return;
+  try {
+    const st = history.state;
+    if (st && st.mowakkilView === name) return;
+    if (st && st.mowakkilView) history.pushState({ mowakkilView: name }, '');
+    else history.replaceState({ ...(st || {}), mowakkilView: name }, ''); // أول شاشة بعد الدخول
+  } catch {}
+}
+window.addEventListener('popstate', (e) => {
+  const v = e.state && e.state.mowakkilView;
+  if (!v || document.getElementById('app-body')?.hidden) return;
+  document.querySelector('.modal-backdrop')?.remove(); // لو فيه نافذة مفتوحة تتقفل
+  showView(v, { fromHistory: true });
+});
 
 function skeleton(n) {
   return Array.from({ length: n }).map(() => '<div class="skeleton"></div>').join('');

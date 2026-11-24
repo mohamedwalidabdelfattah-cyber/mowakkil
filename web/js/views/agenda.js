@@ -119,13 +119,13 @@ export async function render(host) {
     b.setAttribute('aria-pressed', String(!hidden.has(cal)));
     calendar?.setCalendarVisibility(cal, !hidden.has(cal));
     savePrefs();
-    if (currentView === 'list') renderList();
+    if (currentView === 'list') renderList(); else fitAlldayPanel();
   }));
   host.querySelector('#ag-all').addEventListener('click', () => {
     hidden.clear(); savePrefs();
     host.querySelectorAll('.ag-chip[data-cal]').forEach(b => { b.classList.remove('off'); b.setAttribute('aria-pressed', 'true'); });
     AGENDA_KINDS.forEach(k => calendar?.setCalendarVisibility(k.cal, true));
-    if (currentView === 'list') renderList();
+    if (currentView === 'list') renderList(); else fitAlldayPanel();
   });
 }
 
@@ -229,6 +229,8 @@ function initCalendar(host, kinds) {
       allday(ev) { return `<span>${esc(ev.title)}</span>`; },
       monthMoreTitleDate(more) { return `<span>${esc(String(more.date))}</span>`; },
       monthMore() { return 'المزيد'; },
+      monthGridHeaderExceed(n) { return `<span class="ag-more">+${n} كمان</span>`; },
+      weekGridFooterExceed(n) { return `+${n} كمان`; },
       alldayTitle() { return '<span class="ag-allday-title">طول اليوم</span>'; },
       timegridDisplayPrimaryTime({ time }) {
         const d = time.toDate ? time.toDate() : new Date(time);
@@ -294,11 +296,40 @@ async function loadEvents() {
   const to = formatDate(calendar.getDateRangeEnd().toDate());
   try {
     const events = await apiJson(`/api/calendar/events?from=${from}&to=${to}`, { skipCache: true });
+    const prepared = prepare(events);
     calendar.clear();
-    calendar.createEvents(prepare(events));
+    calendar.createEvents(prepared);
+    lastPrepared = prepared; fitAlldayPanel(prepared);
   } catch (e) {
     console.error('loadEvents failed:', e);
   }
+}
+
+// عرض الأسبوع/اليوم: خانة "طول اليوم" بتكبر على قد أزحم يوم، عشان "+N" ميتطبعش فوق موعد
+const ALLDAY_ROW = 24;   // ارتفاع الموعد في المكتبة
+const ALLDAY_MAX_ROWS = 8; // بعد كده بيظهر "+N" ولما تدوس عليه يفتح الباقي
+let lastPrepared = [];
+function fitAlldayPanel(list = lastPrepared) {
+  if (!calendar || (currentView !== 'week' && currentView !== 'day')) return;
+  try {
+    const start = calendar.getDateRangeStart().toDate(); start.setHours(0, 0, 0, 0);
+    const end = calendar.getDateRangeEnd().toDate(); end.setHours(23, 59, 59, 999);
+    const perDay = new Map();
+    for (const e of list) {
+      if (e.category !== 'allday' || hidden.has(e.calendarId)) continue;
+      const s = new Date(String(e.start).length <= 10 ? e.start + 'T00:00:00' : e.start);
+      const f = e.end ? new Date(String(e.end).length <= 10 ? e.end + 'T00:00:00' : e.end) : s;
+      for (let d = new Date(Math.max(s, start)); d <= f && d <= end; d.setDate(d.getDate() + 1)) {
+        const k = d.toDateString(); perDay.set(k, (perDay.get(k) || 0) + 1);
+        d.setHours(0, 0, 0, 0);
+      }
+    }
+    const most = Math.max(0, ...perDay.values());
+    const rows = Math.min(Math.max(most, 3), ALLDAY_MAX_ROWS);
+    // لو فيه زيادة عن الحد، صف فاضي زيادة عشان "+N" يبقى لوحده
+    const height = (most > ALLDAY_MAX_ROWS ? rows + 1 : rows) * ALLDAY_ROW;
+    calendar.getStoreDispatchers('weekViewLayout')?.updateDayGridRowHeight({ rowName: 'allday', height });
+  } catch (err) { console.warn('fitAlldayPanel', err); }
 }
 
 let listOffset = 0;

@@ -1,7 +1,7 @@
 // web/js/views/dashboard.js
 // لوحة التحكم — تصميم v7
 
-import { apiJson, hasFeature, fetchSubscription } from '../api.js';
+import { apiJson, hasFeature, fetchSubscription, getToken } from '../api.js';
 import { esc, empty, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { icon } from '../icons.js';
 import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
@@ -17,43 +17,58 @@ const PERIODS = [
   ['7d', '7 أيام'], ['30d', '30 يوم'], ['month', 'الشهر'], ['3m', '3 شهور'], ['year', 'السنة'],
 ];
 
+// آخر بيانات اتعرضت لكل فترة: الرجوع للرئيسية بيظهر فوراً (بالرسوم) وبعدين بيتحدث في الخلفية
+// (قبل كده كانت بتستنى 3 طلبات ورا بعض كل مرة — ثانيتين لـ 4 على السيرفر الحقيقي والرسوم مختفية)
+const lastData = new Map();
+const cacheKey = (period) => `${getToken().slice(-16)}|${period}`;
+
+// كل الطلبات مرة واحدة مع بعض
+async function fetchAll(period) {
+  await fetchSubscription().catch(() => {}); // متخزنة بعد أول مرة، فمش بتأخّر
+  let hasFinance = hasFeature('finance');
+  const withAccounting = hasFinance && hasFeature('accounting');
+  const range = getRangeForFilter(period);
+  const months = period === 'year' ? 12 : period === '3m' ? 3 : 6;
+  const locked = (e) => e?.message?.includes('🔒') || e?.message?.includes('ترقية');
+  let financeLocked = false;
+  const fin = (p, o) => apiJson(p, o).catch(e => { if (locked(e)) financeLocked = true; else console.error('Dashboard finance error:', e); return null; });
+
+  const [dashboard, sessions, trendData, summary, pl, cash] = await Promise.all([
+    apiJson(`/api/dashboard?period=${period}`).catch(() => ({})),
+    apiJson('/api/agenda?days=7').catch(() => []),
+    hasFinance ? apiJson(`/api/reports/monthly-trend?months=${months}`).catch(() => []) : [],
+    withAccounting ? fin(`/api/reports/accounting-summary?from=${range.from}&to=${range.to}`, { silent: true }) : null,
+    withAccounting ? fin(`/api/reports/profit-loss?from=${range.from}&to=${range.to}`, { silent: true }) : null,
+    hasFinance ? apiJson(`/api/fees/cash-summary?from=${range.from}&to=${range.to}`, { skipCache: true, silent: true }).catch(() => null) : null,
+  ]);
+  if (financeLocked) hasFinance = false;
+  return { hasFinance, dashboard: dashboard || {}, sessions: sessions || [], trendData: trendData || [], summary: summary || {}, pl: pl || {}, cash };
+}
+
 export async function render(host) {
-  host.innerHTML = `
-    <div class="card">${skeleton(2, 'card')}</div>
-    <div class="card">${skeleton(1, 'chart')}</div>
-  `;
-
+  let seq = 0;
   const loadAndRender = async () => {
-    // 1) ملخص مالي — لو 403 يبقى الباقة مش فيها finance
-    await fetchSubscription().catch(() => {}); // نعرف الباقة قبل ما نطلب حاجة مش فيها
-    let hasFinance = hasFeature('finance');
-    let summary = {};
-    let pl = {};
-    const range = getRangeForFilter(currentFilters.period);
+    const my = ++seq;
+    const period = currentFilters.period;
+    const key = cacheKey(period);
+    const cached = lastData.get(key);
+    if (cached) paint(host, cached, loadAndRender);
+    else host.innerHTML = `
+      <div class="card">${skeleton(2, 'card')}</div>
+      <div class="card">${skeleton(1, 'chart')}</div>
+    `;
+    const data = await fetchAll(period);
+    if (my !== seq || !host.isConnected) return; // المستخدم غيّر الفترة أو راح لشاشة تانية
+    lastData.set(key, data);
+    // نرسم تاني بس لو حاجة اتغيرت (عشان الصفحة متترعشش)
+    if (!cached || JSON.stringify(cached) !== JSON.stringify(data)) paint(host, data, loadAndRender);
+  };
 
-    // القوائم المحاسبية للباقات اللي فيها المحاسبة الكاملة بس (من غيرها: الأرقام من الفلوس اللي دخلت وخرجت)
-    if (hasFinance && hasFeature('accounting')) try {
-      [summary, pl] = await Promise.all([
-        apiJson(`/api/reports/accounting-summary?from=${range.from}&to=${range.to}`, { silent: true }),
-        apiJson(`/api/reports/profit-loss?from=${range.from}&to=${range.to}`, { silent: true }),
-      ]);
-    } catch (e) {
-      if (e.message?.includes('🔒') || e.message?.includes('ترقية')) hasFinance = false;
-      else console.error('Dashboard finance error:', e);
-    }
+  await loadAndRender();
+}
 
-    // 2) البيانات الأساسية
-    const promises = [
-      apiJson(`/api/dashboard?period=${currentFilters.period}`).catch(() => ({})),
-      apiJson('/api/agenda?days=7').catch(() => []),
-    ];
-    if (hasFinance) {
-      const months = currentFilters.period === 'year' ? 12 : currentFilters.period === '3m' ? 3 : 6;
-      promises.push(apiJson(`/api/reports/monthly-trend?months=${months}`).catch(() => []));
-    }
-    const [dashboard, sessions, trendData] = await Promise.all(promises);
-    if (!host.isConnected) return; // المستخدم راح لشاشة تانية
-
+function paint(host, data, reload) {
+    const { hasFinance, dashboard, sessions, trendData, summary, pl, cash } = data;
     const monthlyData = {
       months: (trendData || []).map(t => t.label),
       revenues: (trendData || []).map(t => t.revenue),
@@ -63,11 +78,7 @@ export async function render(host) {
     const revenue = summary.revenue || 0;
     const expenses = summary.expenses || 0;
     // الرقم اللي فوق: الفلوس اللي دخلت فعلاً ناقص اللي اتصرف (زي الوضع المبسط) — مش الأتعاب المتفق عليها
-    let net = revenue - expenses;
-    if (hasFinance) {
-      try { const cs = await apiJson(`/api/fees/cash-summary?from=${range.from}&to=${range.to}`, { skipCache: true }); net = cs.net; } catch {}
-      if (!host.isConnected) return;
-    }
+    const net = cash && cash.net != null ? cash.net : revenue - expenses;
 
     Object.values(charts).forEach(c => c?.destroy?.());
     charts = {};
@@ -226,20 +237,26 @@ export async function render(host) {
     }));
     host.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => {
       currentFilters.period = b.dataset.period;
-      loadAndRender();
+      reload();
     }));
 
     if (hasFinance) {
-      requestAnimationFrame(() => {
-        if (!host.isConnected) return;
+      const canvas = host.querySelector('#chart-monthly');
+      whenChartReady(() => {
+        // لو الصفحة اترسمت تاني أو المستخدم مشي، الرسمة دي مبقتش ليها لازمة
+        if (!canvas.isConnected) return;
         drawMonthlyChart(monthlyData);
         drawExpensesChart(pl.expense_groups || {});
         drawRevenueChart(pl.revenues || []);
       });
     }
-  };
+}
 
-  await loadAndRender();
+// مكتبة الرسوم بتتحمل من النت: لو لسه موصلتش نستناها بدل ما الرسوم متظهرش خالص
+function whenChartReady(fn, tries = 0) {
+  if (typeof window.Chart !== 'undefined') return requestAnimationFrame(fn);
+  if (tries > 60) return; // 15 ثانية
+  setTimeout(() => whenChartReady(fn, tries + 1), 250);
 }
 
 function fmtShortDate(s) {
