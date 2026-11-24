@@ -26,7 +26,21 @@ export function applyChartTheme() {
   d.borderColor = '#EAECF0';
   d.maintainAspectRatio = false;
   d.responsive = true;
-  d.animation = { duration: 500, easing: 'easeOutQuart' };
+  // ⚠️ متستبدلش الكائن كله: Chart.js بيبني إعدادات الحركة من مفاتيحه (type/fn/from/to…)،
+  // ولو اتمسحت، حركة الألوان بتضرب خطأ "this._fn is not a function" وبتوقف رسم كل الرسوم
+  // لحد ريفريش (ده اللي كان بيخفي رسوم الرئيسية بعد الرجوع من أي صفحة)
+  d.animation.duration = 500;
+  d.animation.easing = 'easeOutQuart';
+  // حماية زيادة: أي حركة مالهاش طريقة معروفة تقفز للقيمة النهائية بدل ما توقف الرسم كله
+  const A = C.Animation?.prototype;
+  if (A && !A.__mowakkilSafe) {
+    const tick = A.tick;
+    A.tick = function (date) {
+      if (typeof this._fn !== 'function') this._fn = (from, to) => to;
+      return tick.call(this, date);
+    };
+    A.__mowakkilSafe = true;
+  }
   d.locale = 'ar-EG';
 
   const p = d.plugins;
