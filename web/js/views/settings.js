@@ -152,6 +152,8 @@ async function renderStorageTab(content, settings, isAdmin, reload) {
 let currentTab = 'office';
 
 export async function render(host) {
+  // فتح تبويب معيّن (مثلاً من زرار الإعدادات في قايمة الإشعارات)
+  try { const t = sessionStorage.getItem('mowakkil_settings_tab'); if (t) { currentTab = t; sessionStorage.removeItem('mowakkil_settings_tab'); } } catch {}
   const isAdmin = can('settings.manage'); // المالك والشريك (والأدوار المخصصة اللي معاها الصلاحية)
 
   host.innerHTML = `
@@ -225,7 +227,10 @@ async function loadTab(host, tab, isAdmin) {
     if (tab === 'office')             content.innerHTML = renderOfficeTab(settings, isAdmin);
     else if (tab === 'account')       content.innerHTML = renderAccountTab(isAdmin);
     else if (tab === 'accounting')    content.innerHTML = renderAccountingTab(settings, isAdmin);
-    else if (tab === 'notifications') content.innerHTML = renderNotificationsTab(settings, isAdmin);
+    else if (tab === 'notifications') {
+      await renderNotifTab(content, settings, isAdmin, () => loadTab(host, 'notifications', isAdmin));
+      return;
+    }
     else if (tab === 'appearance')    content.innerHTML = renderAppearanceTab(settings, isAdmin);
     else if (tab === 'plan')          content.innerHTML = await renderPlanTab();
     else if (tab === 'storage') {
@@ -434,50 +439,130 @@ function renderAccountingTab(s, isAdmin) {
 
 // ============================================================
 // 4. تبويب الإشعارات
+//    - على الجهاز ده (لكل مستخدم): إشعارات الجهاز + الصوت + إشعار تجريبي
+//    - إشعارات المكتب (المدير بيعدّل): أنواع الإشعارات اللي بتتعمل + ميعاد تذكير الجلسات
 // ============================================================
-function renderNotificationsTab(s, isAdmin) {
-  const toggles = [
-    { key: 'notif_cases',       icon: '⚖️', label: 'إشعارات القضايا' },
-    { key: 'notif_clients',     icon: '👤', label: 'إشعارات الموكلين' },
-    { key: 'notif_payments',    icon: '💰', label: 'إشعارات الدفعات' },
-    { key: 'notif_fees',        icon: '💵', label: 'إشعارات الأتعاب المتأخرة' },
-    { key: 'notif_sessions',    icon: '📅', label: 'إشعارات الجلسات' },
-    { key: 'notif_tasks',       icon: '✅', label: 'إشعارات المهام' },
-  ];
+const NOTIF_GROUPS = [
+  { key: 'notif_sessions', icon: '⚖️', label: 'الجلسات', desc: 'تذكير قبل كل جلسة (بالساعة لو متسجلة)، وإشعار لما جلسة جديدة تتضاف.', extra: 'reminder' },
+  { key: 'notif_events',   icon: '🗓️', label: 'مواعيد الأجندة', desc: 'الموعد النهائي/ميعاد الطعن: قبله بـ 3 أيام وبيوم ويومها. الاجتماع والاستشارة والإجراء: قبلها بيوم ويومها.' },
+  { key: 'notif_tasks',    icon: '✅', label: 'المهام', desc: 'المهام المستحقة النهارده، ولما مهمة تتسند لحد.' },
+  { key: 'notif_fees',     icon: '💰', label: 'الأتعاب المتأخرة', desc: 'لما أتعاب تعدّي ميعادها بأسبوع، وبيتكرر كل أسبوع لحد ما تتدفع.' },
+  { key: 'notif_payments', icon: '💵', label: 'التحصيل والفواتير', desc: 'دفعة جديدة اتسجلت أو فاتورة جديدة اتعملت.' },
+  { key: 'notif_cases',    icon: '📁', label: 'القضايا الجديدة', desc: 'لما قضية جديدة تتضاف للمكتب.' },
+  { key: 'notif_clients',  icon: '👤', label: 'الموكلين الجدد', desc: 'لما موكل جديد يتضاف.' },
+];
 
-  return `
-    <div class="card">
-      <h3>🔔 إعدادات الإشعارات</h3>
-      <p style="color:var(--text-soft);font-size:13px;margin-bottom:16px">
-        اختر أنواع الإشعارات اللي عايز تستقبلها
-      </p>
+async function renderNotifTab(content, s, isAdmin, reload) {
+  const notif = await import('../notifications.js');
+  const support = notif.deviceSupport();
+  const dev = notif.deviceEnabled() && support === 'granted';
+  const on = (k) => s[k] === undefined || s[k] === null ? true : Number(s[k]) === 1;
+  const lead = Number(s.session_reminder_days ?? 1);
+  const leadOpts = [[0, 'يوم الجلسة الصبح'], [1, 'قبلها بيوم'], [2, 'قبلها بيومين'], [3, 'قبلها بـ 3 أيام'], [7, 'قبلها بأسبوع']];
 
-      <div class="settings-toggles">
-        ${toggles.map(t => `
-          <label class="settings-toggle">
-            <input type="checkbox" id="s-${t.key}" ${s[t.key] ? 'checked' : ''} ${!isAdmin ? 'disabled' : ''}>
-            <div class="settings-toggle-info">
-              <span class="settings-toggle-icon">${t.icon}</span>
-              <span class="settings-toggle-label">${t.label}</span>
-            </div>
-            <span class="settings-toggle-switch"></span>
-          </label>
-        `).join('')}
+  const sw = (id, checked, disabled = false) => `
+    <span class="nt-switch"><input type="checkbox" id="${id}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span class="nt-slider" aria-hidden="true"></span></span>`;
+
+  content.innerHTML = `
+    <div class="card nt-card">
+      <div class="nt-head">
+        <div>
+          <h3>🔔 على الجهاز ده</h3>
+          <p class="meta">الإعدادات دي بتاعتك انت وعلى الجهاز ده بس.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="nt-test">📨 ابعت إشعار تجريبي</button>
       </div>
+      <label class="nt-row" for="nt-device">
+        <div class="nt-row-ic">🖥️</div>
+        <div class="nt-row-body">
+          <div class="nt-row-title">إشعارات الجهاز</div>
+          <div class="nt-row-desc">
+            ${support === 'unsupported' ? 'المتصفح ده مش بيدعم إشعارات الجهاز.'
+              : support === 'denied' ? '⚠️ المتصفح مانع الإشعارات للموقع — اسمح بيها من علامة القفل جنب عنوان الموقع وبعدين فعّلها هنا.'
+              : 'تظهر على الكمبيوتر أو الموبايل حتى لو الموقع مفتوح في الخلفية.'}
+          </div>
+        </div>
+        ${sw('nt-device', dev, support === 'unsupported')}
+      </label>
+      <label class="nt-row" for="nt-sound">
+        <div class="nt-row-ic">🔊</div>
+        <div class="nt-row-body">
+          <div class="nt-row-title">صوت مع الإشعار الجديد</div>
+          <div class="nt-row-desc">نغمة خفيفة لما يوصل إشعار جديد.</div>
+        </div>
+        ${sw('nt-sound', notif.soundEnabled())}
+      </label>
+    </div>
 
-      <div class="form-row" style="margin-top:20px">
-        <label class="label">⏰ تذكير الجلسات قبل (بالأيام)</label>
-        <input class="input" id="s-reminder-days" type="number" min="1" max="7" value="${s.session_reminder_days || 1}" ${!isAdmin ? 'disabled' : ''}>
+    <div class="card nt-card">
+      <div class="nt-head">
+        <div>
+          <h3>🏢 إشعارات المكتب</h3>
+          <p class="meta">${isAdmin
+            ? 'اختار الإشعارات اللي تتبعت للفريق. التغيير بيتحفظ لوحده.'
+            : 'الإعدادات دي بيحددها مدير المكتب.'}
+            كل واحد بيشوف بس الإشعارات اللي من حقه حسب صلاحياته، والتذكيرات بتتبعت كل يوم الصبح بدري.</p>
+        </div>
+        <span class="nt-saved" id="nt-saved" role="status" aria-live="polite"></span>
       </div>
-
-      ${isAdmin ? `
-        <button class="btn btn-primary" id="save-notifications" style="margin-top:16px">
-          💾 حفظ إعدادات الإشعارات
-        </button>
-        <div id="s-notif-status" class="status" style="margin-top:12px"></div>
-      ` : ''}
+      ${NOTIF_GROUPS.map(g => `
+        <div class="nt-row ${on(g.key) ? '' : 'off'}" data-row="${g.key}">
+          <div class="nt-row-ic">${g.icon}</div>
+          <div class="nt-row-body">
+            <label class="nt-row-title" for="nt-${g.key}">${g.label}</label>
+            <div class="nt-row-desc">${g.desc}</div>
+            ${g.extra === 'reminder' ? `
+              <div class="nt-extra">
+                <label for="nt-lead">ميعاد التذكير:</label>
+                <select id="nt-lead" class="input" ${isAdmin ? '' : 'disabled'}>
+                  ${leadOpts.map(([v, l]) => `<option value="${v}" ${v === lead ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+              </div>` : ''}
+          </div>
+          ${sw('nt-' + g.key, on(g.key), !isAdmin)}
+        </div>`).join('')}
     </div>
   `;
+
+  const saved = content.querySelector('#nt-saved');
+  const flash = (txt, bad = false) => {
+    saved.textContent = txt; saved.className = 'nt-saved show' + (bad ? ' bad' : '');
+    clearTimeout(saved._t); saved._t = setTimeout(() => saved.classList.remove('show'), 2200);
+  };
+  const patch = async (body) => {
+    try {
+      await apiJson('/api/settings', { method: 'PATCH', body: JSON.stringify(body) });
+      clearCache();
+      flash('✓ اتحفظ');
+      return true;
+    } catch (e) { flash('⚠️ ' + e.message, true); return false; }
+  };
+
+  // على الجهاز
+  content.querySelector('#nt-device')?.addEventListener('change', async (e) => {
+    try { await notif.setDeviceEnabled(e.target.checked); toast(e.target.checked ? '✓ إشعارات الجهاز اتفعّلت' : 'إشعارات الجهاز اتقفلت', 'ok'); }
+    catch (err) { e.target.checked = false; toast('⚠️ ' + err.message, 'bad'); }
+  });
+  content.querySelector('#nt-sound')?.addEventListener('change', (e) => notif.setSoundEnabled(e.target.checked));
+  content.querySelector('#nt-test')?.addEventListener('click', async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try {
+      await apiJson('/api/notifications/test', { method: 'POST' });
+      toast('✓ اتبعت — هتلاقيه في الجرس فوق', 'ok');
+      notif.updateBadge();
+    } catch (err) { toast('⚠️ ' + err.message, 'bad'); }
+    finally { setTimeout(() => { b.disabled = false; }, 1500); }
+  });
+
+  if (!isAdmin) return;
+  for (const g of NOTIF_GROUPS) {
+    content.querySelector('#nt-' + g.key)?.addEventListener('change', async (e) => {
+      const v = e.target.checked;
+      content.querySelector(`[data-row="${g.key}"]`)?.classList.toggle('off', !v);
+      if (!(await patch({ [g.key]: v ? 1 : 0 }))) { e.target.checked = !v; content.querySelector(`[data-row="${g.key}"]`)?.classList.toggle('off', v); }
+    });
+  }
+  content.querySelector('#nt-lead')?.addEventListener('change', (e) => patch({ session_reminder_days: Number(e.target.value) }));
 }
 
 // ============================================================
@@ -767,18 +852,7 @@ function bindTabEvents(host, tab, settings) {
     }), 'تم حفظ إعدادات المحاسبة');
   }
 
-  // 4. الإشعارات
-  if (tab === 'notifications') {
-    save('save-notifications', 's-notif-status', () => ({
-      notif_cases:       check('s-notif_cases'),
-      notif_clients:     check('s-notif_clients'),
-      notif_payments:    check('s-notif_payments'),
-      notif_fees:        check('s-notif_fees'),
-      notif_sessions:    check('s-notif_sessions'),
-      notif_tasks:       check('s-notif_tasks'),
-      session_reminder_days: num('s-reminder-days'),
-    }), 'تم حفظ إعدادات الإشعارات');
-  }
+  // 4. الإشعارات: ليها ربط خاص في renderNotifTab
 
   // 5. المظهر
   if (tab === 'appearance') {

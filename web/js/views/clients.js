@@ -448,6 +448,9 @@ function showInviteModal(invite, message, host) {
 // ============================================================
 // ✅ ملف الموكل الكامل — Modal شامل
 // ============================================================
+// فتح موكل من البحث أو الإشعارات
+document.addEventListener('mowakkil:open-client', (e) => { if (e.detail?.id) showProfile(Number(e.detail.id)); });
+
 async function showProfile(id) {
   document.getElementById('client-profile-modal')?.remove();
 

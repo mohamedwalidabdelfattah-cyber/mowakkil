@@ -256,6 +256,9 @@ function caseItem(c) {
 // ============================================================
 // تفاصيل القضية (Modal شامل)
 // ============================================================
+// فتح قضية من البحث أو الإشعارات
+document.addEventListener('mowakkil:open-case', (e) => { if (e.detail?.id) showCaseDetail(Number(e.detail.id)); });
+
 async function showCaseDetail(id, initialTab = 'overview') {
   document.getElementById('case-detail-modal')?.remove();
 

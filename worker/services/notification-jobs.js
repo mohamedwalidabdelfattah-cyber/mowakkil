@@ -1,19 +1,38 @@
 // worker/services/notification-jobs.js
 // مهام التذكيرات التلقائية + فحص الحدود
 
-import { createNotification } from '../routes/notifications.js';
+import { createNotification, getOfficePrefs } from '../routes/notifications.js';
+import { cairoDay } from '../lib/ai-quota.js';
 import { getLimits, getUsage } from '../middleware/feature-gate.js';
 
 // ============================================================
-// تذكيرات الجلسات القادمة (قبل 24 ساعة)
+// مساعدات التاريخ (توقيت القاهرة)
+// ============================================================
+function addDays(day, n) {
+  const d = new Date(day + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function daysBetween(a, b) {
+  return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+}
+function whenLabel(n) {
+  return n === 0 ? 'النهارده' : n === 1 ? 'بكرة' : n === 2 ? 'بعد يومين' : `بعد ${n} أيام`;
+}
+function fmt12(t) {
+  if (!t) return '';
+  const [h, m] = String(t).split(':').map(Number);
+  return `${h % 12 || 12}:${String(m || 0).padStart(2, '0')} ${h < 12 ? 'ص' : 'م'}`;
+}
+
+// ============================================================
+// تذكيرات الجلسات القادمة (قبلها بعدد الأيام اللي المكتب اختاره، افتراضي يوم)
 // ============================================================
 export async function checkUpcomingSessions(env) {
   try {
-    const now = new Date();
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-
+    const today = cairoDay();
     const { results: sessions } = await env.DB.prepare(
-      `SELECT s.id, s.session_date, s.notes,
+      `SELECT s.id, s.session_date, s.session_time, s.notes,
               c.id as case_id, c.case_number, c.court,
               cl.name as client_name,
               c.office_id
@@ -22,31 +41,36 @@ export async function checkUpcomingSessions(env) {
        LEFT JOIN clients cl ON cl.id = c.client_id
        WHERE c.office_id IS NOT NULL
          AND c.deleted_at IS NULL
-         AND date(s.session_date) = date(?)
+         AND date(s.session_date) BETWEEN date(?) AND date(?)
          AND NOT EXISTS (
            SELECT 1 FROM notifications n
            WHERE n.reference_type = 'session'
              AND n.reference_id = s.id
              AND n.type = 'session_reminder'
          )`
-    ).bind(tomorrow.toISOString().slice(0, 10)).all();
+    ).bind(today, addDays(today, 7)).all();
 
+    let made = 0;
     for (const s of (sessions || [])) {
-      await createNotification(env, {
+      const prefs = await getOfficePrefs(env, s.office_id);
+      const lead = Math.min(Math.max(Number(prefs.session_reminder_days) || 1, 0), 7);
+      const left = daysBetween(today, String(s.session_date).slice(0, 10));
+      if (left > lead) continue; // لسه بدري
+      const ok = await createNotification(env, {
         officeId: s.office_id,
         type: 'session_reminder',
-        title: `⚖️ جلسة غدًا — ${s.client_name || 'موكل'}`,
-        body: `قضية ${s.case_number || '—'} · ${s.court || ''}\n${s.notes || ''}`,
+        title: `جلسة ${whenLabel(left)} — ${s.client_name || 'موكل'}`,
+        body: `قضية ${s.case_number || '—'}${s.court ? ' · ' + s.court : ''}${s.session_time ? '\nالساعة ' + fmt12(s.session_time) : ''}${s.notes ? '\n' + s.notes : ''}`,
         link: `#case-${s.case_id}`,
         icon: '⚖️',
-        priority: 'high',
+        priority: left <= 1 ? 'high' : 'normal',
         referenceType: 'session',
         referenceId: s.id,
         dueAt: s.session_date,
       });
+      if (ok) made++;
     }
-
-    return sessions?.length || 0;
+    return made;
   } catch (e) {
     console.error('checkUpcomingSessions failed:', e.message);
     return 0;
@@ -54,17 +78,18 @@ export async function checkUpcomingSessions(env) {
 }
 
 // ============================================================
-// تذكيرات المهام المستحقة (اليوم)
+// تذكيرات المهام المستحقة (النهارده)
 // ============================================================
 export async function checkDueTasks(env) {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = cairoDay();
 
     const { results: tasks } = await env.DB.prepare(
-      `SELECT t.id, t.title, t.due_date, t.office_id,
-              l.name as lawyer_name
+      `SELECT t.id, t.title, t.due_date, t.office_id, t.case_id,
+              l.name as lawyer_name, c.case_number
        FROM tasks t
        LEFT JOIN lawyers l ON l.id = t.lawyer_id
+       LEFT JOIN cases c ON c.id = t.case_id
        WHERE t.status = 'مفتوحة'
          AND date(t.due_date) = date(?)
          AND NOT EXISTS (
@@ -75,12 +100,13 @@ export async function checkDueTasks(env) {
          )`
     ).bind(today).all();
 
+    let made = 0;
     for (const t of (tasks || [])) {
-      await createNotification(env, {
+      const ok = await createNotification(env, {
         officeId: t.office_id,
         type: 'task_due',
-        title: `✅ مهمة مستحقة اليوم`,
-        body: `${t.title}${t.lawyer_name ? '\n👤 ' + t.lawyer_name : ''}`,
+        title: `مهمة مستحقة النهارده`,
+        body: `${t.title}${t.case_number ? '\n📁 ' + t.case_number : ''}${t.lawyer_name ? '\n👤 ' + t.lawyer_name : ''}`,
         link: `#task-${t.id}`,
         icon: '✅',
         priority: 'high',
@@ -88,11 +114,67 @@ export async function checkDueTasks(env) {
         referenceId: t.id,
         dueAt: t.due_date,
       });
+      if (ok) made++;
     }
-
-    return tasks?.length || 0;
+    return made;
   } catch (e) {
     console.error('checkDueTasks failed:', e.message);
+    return 0;
+  }
+}
+
+// ============================================================
+// تذكيرات مواعيد الأجندة (اجتماع، استشارة، موعد نهائي…)
+//   موعد نهائي: قبله بـ 3 أيام + يوم + يومها
+//   اجتماع / استشارة / إجراء: قبله بيوم + يومها
+//   تذكير / شخصي / أخرى: يومها
+// ============================================================
+const EVENT_LEADS = { deadline: [3, 1, 0], meeting: [1, 0], consultation: [1, 0], procedure: [1, 0] };
+const EVENT_LABELS = { deadline: 'موعد نهائي', meeting: 'اجتماع', consultation: 'استشارة', procedure: 'إجراء', reminder: 'تذكير', personal: 'موعد شخصي', other: 'موعد' };
+const EVENT_ICONS = { deadline: '⏰', meeting: '🤝', consultation: '💬', procedure: '📋', reminder: '🔔', personal: '🙂', other: '📌' };
+
+export async function checkAgendaEvents(env) {
+  try {
+    const today = cairoDay();
+    const { results } = await env.DB.prepare(
+      `SELECT e.id, e.office_id, e.user_id, e.kind, e.title, e.start_date, e.start_time, e.location,
+              c.case_number, cl.name as client_name
+       FROM agenda_events e
+       LEFT JOIN cases c ON c.id = e.case_id
+       LEFT JOIN clients cl ON cl.id = e.client_id
+       WHERE e.done = 0 AND e.start_date BETWEEN ? AND ?
+         AND NOT EXISTS (
+           SELECT 1 FROM notifications n
+           WHERE n.type = 'event_reminder' AND n.reference_type = 'event'
+             AND n.reference_id = e.id AND date(n.created_at) = date('now')
+         )`
+    ).bind(today, addDays(today, 3)).all();
+
+    let made = 0;
+    for (const e of (results || [])) {
+      const left = daysBetween(today, e.start_date);
+      if (!(EVENT_LEADS[e.kind] || [0]).includes(left)) continue;
+      // المواعيد الشخصية لصاحبها بس
+      const personal = e.kind === 'personal' || e.kind === 'reminder';
+      const ok = await createNotification(env, {
+        officeId: e.office_id,
+        userId: personal ? e.user_id : null,
+        type: 'event_reminder',
+        title: `${EVENT_LABELS[e.kind] || 'موعد'} ${whenLabel(left)} — ${e.title}`,
+        body: [e.start_time ? 'الساعة ' + fmt12(e.start_time) : '', e.location ? '📍 ' + e.location : '',
+          e.case_number ? '📁 ' + e.case_number : '', e.client_name ? '👤 ' + e.client_name : ''].filter(Boolean).join('\n') || null,
+        link: '#agenda',
+        icon: EVENT_ICONS[e.kind] || '📌',
+        priority: e.kind === 'deadline' ? (left <= 1 ? 'urgent' : 'high') : (left === 0 ? 'high' : 'normal'),
+        referenceType: 'event',
+        referenceId: e.id,
+        dueAt: e.start_date,
+      });
+      if (ok) made++;
+    }
+    return made;
+  } catch (e) {
+    console.error('checkAgendaEvents failed:', e.message);
     return 0;
   }
 }
@@ -102,7 +184,7 @@ export async function checkDueTasks(env) {
 // ============================================================
 export async function checkOverdueFees(env) {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = cairoDay();
 
     const { results: fees } = await env.DB.prepare(
       `SELECT f.id, f.amount_due, f.amount_paid, f.due_date, f.office_id,
@@ -128,7 +210,7 @@ export async function checkOverdueFees(env) {
         officeId: f.office_id,
         type: 'fee_overdue',
         title: `💰 أتعاب متأخرة — ${f.client_name || 'موكل'}`,
-        body: `متبقي: ${remaining.toLocaleString('ar-EG')} ج\n${f.case_number ? '📁 قضية ' + f.case_number : ''}`,
+        body: `متبقي: ${remaining.toLocaleString('en-US')} ج\n${f.case_number ? '📁 قضية ' + f.case_number : ''}`,
         link: '#fees',
         icon: '💰',
         priority: 'urgent',
@@ -236,12 +318,13 @@ export async function checkUsageLimits(env) {
 // ============================================================
 export async function runNotificationJobs(env) {
   console.log('=== Running notification jobs ===');
-  const [sessions, tasks, fees, limits] = await Promise.all([
+  const [sessions, tasks, fees, limits, events] = await Promise.all([
     checkUpcomingSessions(env),
     checkDueTasks(env),
     checkOverdueFees(env),
     checkUsageLimits(env),
+    checkAgendaEvents(env),
   ]);
-  console.log(`✅ Created notifications: sessions=${sessions}, tasks=${tasks}, fees=${fees}, limits=${limits}`);
-  return { sessions, tasks, fees, limits };
+  console.log(`✅ Created notifications: sessions=${sessions}, tasks=${tasks}, fees=${fees}, limits=${limits}, events=${events}`);
+  return { sessions, tasks, fees, limits, events };
 }

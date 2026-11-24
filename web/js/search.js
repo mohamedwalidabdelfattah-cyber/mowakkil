@@ -3,6 +3,7 @@
 
 import { apiJson } from './api.js';
 import { showView } from './router.js';
+import { openLink } from './nav-links.js';
 
 const HISTORY_KEY = 'mowakkil-search-history';
 const MAX_HISTORY = 8;
@@ -249,6 +250,7 @@ function renderResults(results, query) {
     payment:  '💵 الدفعات',
     invoice:  '📄 الفواتير',
     session:  '📅 الجلسات',
+    event:    '🗓️ مواعيد الأجندة',
     task:     '✅ المهام',
     lawyer:   '👨‍⚖️ المحامون',
   };
@@ -403,63 +405,8 @@ function onResultClick(e) {
 // التنقل حسب نوع النتيجة
 // ============================================================
 function handleResultNavigation(item) {
-  const link = item.link || '';
-
-  // case-123 → افتح القضية
-  if (link.startsWith('#case-')) {
-    const id = link.replace('#case-', '');
-    showView('cases');
-    setTimeout(() => {
-      document.dispatchEvent(new CustomEvent('mowakkil:open-case', { detail: { id } }));
-    }, 100);
-    return;
-  }
-
-  // client-123 → افتح الموكل
-  if (link.startsWith('#client-')) {
-    const id = link.replace('#client-', '');
-    showView('clients');
-    setTimeout(() => {
-      document.dispatchEvent(new CustomEvent('mowakkil:open-client', { detail: { id } }));
-    }, 100);
-    return;
-  }
-
-  // task-123 → افتح المهمة
-  if (link.startsWith('#task-')) {
-    const id = link.replace('#task-', '');
-    showView('tasks');
-    setTimeout(() => {
-      document.dispatchEvent(new CustomEvent('mowakkil:open-task', { detail: { id } }));
-    }, 100);
-    return;
-  }
-
-  // invoice-123 → افتح الفاتورة
-  if (link.startsWith('#invoice-')) {
-    const id = link.replace('#invoice-', '');
-    showView('money-invoices');
-    setTimeout(() => {
-      document.dispatchEvent(new CustomEvent('mowakkil:open-invoice', { detail: { id } }));
-    }, 100);
-    return;
-  }
-
-  // fallback: افتح حسب النوع
-  const typeViews = {
-    case:     'cases',
-    client:   'clients',
-    fee:      'fees',
-    payment:  'money',
-    invoice:  'money-invoices',
-    session:  'agenda',
-    task:     'tasks',
-    lawyer:   'lawyers',
-  };
-
-  if (typeViews[item.type]) {
-    showView(typeViews[item.type]);
-  }
+  // نفس طريقة فتح الروابط في الإشعارات: الشاشة + العنصر نفسه (القضية/الموكل…)
+  openLink(item.link || '', item.type);
 }
 
 // ============================================================
