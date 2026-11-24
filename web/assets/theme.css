@@ -1092,3 +1092,10 @@ body .search-result-item.selected, body .search-result-item:hover { background: 
   .st-totals { grid-template-columns: 1fr 1fr; }
   .st-totals div:last-child { grid-column: 1 / -1; }
 }
+
+.st-trust { border: 1px dashed var(--border); border-radius: 12px; padding: 10px 12px; margin-top: 10px; display: grid; gap: 6px; }
+.st-trust-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ms-adv { display: grid; gap: 4px; }
+.ms-adv-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--border); }
+.ms-adv-acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ms-adv-acts .input { width: auto; padding: 6px 10px; }

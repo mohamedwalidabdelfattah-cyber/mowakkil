@@ -2,6 +2,7 @@
 // نظام الفواتير
 
 import { ok, fail } from '../lib/response.js';
+import { assertOpen } from '../lib/period-lock.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson, isStr } from '../lib/validation.js';
 import { syncInvoiceEntry, recordPayment } from '../services/accounting.js';
@@ -100,6 +101,7 @@ async function create({ request, env, authUser, officeId }) {
   const b = await safeJson(request);
   if (!b) return fail(env, 'JSON غلط', 400);
   if (!b.issue_date) return fail(env, 'اكتب تاريخ الفاتورة', 400);
+  try { await assertOpen(env, officeId, b.issue_date); } catch (e) { return fail(env, e.message, 423); }
   if (!Array.isArray(b.lines) || b.lines.length === 0) {
     return fail(env, 'الفاتورة لازم يكون فيها بند واحد على الأقل', 400);
   }
@@ -207,6 +209,7 @@ async function update({ request, env, authUser, officeId, params }) {
     `SELECT * FROM invoices WHERE id = ? AND office_id = ?`
   ).bind(id, officeId).first();
   if (!existing) return fail(env, 'not found', 404);
+  try { await assertOpen(env, officeId, existing.issue_date); if (b.issue_date) await assertOpen(env, officeId, b.issue_date); } catch (e) { return fail(env, e.message, 423); }
 
   const fields = [];
   const binds = [];

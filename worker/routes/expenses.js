@@ -2,6 +2,9 @@
 // المصاريف — عامة + جلسات + مهام (مدمجة)
 
 import { ok, fail } from '../lib/response.js';
+import { assertOpen } from '../lib/period-lock.js';
+import { trustBalance, autoEntryTrustExpense, payrollPreview, runPayroll, generateRecurring } from '../services/finance-advanced.js';
+import { requireFeature as needFeature } from '../middleware/feature-gate.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson, isStr } from '../lib/validation.js';
 import { autoEntryExpense, deleteEntriesFor, REF } from '../services/accounting.js';
@@ -12,6 +15,8 @@ export const routes = [
   { method: 'POST',   path: '/api/expenses',                       handler: create },
   { method: 'GET',    path: '/api/expenses/stats',                 handler: stats },
   { method: 'GET',    path: '/api/expenses/recurring',             handler: recurringList },
+  { method: 'GET',    path: '/api/expenses/payroll',               handler: payrollGet },
+  { method: 'POST',   path: '/api/expenses/payroll',               handler: payrollPost },
   { method: 'GET',    path: /^\/api\/expenses\/(\d+)$/,            handler: get },
   { method: 'PATCH',  path: /^\/api\/expenses\/(\d+)$/,            handler: update },
   { method: 'DELETE', path: /^\/api\/expenses\/(\d+)$/,            handler: remove },
@@ -23,6 +28,8 @@ export const routes = [
 async function list({ env, officeId, url }) {
   const gate = await requireFeature(env, officeId, 'finance');
   if (gate) return gate;
+  // المصاريف المتكررة اللي جه ميعادها تتسجل (لو الكرون لسه ما اشتغلش النهارده)
+  await generateRecurring(env, { officeId }).catch(e => console.warn('recurring failed', e.message));
 
   const fromDate = url.searchParams.get('from');
   const toDate = url.searchParams.get('to');
@@ -38,7 +45,9 @@ async function list({ env, officeId, url }) {
               a.code as account_code, a.name as account_name,
               c.case_number, cl.name as client_name,
               NULL as task_title,
-              u.full_name as created_by_name
+              u.full_name as created_by_name,
+              e.is_recurring, e.recurring_frequency, e.recurring_parent_id,
+              COALESCE(e.is_reimbursable, 0) AS on_client, COALESCE(e.paid_from_trust, 0) AS from_trust
             FROM expenses e
             LEFT JOIN accounts a ON a.id = e.account_id
             LEFT JOIN cases c ON c.id = e.case_id
@@ -59,7 +68,9 @@ async function list({ env, officeId, url }) {
               '5301' as account_code, 'مصاريف قضائية' as account_name,
               c.case_number, cl.name as client_name,
               NULL as task_title,
-              NULL as created_by_name
+              NULL as created_by_name,
+              0 AS is_recurring, NULL AS recurring_frequency, NULL AS recurring_parent_id,
+              COALESCE(se.billable, 0) AS on_client, 0 AS from_trust
             FROM session_expenses se
             JOIN sessions s ON s.id = se.session_id
             JOIN cases c ON c.id = s.case_id
@@ -79,7 +90,9 @@ async function list({ env, officeId, url }) {
               '5301' as account_code, 'مصاريف مهام' as account_name,
               c.case_number, NULL as client_name,
               t.title as task_title,
-              NULL as created_by_name
+              NULL as created_by_name,
+              0 AS is_recurring, NULL AS recurring_frequency, NULL AS recurring_parent_id,
+              COALESCE(te.billable, 0) AS on_client, 0 AS from_trust
             FROM task_expenses te
             JOIN tasks t ON t.id = te.task_id
             LEFT JOIN cases c ON c.id = t.case_id
@@ -178,6 +191,17 @@ async function create({ request, env, authUser, officeId }) {
     if (c?.client_id) b.client_id = c.client_id;
   }
   if (b.is_reimbursable && !b.client_id) return fail(env, 'المصروف على حساب الموكل محتاج قضية أو موكل', 400);
+  try { await assertOpen(env, officeId, b.expense_date); } catch (e) { return fail(env, e.message, 423); }
+  // الصرف من أمانة الموكل (الاحترافية وفوق)
+  if (b.paid_from_trust) {
+    const g = await needFeature(env, officeId, 'accounting');
+    if (g) return g;
+    if (!b.client_id) return fail(env, 'الصرف من الأمانة محتاج قضية أو موكل', 400);
+    const bal = await trustBalance(env, officeId, b.client_id);
+    if (total > bal + 0.009) return fail(env, `رصيد أمانة الموكل ${bal} — أقل من المصروف`, 400);
+    b.is_reimbursable = 0;
+  }
+  if (b.is_recurring && !['monthly', 'quarterly', 'yearly'].includes(b.recurring_frequency)) b.recurring_frequency = 'monthly';
 
   let accountId = b.account_id || null;
   if (accountId) {
@@ -196,8 +220,8 @@ async function create({ request, env, authUser, officeId }) {
     `INSERT INTO expenses
       (office_id, expense_date, description, account_id, amount, tax_amount, total_amount,
        payment_method, vendor, reference_number, case_id, client_id,
-       is_reimbursable, is_recurring, recurring_frequency, receipt_url, notes, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       is_reimbursable, is_recurring, recurring_frequency, receipt_url, notes, created_by, paid_from_trust)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     officeId,
     b.expense_date,
@@ -216,8 +240,15 @@ async function create({ request, env, authUser, officeId }) {
     b.recurring_frequency || null,
     b.receipt_url || null,
     b.notes || null,
-    authUser.user_id
+    authUser.user_id,
+    b.paid_from_trust ? 1 : 0
   ).run();
+
+  if (b.paid_from_trust) {
+    await autoEntryTrustExpense(env, { officeId, expenseId: r.meta.last_row_id, amount: total, date: b.expense_date, description: b.description, method: b.payment_method, userId: authUser.user_id });
+    await audit(env, { office_id: officeId, user_id: authUser.user_id, action: 'create', entity: 'expense', entity_id: r.meta.last_row_id, request });
+    return ok(env, { id: r.meta.last_row_id }, 201);
+  }
 
   try {
     let accountCode = '5406';
@@ -337,6 +368,9 @@ async function update({ request, env, authUser, officeId, params }) {
   if (b.client_id !== undefined)          { fields.push('client_id = ?'); binds.push(b.client_id || null); }
   if (b.notes !== undefined)              { fields.push('notes = ?'); binds.push(b.notes); }
   if (b.is_reimbursable !== undefined)    { fields.push('is_reimbursable = ?'); binds.push(b.is_reimbursable ? 1 : 0); }
+  if (b.is_recurring !== undefined)       { fields.push('is_recurring = ?'); binds.push(b.is_recurring ? 1 : 0); }
+  if (b.recurring_frequency !== undefined && ['monthly', 'quarterly', 'yearly'].includes(b.recurring_frequency)) { fields.push('recurring_frequency = ?'); binds.push(b.recurring_frequency); }
+  try { await assertOpen(env, officeId, existing.expense_date); if (b.expense_date) await assertOpen(env, officeId, b.expense_date); } catch (e) { return fail(env, e.message, 423); }
 
   if (!fields.length) return fail(env, 'مفيش تغييرات', 400);
   binds.push(id, officeId);
@@ -347,7 +381,10 @@ async function update({ request, env, authUser, officeId, params }) {
 
   // القيد يتحدّث بالمبلغ/الحساب/طريقة الدفع الجديدة
   const e2 = await env.DB.prepare('SELECT e.*, a.code AS account_code FROM expenses e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.id = ? AND e.office_id = ?').bind(id, officeId).first();
-  if (e2) {
+  if (e2 && e2.paid_from_trust) {
+    await deleteEntriesFor(env, officeId, REF.expense, id);
+    await autoEntryTrustExpense(env, { officeId, expenseId: id, amount: Number(e2.total_amount) || 0, date: e2.expense_date, description: e2.description, method: e2.payment_method, userId: authUser.user_id });
+  } else if (e2) {
     await deleteEntriesFor(env, officeId, REF.expense, id);
     await autoEntryExpense(env, { officeId, expenseId: id, amount: Number(e2.total_amount) || Number(e2.amount) || 0, date: e2.expense_date,
       description: e2.description, accountCode: e2.account_code || '5406', method: e2.payment_method, refType: REF.expense, billable: !!e2.is_reimbursable, userId: authUser.user_id });
@@ -419,9 +456,10 @@ async function remove({ env, authUser, officeId, params, url }) {
 
   // ---------- عام ----------
   const existing = await env.DB.prepare(
-    `SELECT id FROM expenses WHERE id = ? AND office_id = ?`
+    `SELECT id, expense_date FROM expenses WHERE id = ? AND office_id = ?`
   ).bind(id, officeId).first();
   if (!existing) return fail(env, 'not found', 404);
+  try { await assertOpen(env, officeId, existing.expense_date); } catch (e) { return fail(env, e.message, 423); }
 
   const { results: entries } = await env.DB.prepare(
     `SELECT id FROM journal_entries WHERE reference_type = 'expense' AND reference_id = ? AND office_id = ?`
@@ -572,4 +610,22 @@ async function recurringList({ env, officeId }) {
     monthly_estimate: monthly,
     yearly_estimate: monthly * 12,
   });
+}
+
+// ============================================================
+// صرف مرتبات الشهر (الاحترافية وفوق)
+// ============================================================
+async function payrollGet({ env, officeId, url }) {
+  const g = await needFeature(env, officeId, 'accounting'); if (g) return g;
+  const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+  return ok(env, { month, lawyers: await payrollPreview(env, officeId, month) });
+}
+async function payrollPost({ request, env, officeId, authUser }) {
+  const g = await needFeature(env, officeId, 'accounting'); if (g) return g;
+  const b = await safeJson(request);
+  try {
+    const r = await runPayroll(env, { officeId, userId: authUser.user_id, month: b?.month, method: b?.method || 'تحويل بنكي', date: b?.date });
+    await audit(env, { office_id: officeId, user_id: authUser.user_id, action: 'create', entity: 'payroll', metadata: { month: b?.month, ...r }, request });
+    return ok(env, r, 201);
+  } catch (e) { return fail(env, e.message, e.status || 400); }
 }

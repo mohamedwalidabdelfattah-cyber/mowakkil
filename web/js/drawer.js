@@ -52,6 +52,7 @@ const MENU = [
       { id: 'money-income',       label: 'الإيرادات' },
       { id: 'money-reports',      label: 'التقارير' },
       { id: 'money-invoices',     label: 'الفواتير' },
+      { id: 'money-profit',       label: 'ربحية القضايا والمحامين' },
       { id: 'accounting-journal', label: 'دفتر اليومية' },
       { id: 'accounting-accounts',label: 'دليل الحسابات' },
       { id: 'accounting-pl',      label: 'قائمة الدخل' },
@@ -149,7 +150,8 @@ function renderMenu() {
   const showAccounting = hasFeature('accounting') && (accMode || getAccessState()?.role === 'accountant');
   nav.innerHTML = MENU
     .filter(item => (!item.adminOnly || isAdmin) && canView(item.id))
-    .map(item => ({ ...item, sub: item.sub?.filter(s => canView(s.id) && (showAccounting || !s.id.startsWith('accounting-'))) }))
+    .map(item => ({ ...item, sub: item.sub?.filter(s => canView(s.id) && (showAccounting || !s.id.startsWith('accounting-'))
+      && (s.id !== 'money-profit' || hasFeature('accounting')) && (s.id !== 'money-invoices' || hasFeature('invoices'))) }))
     .map(item => {
       const hasSub = item.sub && item.sub.length > 0;
       return `

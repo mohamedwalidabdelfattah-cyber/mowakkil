@@ -6,19 +6,19 @@ import { fail } from '../lib/response.js';
 const FEATURES = {
   starter: {
     cases: true, clients: true, agenda: true, portal: true,
-    finance: true, invoices: true, accounting: false, ai: false,
+    finance: true, invoices: true, accounting: false, finance_advanced: false, ai: false,
     advanced_reports: false, whatsapp: false,
     multi_office: false, api: false,
   },
   pro: {
     cases: true, clients: true, agenda: true, portal: true,
-    finance: true, invoices: true, accounting: true, ai: true,
+    finance: true, invoices: true, accounting: true, finance_advanced: false, ai: true,
     advanced_reports: true, whatsapp: true,
     multi_office: false, api: false,
   },
   plus: {
     cases: true, clients: true, agenda: true, portal: true,
-    finance: true, invoices: true, accounting: true, ai: true,
+    finance: true, invoices: true, accounting: true, finance_advanced: true, ai: true,
     advanced_reports: true, whatsapp: true,
     multi_office: true, api: true,
   },
@@ -26,13 +26,13 @@ const FEATURES = {
   // الأتعاب والتحصيل والمصروفات والوضع المبسط وكشف الحساب (من غير فواتير ولا محاسبة كاملة)
   lifetime_basic: {
     cases: true, clients: true, agenda: true, portal: true,
-    finance: true, invoices: false, accounting: false, ai: false,
+    finance: true, invoices: false, accounting: false, finance_advanced: false, ai: false,
     advanced_reports: false, whatsapp: false,
     multi_office: false, api: false,
   },
   lifetime_pro: {
     cases: true, clients: true, agenda: true, portal: true,
-    finance: true, invoices: true, accounting: true, ai: true,
+    finance: true, invoices: true, accounting: true, finance_advanced: false, ai: true,
     advanced_reports: true, whatsapp: true,
     multi_office: false, api: true,
   },
@@ -50,7 +50,7 @@ const LIMITS = {
 // باقة احتياطية داخلية (مش معروضة للعملاء) لأي اشتراك قديم باسم باقة غير معروف
 const FALLBACK_FEATURES = {
   cases: true, clients: true, agenda: true, portal: true,
-  finance: false, invoices: false, accounting: false, ai: false,
+  finance: false, invoices: false, accounting: false, finance_advanced: false, ai: false,
   advanced_reports: false, whatsapp: false,
   multi_office: false, api: false,
 };

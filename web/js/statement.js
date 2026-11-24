@@ -1,7 +1,7 @@
 // web/js/statement.js
 // كشف حساب الموكل: اللي عليه، اللي دفعه، الباقي — طباعة/PDF وواتساب وتسجيل دفعة على الحساب
 
-import { apiJson } from './api.js';
+import { apiJson, hasFeature } from './api.js';
 import { esc, toast, fmtMoney, cur, curName, localISO } from './ui.js';
 import { openModal } from './modal.js';
 import { openWhatsAppComposer } from './whatsapp.js';
@@ -56,6 +56,14 @@ export async function openStatement(clientId) {
         </tbody>
       </table>` : '<div class="empty" style="padding:24px">مفيش حركات على الموكل ده لسه</div>'}
     </div>
+    ${hasFeature('accounting') ? `
+    <div class="st-trust">
+      <div class="st-trust-head">
+        <strong>💼 أمانة الموكل (مقدم مصاريف): ${fmtMoney(s.trust?.balance || 0)} ${cur()}</strong>
+        <span><button class="btn btn-ghost btn-sm" data-st="deposit">➕ إيداع</button>${(s.trust?.balance || 0) > 0 ? ' <button class="btn btn-ghost btn-sm" data-st="refund">↩️ رد للموكل</button>' : ''}</span>
+      </div>
+      ${(s.trust?.rows || []).length ? `<div class="meta">${s.trust.rows.slice(-4).map(r => `${esc(r.date)} · ${esc(r.description)} · ${r.in ? '+' + fmtMoney(r.in) : '−' + fmtMoney(r.out)}`).join('<br>')}</div>` : '<div class="meta">الأمانة: فلوس الموكل اللي دفعها مقدم للمصاريف (رسوم، دمغات…) — بتتصرف منها مصاريف قضيته ويترد الباقي.</div>'}
+    </div>` : ''}
     <div class="st-actions">
       <button class="btn btn-primary btn-sm" data-st="pay">💵 تسجيل دفعة على الحساب</button>
       ${client.phone ? '<button class="btn wa-send btn-sm" data-st="wa">💬 ابعته على واتساب</button>' : ''}
@@ -78,6 +86,25 @@ export async function openStatement(clientId) {
         'لو محتاج الكشف بالتفصيل بلّغنا ونبعتهولك.',
       ].filter(Boolean).join('\n');
       return openWhatsAppComposer({ kind: 'general', phone: client.phone, client_name: client.name, presetText: text });
+    }
+    if (a === 'deposit' || a === 'refund') {
+      const res = await openModal({
+        title: a === 'deposit' ? '➕ إيداع أمانة (مقدم مصاريف)' : '↩️ رد أمانة للموكل',
+        submitText: 'تسجيل',
+        initialData: { amount: a === 'refund' ? (s.trust?.balance || '') : '', date: localISO(), method: 'نقدي' },
+        fields: [
+          { name: 'amount', label: `المبلغ (${cur()})`, type: 'number', required: true },
+          { name: 'date', label: 'التاريخ', type: 'date', required: true },
+          { name: 'method', label: 'طريقة الدفع', type: 'select', options: ['نقدي', 'تحويل بنكي', 'إنستاباي', 'فودافون كاش', 'شيك'] },
+          { name: 'description', label: 'ملاحظات', type: 'textarea' },
+        ],
+        onSubmit: async (d) => {
+          if (!(Number(d.amount) > 0)) throw new Error('اكتب المبلغ');
+          await apiJson('/api/fees/trust', { method: 'POST', body: JSON.stringify({ client_id: client.id, kind: a, amount: Number(d.amount), date: d.date, method: d.method, description: d.description || null }) });
+        },
+      });
+      if (res) { toast('✓ اتسجل', 'ok'); close(); openStatement(clientId); }
+      return;
     }
     if (a === 'pay') {
       const res = await openModal({

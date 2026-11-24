@@ -3,6 +3,7 @@
 
 import { apiJson, hasFeature } from '../api.js';
 import { renderSimple } from './money-simple.js';
+import { renderProfit } from './money-profit.js';
 import { esc, toast, empty, skeleton, fmtMoney, cur, curName, localISO, monthStartISO, monthEndISO, defaultVat } from '../ui.js';
 import { openModal } from '../modal.js';
 
@@ -30,6 +31,7 @@ export async function render(host, options = {}) {
       case 'money-expenses': return await renderExpenses(host);
       case 'money-income':   return await renderIncome(host);
       case 'money-reports':  return await renderSimple(host);
+      case 'money-profit':   return await renderProfit(host);
       case 'money-invoices': return await renderInvoices(host);
       default:               return await renderSimple(host); // الوضع المبسط (الفلوس اللي دخلت وخرجت فعلاً)
     }
@@ -313,7 +315,7 @@ async function renderExpenses(host) {
 
   const expenseAccounts = accounts.filter(a => a.category === 'expense');
   const now = new Date();
-  const monthExpenses = expenses.filter(e => (e.date || '').startsWith(now.toISOString().slice(0, 7)));
+  const monthExpenses = expenses.filter(e => (e.date || '').startsWith(localISO(now).slice(0, 7)));
   const monthTotal = monthExpenses.reduce((s, e) => s + (e.amount || 0), 0);
 
   host.innerHTML = `
@@ -326,6 +328,7 @@ async function renderExpenses(host) {
       <button class="btn btn-primary btn-block" id="add-expense">
         ➕ إضافة مصروف جديد
       </button>
+      ${hasFeature('accounting') ? '<button class="btn btn-ghost btn-block" id="payroll-btn" style="margin-top:8px">💼 صرف مرتبات الشهر</button>' : ''}
     </div>
 
     <div id="expenses-list">
@@ -336,12 +339,15 @@ async function renderExpenses(host) {
             <span class="num mono" style="color:var(--danger);font-weight:700">${fmtMoney(e.amount)} ${cur()}</span>
           </div>
           <div class="meta">
-            ${e.source === 'session' ? '⚖️ مصروف قضية' : '🏢 مصروف عام'}
+            ${e.source === 'session' ? '⚖️ مصروف جلسة' : e.source === 'task' ? '✅ مصروف مهمة' : (e.case_number ? '📁 مصروف قضية' : '🏢 مصروف عام')}
+            · <span class="exp-who ${e.from_trust ? 'client' : e.on_client ? 'client' : 'office'}">${e.from_trust ? 'من أمانة الموكل' : e.on_client ? 'على الموكل' : 'على المكتب'}</span>
+            ${e.is_recurring ? ` · 🔁 ${({ monthly: 'شهري', quarterly: 'كل 3 شهور', yearly: 'سنوي' })[e.recurring_frequency] || 'متكرر'}` : ''}
             ${e.account_name ? ' · ' + esc(e.account_name) : ''}
             · 📅 ${esc(e.date || '')}
             ${e.case_number ? ' · 📁 ' + esc(e.case_number) : ''}
           </div>
           <div class="acts">
+            ${e.is_recurring ? `<button class="btn btn-ghost" data-stop-recurring="${e.id}">⏹ إيقاف التكرار</button>` : ''}
             <button class="btn btn-ghost" data-del-expense="${e.id}" data-source="${e.source || 'general'}" style="color:var(--danger)">🗑 حذف</button>
           </div>
         </div>
@@ -367,17 +373,28 @@ async function renderExpenses(host) {
           placeholder: 'نقدي',
           options: ['نقدي', 'تحويل بنكي', 'شيك', 'فودافون كاش', 'إنستاباي'] },
         { name: 'case_id', label: '📁 القضية (لو المصروف خاص بقضية)', type: 'select', options: [{ value: '', label: '— مصروف عام على المكتب —' }, ...casesList.map(c => ({ value: c.id, label: (c.case_number || 'قضية #' + c.id) + (c.client_name ? ' — ' + c.client_name : '') }))] },
-        { name: 'is_reimbursable', label: '👤 مين هيتحمّله؟', type: 'select', options: [{ value: '0', label: 'المكتب (مصروف على المكتب)' }, { value: '1', label: 'الموكل (يتضاف لحسابه وكشف حسابه)' }] },
+        { name: 'is_reimbursable', label: '👤 مين هيتحمّله؟', type: 'select', options: [{ value: '0', label: 'المكتب (مصروف على المكتب)' }, { value: '1', label: 'الموكل (يتضاف لحسابه وكشف حسابه)' },
+          ...(hasFeature('accounting') ? [{ value: '2', label: 'من أمانة الموكل (مقدم المصاريف اللي دفعه)' }] : [])] },
+        ...(hasFeature('accounting') ? [{ name: 'recurring_frequency', label: '🔁 يتكرر؟', type: 'select', options: [{ value: '', label: 'لأ، مرة واحدة' }, { value: 'monthly', label: 'كل شهر (إيجار، اشتراكات…)' }, { value: 'quarterly', label: 'كل 3 شهور' }, { value: 'yearly', label: 'كل سنة' }] }] : []),
         { name: 'vendor', label: '🏢 الجهة / المورد', placeholder: 'مالك العقار' },
         { name: 'notes', label: '📝 ملاحظات', type: 'textarea' },
       ],
       onSubmit: async (d) => {
-        if (d.is_reimbursable === '1' && !d.case_id) throw new Error('اختار القضية عشان نعرف الموكل اللي هيتحمّل المصروف');
-        await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, case_id: d.case_id || null, is_reimbursable: d.is_reimbursable === '1' ? 1 : 0 }) });
+        if ((d.is_reimbursable === '1' || d.is_reimbursable === '2') && !d.case_id) throw new Error('اختار القضية عشان نعرف الموكل');
+        await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, case_id: d.case_id || null,
+          is_reimbursable: d.is_reimbursable === '1' ? 1 : 0, paid_from_trust: d.is_reimbursable === '2' ? 1 : 0,
+          is_recurring: d.recurring_frequency ? 1 : 0, recurring_frequency: d.recurring_frequency || null }) });
       },
     });
     if (result) { toast('اتحفظ ✓', 'ok'); render(host, { subView: 'money-expenses' }); }
   });
+
+  host.querySelectorAll('[data-stop-recurring]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('توقف تكرار المصروف ده؟ (اللي اتسجل قبل كده هيفضل)')) return;
+    try { await apiJson(`/api/expenses/${b.dataset.stopRecurring}`, { method: 'PATCH', body: JSON.stringify({ is_recurring: 0 }) }); toast('اتوقف التكرار', 'ok'); render(host, { subView: 'money-expenses' }); }
+    catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+  }));
+  host.querySelector('#payroll-btn')?.addEventListener('click', () => openPayroll(() => render(host, { subView: 'money-expenses' })));
 
   host.querySelectorAll('[data-del-expense]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('متأكد من الحذف؟')) return;
@@ -1006,3 +1023,47 @@ function openInvoiceModal(host, clients, cases, onDone) {
 
   updateTotals();
 } 
+
+
+// ============================================================
+// صرف مرتبات الشهر (من بيانات المحامين)
+// ============================================================
+async function openPayroll(onDone) {
+  const month = localISO().slice(0, 7);
+  let p;
+  try { p = await apiJson(`/api/expenses/payroll?month=${month}`, { skipCache: true }); }
+  catch (e) { return toast('⚠️ ' + e.message, 'bad'); }
+  const due = p.lawyers.filter(l => !l.already_paid);
+  const total = due.reduce((s, l) => s + l.salary, 0);
+  document.getElementById('payroll-modal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'payroll-modal';
+  m.className = 'modal-overlay show';
+  m.innerHTML = `
+    <div class="modal-card" style="max-width:480px;width:calc(100vw - 32px)" role="dialog" aria-modal="true">
+      <div class="st-head"><h3 style="margin:0">💼 مرتبات ${esc(month)}</h3><button class="icon-btn" data-pr="close" aria-label="إغلاق">✕</button></div>
+      ${p.lawyers.length ? `
+        <div class="st-table-wrap" style="max-height:45vh"><table class="st-table"><thead><tr><th>المحامي</th><th>المرتب</th><th></th></tr></thead><tbody>
+          ${p.lawyers.map(l => `<tr><td>${esc(l.name)}</td><td class="mono">${fmtMoney(l.salary)}</td><td>${l.already_paid ? '<span class="meta">✓ اتصرف</span>' : ''}</td></tr>`).join('')}
+        </tbody></table></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+          <label class="meta">اتصرفت إزاي:</label>
+          <select id="pr-method" class="input" style="width:auto"><option>تحويل بنكي</option><option>نقدي</option><option>إنستاباي</option><option>فودافون كاش</option></select>
+        </div>
+        <div class="st-actions">
+          ${due.length ? `<button class="btn btn-primary" data-pr="run">صرف ${due.length} مرتب — ${fmtMoney(total)} ${cur()}</button>` : '<span class="meta">كل مرتبات الشهر ده اتصرفت ✓</span>'}
+        </div>` : '<div class="empty">مفيش محامين ليهم مرتب — ضيف المرتب من صفحة المحامين</div>'}
+    </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-pr]')?.dataset.pr;
+    if (e.target === m || a === 'close') return m.remove();
+    if (a === 'run') {
+      try {
+        const r = await apiJson('/api/expenses/payroll', { method: 'POST', body: JSON.stringify({ month, method: m.querySelector('#pr-method').value }) });
+        toast(`✓ اتسجل ${r.created} مرتب (${fmtMoney(r.total)} ${cur()})`, 'ok');
+        m.remove(); onDone?.();
+      } catch (err) { toast('⚠️ ' + err.message, 'bad'); }
+    }
+  });
+}

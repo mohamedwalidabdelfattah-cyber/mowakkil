@@ -147,7 +147,7 @@ async function remove({ request, env, authUser, officeId, params }) {
   if (!p) return fail(env, 'not found', 404);
 
   // بيمسح الدفعة وقيدها، وبيعيد حساب المدفوع على الأتعاب والفاتورة
-  await removePayment(env, officeId, p);
+  try { await removePayment(env, officeId, p); } catch (e) { return fail(env, e.message, e.status || 400); }
 
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,

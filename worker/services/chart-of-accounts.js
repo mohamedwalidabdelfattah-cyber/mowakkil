@@ -30,6 +30,7 @@ export const DEFAULT_CHART = [
   { code: '2104', name: 'ضرائب مستحقة', name_en: 'Accrued Taxes', type: 'liability', category: 'current_liability', parent_code: '2100', is_system: 1 },
   { code: '2105', name: 'تأمينات اجتماعية', name_en: 'Social Insurance', type: 'liability', category: 'current_liability', parent_code: '2100', is_system: 1 },
   { code: '2106', name: 'إيرادات مؤجلة (دفعات مقدمة)', name_en: 'Deferred Revenue', type: 'liability', category: 'current_liability', parent_code: '2100', is_system: 1 },
+  { code: '2107', name: 'أمانات الموكلين (مقدم مصاريف)', name_en: 'Client Trust Deposits', type: 'liability', category: 'current_liability', parent_code: '2100', is_system: 1 },
 
   // ============ حقوق الملكية (3000-3999) ============
   { code: '3000', name: 'حقوق الملكية', name_en: 'Equity', type: 'equity', category: 'header', is_system: 1 },

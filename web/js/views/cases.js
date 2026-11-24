@@ -7,6 +7,7 @@ import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
 import { openModal } from '../modal.js';
+import { hasFeature as hasFeatureFn } from '../api.js';
 import { can } from '../access.js';
 import { openWhatsAppComposer, localDateStr } from '../whatsapp.js';
 import { mountAiMeter } from '../ai-usage.js';
@@ -455,11 +456,12 @@ async function showCaseDetail(id, initialTab = 'overview') {
               { name: 'expense_date', label: 'التاريخ', type: 'date', required: true },
               { name: 'is_reimbursable', label: 'مين هيتحمّله؟', type: 'select', options: [
                 ...(c.client_id ? [{ value: '1', label: 'الموكل (يتضاف لحسابه وكشف حسابه)' }] : []),
+                ...(c.client_id && hasFeatureFn('accounting') ? [{ value: '2', label: 'من أمانة الموكل (مقدم المصاريف)' }] : []),
                 { value: '0', label: 'المكتب' }] },
               { name: 'payment_method', label: 'اتدفع إزاي', type: 'select', options: ['نقدي', 'تحويل بنكي', 'إنستاباي', 'فودافون كاش', 'شيك'] },
             ],
             onSubmit: async (d) => {
-              await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, amount: Number(d.amount), case_id: c.id, client_id: c.client_id || null, is_reimbursable: d.is_reimbursable === '1' ? 1 : 0 }) });
+              await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, amount: Number(d.amount), case_id: c.id, client_id: c.client_id || null, is_reimbursable: d.is_reimbursable === '1' ? 1 : 0, paid_from_trust: d.is_reimbursable === '2' ? 1 : 0 }) });
             },
           });
           if (res) { toast('✓ اتسجل المصروف', 'ok'); showCaseDetail(c.id, 'expenses'); }

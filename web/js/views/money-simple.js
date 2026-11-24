@@ -8,6 +8,7 @@ import { openModal } from '../modal.js';
 import { can } from '../access.js';
 import { openStatement } from '../statement.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
+import { toExcel } from '../exporter.js';
 
 const ACC_KEY = 'mowakkil_acc_mode';
 export function accountantMode() {
@@ -78,6 +79,7 @@ export async function renderSimple(host) {
           <div><span>الصندوق (كاش)</span><strong>${fmtMoney(s.cash_box)} ${cur()}</strong></div>
           <div><span>البنك والمحافظ</span><strong>${fmtMoney(s.bank)} ${cur()}</strong></div>
         </div>
+        ${s.trust_held > 0 ? `<div class="meta" style="margin-bottom:6px">💼 منها أمانات للموكلين (مقدم مصاريف): <strong>${fmtMoney(s.trust_held)} ${cur()}</strong> — مش فلوسك لحد ما تتصرف عليهم.</div>` : ''}
         <div class="meta">اتفقت الشهر ده على أتعاب بـ ${fmtMoney(s.agreed_fees)} ${cur()} (${s.agreed_count} اتفاق) — بتتحسب لما تتحصّل.</div>
       </div>
       <div class="card ms-quick">
@@ -90,6 +92,26 @@ export async function renderSimple(host) {
         </div>
       </div>
     </div>
+
+    ${hasFeature('finance_advanced') && can('settings.manage') ? `
+    <div class="card ms-adv">
+      <h3>🗂️ أدوات المكاتب الكبيرة</h3>
+      <div class="ms-adv-row">
+        <div>
+          <strong>🔒 قفل الفترات</strong>
+          <div class="meta">${s.lock_before ? `مقفول: مفيش إضافة أو تعديل لأي حركة قبل <strong>${esc(s.lock_before)}</strong>` : 'مفيش قفل — أي شهر قديم ممكن يتعدّل'}</div>
+        </div>
+        <div class="ms-adv-acts">
+          <input type="month" id="lock-month" class="input" value="${localISO(s.lock_before ? new Date(new Date(s.lock_before + 'T00:00:00').setDate(0)) : new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)).slice(0, 7)}" aria-label="اقفل لحد آخر الشهر ده">
+          <button class="btn btn-ghost btn-sm" data-ms="lock">اقفل لحد آخره</button>
+          ${s.lock_before ? '<button class="btn btn-ghost btn-sm" data-ms="unlock">فتح القفل</button>' : ''}
+        </div>
+      </div>
+      <div class="ms-adv-row">
+        <div><strong>📤 تصدير للمحاسب الخارجي</strong><div class="meta">ملف Excel فيه الدفعات والمصروفات والفواتير والأتعاب والأمانات للشهر ده.</div></div>
+        <div class="ms-adv-acts"><button class="btn btn-ghost btn-sm" data-ms="export">⬇️ تصدير ${esc(monthLabel)}</button></div>
+      </div>
+    </div>` : ''}
 
     <div class="card">
       <div class="section-header">
@@ -119,6 +141,22 @@ export async function renderSimple(host) {
     const c = s.debtors.find(x => String(x.client_id) === b.dataset.waClient);
     if (c) openWhatsAppComposer({ kind: 'fee', kinds: ['fee', 'general'], phone: c.phone, client_name: c.name, remaining: c.balance });
   }));
+  host.querySelector('[data-ms="lock"]')?.addEventListener('click', async () => {
+    const mv = host.querySelector('#lock-month').value; // YYYY-MM
+    if (!mv) return;
+    const [y, mo] = mv.split('-').map(Number);
+    const lockBefore = localISO(new Date(y, mo, 1)); // أول الشهر اللي بعده
+    if (!confirm(`هتقفل كل الحركات لحد آخر ${mv} — محدش هيقدر يضيف أو يعدّل أو يحذف حاجة قبل ${lockBefore}. متأكد؟`)) return;
+    try { await apiJson('/api/fees/lock', { method: 'POST', body: JSON.stringify({ lock_before: lockBefore }) }); toast('🔒 اتقفلت الفترة', 'ok'); renderSimple(host); }
+    catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+  });
+  host.querySelector('[data-ms="unlock"]')?.addEventListener('click', async () => {
+    if (!confirm('تفتح القفل؟ أي حد عنده صلاحية هيقدر يعدّل الشهور القديمة.')) return;
+    try { await apiJson('/api/fees/lock', { method: 'POST', body: JSON.stringify({ lock_before: null }) }); toast('اتفتح القفل', 'ok'); renderSimple(host); }
+    catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+  });
+  host.querySelector('[data-ms="export"]')?.addEventListener('click', () => exportForAccountant(from, to, monthLabel));
+
   const goto = async (v) => { const { showView } = await import('../router.js'); showView(v); };
   host.querySelector('[data-ms="expense"]')?.addEventListener('click', () => goto('money-expenses'));
   host.querySelector('[data-ms="fee"]')?.addEventListener('click', () => goto('fees'));
@@ -157,4 +195,35 @@ async function quickPayment(onDone) {
     },
   });
   if (res) { toast('✓ اتسجلت الدفعة', 'ok'); onDone?.(); }
+}
+
+
+// ============================================================
+// تصدير للمحاسب الخارجي (Excel بشيتات)
+// ============================================================
+async function exportForAccountant(from, to, label) {
+  toast('⏳ بنجهّز الملف…');
+  try {
+    const arr = (x) => (Array.isArray(x) ? x : (x?.items || x?.data || []));
+    const inRange = (d) => { const s = String(d || '').slice(0, 10); return s >= from && s <= to; };
+    const [pays, exps, invs, fees] = await Promise.all([
+      apiJson(`/api/payments?from=${from}&to=${to}`, { skipCache: true }).then(arr),
+      apiJson(`/api/expenses?from=${from}&to=${to}&limit=1000`, { skipCache: true }).then(arr),
+      apiJson('/api/invoices', { skipCache: true }).then(arr).catch(() => []),
+      apiJson('/api/fees', { skipCache: true }).then(arr),
+    ]);
+    const s = await apiJson(`/api/fees/cash-summary?from=${from}&to=${to}`, { skipCache: true });
+    await toExcel({
+      title: `مُوكِّل — ${label}`,
+      blocks: [
+        { type: 'kv', heading: 'ملخص', pairs: [['من', from], ['إلى', to], ['اتحصّل', s.collected, 'money'], ['منه نقدي', s.collected_cash, 'money'], ['منه بنك/محافظ', s.collected_bank, 'money'],
+          ['مصروفات على المكتب', s.spent_office, 'money'], ['مصروفات عن الموكلين', s.spent_for_clients, 'money'], ['الصافي', s.net, 'money'],
+          ['رصيد الصندوق', s.cash_box, 'money'], ['رصيد البنك', s.bank, 'money'], ['أمانات الموكلين', s.trust_held, 'money'], ['مديونيات الموكلين', s.receivable_total, 'money']] },
+        { type: 'table', heading: 'الدفعات', columns: [{ key: 'payment_date', label: 'التاريخ', type: 'date' }, { key: 'receipt_number', label: 'الإيصال' }, { key: 'client_name', label: 'الموكل' }, { key: 'case_number', label: 'القضية' }, { key: 'method', label: 'الطريقة' }, { key: 'amount', label: 'المبلغ', type: 'money' }, { key: 'notes', label: 'ملاحظات' }], rows: pays },
+        { type: 'table', heading: 'المصروفات', columns: [{ key: 'date', label: 'التاريخ', type: 'date' }, { key: 'description', label: 'البيان' }, { key: 'account_name', label: 'النوع' }, { key: 'case_number', label: 'القضية' }, { key: 'who', label: 'مين اتحمّله', value: e => e.from_trust ? 'أمانة الموكل' : e.on_client ? 'الموكل' : 'المكتب' }, { key: 'payment_method', label: 'الطريقة' }, { key: 'amount', label: 'المبلغ', type: 'money' }], rows: exps },
+        { type: 'table', heading: 'الفواتير', columns: [{ key: 'issue_date', label: 'التاريخ', type: 'date' }, { key: 'invoice_number', label: 'الرقم' }, { key: 'client_name', label: 'الموكل' }, { key: 'status', label: 'الحالة' }, { key: 'subtotal', label: 'قبل الضريبة', type: 'money' }, { key: 'tax_amount', label: 'الضريبة', type: 'money' }, { key: 'total', label: 'الإجمالي', type: 'money' }, { key: 'paid_amount', label: 'المدفوع', type: 'money' }], rows: invs.filter(i => inRange(i.issue_date)) },
+        { type: 'table', heading: 'الأتعاب', columns: [{ key: 'created_at', label: 'التاريخ', type: 'date' }, { key: 'client_name', label: 'الموكل' }, { key: 'case_number', label: 'القضية' }, { key: 'amount_due', label: 'المتفق', type: 'money' }, { key: 'amount_paid', label: 'المدفوع', type: 'money' }, { key: 'status', label: 'الحالة' }], rows: fees.filter(f => inRange(f.created_at)) },
+      ],
+    }, `للمحاسب ${from}_${to}`);
+  } catch (e) { toast('⚠️ ' + e.message, 'bad'); }
 }

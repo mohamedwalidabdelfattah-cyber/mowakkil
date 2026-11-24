@@ -2,6 +2,7 @@
 // دفتر اليومية + التقارير المالية
 
 import { ok, fail } from '../lib/response.js';
+import { assertOpen } from '../lib/period-lock.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson } from '../lib/validation.js';
 import {
@@ -75,6 +76,7 @@ async function create({ request, env, authUser, officeId }) {
   const b = await safeJson(request);
   if (!b) return fail(env, 'JSON غلط', 400);
   if (!b.entry_date) return fail(env, 'اكتب تاريخ القيد', 400);
+  try { await assertOpen(env, officeId, b.entry_date); } catch (e) { return fail(env, e.message, 423); }
   if (!Array.isArray(b.lines) || b.lines.length < 2) {
     return fail(env, 'القيد لازم يكون فيه سطرين على الأقل', 400);
   }

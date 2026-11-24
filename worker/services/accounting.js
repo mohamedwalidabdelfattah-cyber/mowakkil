@@ -1,4 +1,5 @@
 // worker/services/accounting.js
+import { assertOpen } from '../lib/period-lock.js';
 // خدمة محاسبية كاملة — دفتر اليومية + التقارير
 
 // ============================================================
@@ -370,6 +371,7 @@ export async function recordPayment(env, { officeId, userId = null, amount, meth
     if (!fee) throw new Error('الأتعاب مش موجودة');
   }
   const day = String(date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  await assertOpen(env, officeId, day);
   const rPrefix = `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-`;
   const receipt = rPrefix + String(await nextSeq(env, 'payments', 'receipt_number', officeId, rPrefix)).padStart(4, '0');
   const client = clientId ?? inv?.client_id ?? fee?.client_id ?? null;
@@ -394,6 +396,7 @@ export async function recordPayment(env, { officeId, userId = null, amount, meth
 
 // حذف دفعة + قيدها + إعادة حساب الأتعاب والفاتورة
 export async function removePayment(env, officeId, payment) {
+  await assertOpen(env, officeId, payment.payment_date);
   await env.DB.prepare('DELETE FROM payments WHERE id = ? AND office_id = ?').bind(payment.id, officeId).run();
   await deleteEntriesFor(env, officeId, REF.payment, payment.id);
   await recalcFee(env, officeId, payment.fee_id);

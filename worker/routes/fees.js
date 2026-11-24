@@ -1,4 +1,6 @@
 import { ok, fail } from '../lib/response.js';
+import { assertOpen } from '../lib/period-lock.js';
+import { recordTrust, trustLedger, profitability, lockDate } from '../services/finance-advanced.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson } from '../lib/validation.js';
 import { autoEntryFeeCreated, recordPayment, deleteEntriesFor, REF, syncInvoiceEntry } from '../services/accounting.js';
@@ -7,6 +9,10 @@ import { cashSummary } from '../services/client-statement.js';
 
 export const routes = [
   { method: 'GET',    path: '/api/fees/cash-summary', handler: cashSummaryRoute },
+  { method: 'GET',    path: /^\/api\/fees\/trust\/(\d+)$/, handler: trustGet },
+  { method: 'POST',   path: '/api/fees/trust', handler: trustPost },
+  { method: 'GET',    path: '/api/fees/profitability', handler: profitRoute },
+  { method: 'POST',   path: '/api/fees/lock', handler: lockRoute, adminOnly: true },
   { method: 'GET',    path: '/api/fees',                handler: list },
   { method: 'POST',   path: '/api/fees',                handler: create },
   { method: 'PATCH',  path: /^\/api\/fees\/(\d+)$/,     handler: markPaid },
@@ -198,4 +204,47 @@ async function cashSummaryRoute({ env, officeId, url }) {
   const to = url.searchParams.get('to');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '')) return fail(env, 'from و to مطلوبين', 400);
   return ok(env, await cashSummary(env, officeId, from, to));
+}
+
+
+// ============================================================
+// أمانات الموكلين (الاحترافية وفوق)
+// ============================================================
+async function trustGet({ env, officeId, params }) {
+  const g = await requireFeature(env, officeId, 'accounting'); if (g) return g;
+  return ok(env, await trustLedger(env, officeId, Number(params[0])));
+}
+async function trustPost({ request, env, officeId, authUser }) {
+  const g = await requireFeature(env, officeId, 'accounting'); if (g) return g;
+  const b = await safeJson(request);
+  if (!b) return fail(env, 'JSON غلط', 400);
+  try {
+    const r = await recordTrust(env, { officeId, userId: authUser.user_id, clientId: Number(b.client_id), caseId: b.case_id ? Number(b.case_id) : null,
+      kind: b.kind, amount: b.amount, method: b.method, date: b.date, description: b.description || null });
+    await audit(env, { office_id: officeId, user_id: authUser.user_id, action: 'create', entity: 'trust', entity_id: r.id, metadata: { kind: b.kind, amount: b.amount }, request });
+    return ok(env, r, 201);
+  } catch (e) { return fail(env, e.message, e.status || 400); }
+}
+
+// ============================================================
+// ربحية القضايا والمحامين (الاحترافية وفوق)
+// ============================================================
+async function profitRoute({ env, officeId, url }) {
+  const g = await requireFeature(env, officeId, 'accounting'); if (g) return g;
+  const from = url.searchParams.get('from'); const to = url.searchParams.get('to');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '')) return fail(env, 'from و to مطلوبين', 400);
+  return ok(env, await profitability(env, officeId, from, to));
+}
+
+// ============================================================
+// قفل الفترات (المتقدمة) — المدير بس
+// ============================================================
+async function lockRoute({ request, env, officeId, authUser }) {
+  const g = await requireFeature(env, officeId, 'finance_advanced'); if (g) return g;
+  const b = await safeJson(request);
+  const v = b?.lock_before || null;
+  if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return fail(env, 'التاريخ غلط', 400);
+  await env.DB.prepare('UPDATE office_settings SET lock_before = ? WHERE office_id = ?').bind(v, officeId).run();
+  await audit(env, { office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'period_lock', metadata: { lock_before: v }, request });
+  return ok(env, { lock_before: v });
 }

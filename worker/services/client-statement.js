@@ -64,11 +64,13 @@ export async function buildStatement(env, officeId, clientId) {
   }
 
   lines.sort((a, b) => a.date.localeCompare(b.date) || (a.paid ? 1 : 0) - (b.paid ? 1 : 0));
+  let trust = { rows: [], balance: 0 };
+  try { const { trustLedger } = await import('./finance-advanced.js'); trust = await trustLedger(env, officeId, clientId); } catch {}
   let balance = 0;
   for (const l of lines) { balance += l.charge - l.paid; l.balance = Math.round(balance * 100) / 100; }
   const charged = lines.reduce((s, l) => s + l.charge, 0);
   const paid = lines.reduce((s, l) => s + l.paid, 0);
-  return { client, lines, totals: { charged, paid, balance: Math.round((charged - paid) * 100) / 100 } };
+  return { client, lines, totals: { charged, paid, balance: Math.round((charged - paid) * 100) / 100 }, trust };
 }
 
 // ============================================================
@@ -139,6 +141,11 @@ export async function cashSummary(env, officeId, from, to) {
      JOIN journal_entries je ON je.id = jl.entry_id JOIN accounts a ON a.id = jl.account_id
      WHERE je.office_id = ? AND a.code = ?`, officeId, code)).b || 0;
   const balances = await clientBalances(env, officeId);
+  // الأمانات اللي عندك للموكلين (جزء من فلوس الصندوق/البنك بس مش بتاعتك)
+  const trust = await one(
+    `SELECT (SELECT COALESCE(SUM(CASE WHEN kind = 'deposit' THEN amount ELSE -amount END), 0) FROM trust_transactions WHERE office_id = ?1)
+          - (SELECT COALESCE(SUM(total_amount), 0) FROM expenses WHERE office_id = ?1 AND paid_from_trust = 1) AS held`, officeId).catch(() => ({ held: 0 }));
+  const lock = await one('SELECT lock_before FROM office_settings WHERE office_id = ?', officeId).catch(() => ({}));
   const owed = balances.filter(r => r.balance > 0);
   return {
     from, to,
@@ -155,6 +162,8 @@ export async function cashSummary(env, officeId, from, to) {
     bank: Number(await bal('1102')) || 0,
     receivable_total: owed.reduce((s, r) => s + r.balance, 0),
     debtors: owed.slice(0, 15),
+    trust_held: Math.round((Number(trust.held) || 0) * 100) / 100,
+    lock_before: lock.lock_before || null,
     credit_clients: balances.filter(r => r.balance < 0).slice(0, 10),
   };
 }

@@ -46,6 +46,7 @@ export async function showView(name) {
     'money-income':         'money',
     'money-reports':        'money',
     'money-invoices':       'money',
+    'money-profit':         'money',
     'accounting-journal':   'accounting',
     'accounting-accounts':  'accounting',
     'accounting-pl':        'accounting',

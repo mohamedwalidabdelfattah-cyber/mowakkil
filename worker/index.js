@@ -190,6 +190,9 @@ export default {
 
     ctx.waitUntil(runTrialExpiry(env));
     ctx.waitUntil(runNotificationJobs(env));
+    // المصاريف المتكررة (إيجار، اشتراكات…) بتتسجل لوحدها في ميعادها
+    const { generateRecurring } = await import('./services/finance-advanced.js');
+    ctx.waitUntil(generateRecurring(env).catch(e => console.warn('recurring expenses failed', e.message)));
     // اكتشاف النماذج المجانية المتاحة النهارده (أسماؤها بتتغير من وقت للتاني)
     ctx.waitUntil(refreshModels(env).catch(e => console.warn('model discovery failed', e.message)));
   },
