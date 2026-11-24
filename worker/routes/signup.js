@@ -3,6 +3,7 @@
 // ملاحظة: الإيميل اختياري، رقم الهاتف إلزامي
 
 import { ok, fail } from '../lib/response.js';
+import { normalizeAttribution } from '../lib/attribution.js';
 import { hashPassword } from '../lib/crypto.js';
 import { signJWT } from '../lib/jwt.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
@@ -78,12 +79,15 @@ async function signup({ request, env }) {
     }
   }
 
-  // 4) نعمل المكتب
+  // 4) نعمل المكتب (ومعاه مصدر التسجيل: إعلان فيسبوك/إنستجرام…)
+  const attr = normalizeAttribution(b.attribution);
   const trialEnds = new Date(Date.now() + 15 * 86400000).toISOString();
   const officeResult = await env.DB.prepare(
-    `INSERT INTO offices (name, name_ar, status, trial_ends_at)
-     VALUES (?,?,?,?)`
-  ).bind(officeName, officeName, 'trial', trialEnds).run();
+    `INSERT INTO offices (name, name_ar, status, trial_ends_at,
+       signup_source, signup_medium, signup_campaign, signup_content, signup_referrer, signup_landing)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).bind(officeName, officeName, 'trial', trialEnds,
+    attr.source, attr.medium, attr.campaign, attr.content, attr.referrer, attr.landing).run();
   const officeId = officeResult.meta.last_row_id;
 
   // 5) نعمل المستخدم (admin)
@@ -113,7 +117,7 @@ async function signup({ request, env }) {
     await audit(env, {
       office_id: officeId, user_id: userId,
       action: 'signup', entity: 'office', entity_id: officeId, request,
-      metadata: { office_name: officeName, phone },
+      metadata: { office_name: officeName, phone, source: attr.source, campaign: attr.campaign },
     });
   } catch (e) {
     console.error('audit failed:', e.message);

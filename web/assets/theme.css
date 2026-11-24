@@ -1200,3 +1200,13 @@ body .search-result-item.selected, body .search-result-item:hover { background: 
 .onb-pulse { position: relative; animation: onbPulse 1.2s ease-in-out 5; box-shadow: 0 0 0 0 rgba(212,175,55,.7); border-radius: 10px; }
 @keyframes onbPulse { 0% { box-shadow: 0 0 0 0 rgba(212,175,55,.7); } 70% { box-shadow: 0 0 0 12px rgba(212,175,55,0); } 100% { box-shadow: 0 0 0 0 rgba(212,175,55,0); } }
 @media (prefers-reduced-motion: reduce) { .onb-pulse { animation: none; outline: 3px solid var(--gold, #D4AF37); } }
+
+/* ===== السوبر أدمن: مصادر التسجيل ===== */
+.src-table td, .src-table th { white-space: nowrap; }
+.src-table td:first-child { white-space: normal; min-width: 140px; }
+.src-table tfoot td { font-weight: 800; border-top: 2px solid var(--border); }
+.src-bar { display: inline-block; width: 70px; height: 6px; border-radius: 999px; background: var(--border, #EAECF0); margin-inline-end: 8px; vertical-align: middle; overflow: hidden; }
+.src-bar span { display: block; height: 100%; background: var(--gold, #D4AF37); border-radius: inherit; }
+.src-help { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.src-help summary { cursor: pointer; font-weight: 700; }
+.src-code { direction: ltr; text-align: left; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; background: var(--surface-2, #F2F4F7); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; word-break: break-all; }

@@ -118,6 +118,7 @@ function renderList(host) {
           👤 ${esc(i.owner_name || '—')}${i.owner_phone ? ' · 📱 ' + esc(i.owner_phone) : ' · ⚠️ من غير رقم'}
           · 📅 يوم ${i.days_since} من التجربة${i.days_left != null ? (i.days_left > 0 ? ` (فاضل ${i.days_left})` : ' (خلصت)') : ''}
         </div>
+        ${i.source_label ? `<div class="meta">📣 جه من: <strong>${esc(i.source_label)}</strong>${i.campaign ? ` · ${esc(i.campaign)}` : ""}</div>` : ""}
         <div class="meta">📁 ${i.cases_count} قضية · 👥 ${i.clients_count} موكل · آخر حركة: ${fmtAgo(i.last_activity_at)} · 📨 اتبعتله ${i.sent_count} رسالة</div>
         <div class="meta">${statusLine}</div>
         ${i.note ? `<div class="meta fu-note">📝 ${esc(i.note)}</div>` : ''}

@@ -48,6 +48,8 @@ async function doSignup() {
         phone,
         email: email || null,
         password,
+        // مصدر الزيارة (إعلان فيسبوك/إنستجرام…) — من attribution.js
+        attribution: (typeof window.mowakkilAttribution === 'function' && window.mowakkilAttribution()) || null,
       }),
     });
 

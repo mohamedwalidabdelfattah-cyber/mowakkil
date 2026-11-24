@@ -5,6 +5,7 @@
 
 import { ok, fail } from '../lib/response.js';
 import { toInt, safeJson, isStr } from '../lib/validation.js';
+import { SOURCE_LABELS } from '../lib/attribution.js';
 
 export const SEGMENTS = {
   not_started: 'مبدأش',
@@ -26,7 +27,46 @@ export const superadminRoutes = [
   { method: 'POST',   path: '/api/superadmin/followup-templates',                 handler: createTemplate },
   { method: 'PATCH',  path: /^\/api\/superadmin\/followup-templates\/(\d+)$/,     handler: updateTemplate },
   { method: 'DELETE', path: /^\/api\/superadmin\/followup-templates\/(\d+)$/,     handler: deleteTemplate },
+  { method: 'GET',    path: '/api/superadmin/signup-sources',                     handler: signupSources },
 ];
+
+// ============================================================
+// مصادر التسجيل: كل مصدر/حملة/إعلان جاب كام تسجيل، وكام منهم بدأ يستخدم، وكام اشترك
+// ============================================================
+async function signupSources({ env, url }) {
+  const daysParam = url.searchParams.get('days');
+  const days = daysParam === 'all' ? null : Math.min(365, Math.max(1, toInt(daysParam) || 30));
+  const { results } = await env.DB.prepare(
+    `SELECT o.id, o.created_at, o.signup_source, o.signup_medium, o.signup_campaign, o.signup_content,
+            s.status AS sub_status, s.plan AS sub_plan, COALESCE(s.amount_paid, 0) AS amount_paid,
+            (SELECT COUNT(*) FROM cases c WHERE c.office_id = o.id AND c.deleted_at IS NULL) AS cases_count,
+            (SELECT COUNT(*) FROM clients cl WHERE cl.office_id = o.id AND cl.deleted_at IS NULL) AS clients_count
+     FROM offices o LEFT JOIN subscriptions s ON s.office_id = o.id
+     ${days ? `WHERE o.created_at >= datetime('now', ?)` : ''}
+     ORDER BY o.created_at DESC`
+  ).bind(...(days ? [`-${days} days`] : [])).all();
+
+  const bump = (map, key, base, o) => {
+    if (!map.has(key)) map.set(key, { ...base, signups: 0, started: 0, paid: 0 });
+    const r = map.get(key);
+    r.signups++;
+    if ((o.cases_count || 0) + (o.clients_count || 0) > 0) r.started++;
+    // اشترك = دفع فعلاً (طلب دفع اتقبل) — مش باقة اتفعّلت هدية أو تجربة من السوبر أدمن
+    if ((o.amount_paid || 0) > 0) r.paid++;
+  };
+  const bySource = new Map(), byCampaign = new Map();
+  for (const o of results || []) {
+    const src = o.signup_source || 'untracked';
+    bump(bySource, src, { source: src, label: SOURCE_LABELS[src] || (src === 'untracked' ? 'قبل تفعيل التتبع' : src) }, o);
+    if (o.signup_campaign || o.signup_content) {
+      const k = `${src}|${o.signup_campaign || ''}|${o.signup_content || ''}`;
+      bump(byCampaign, k, { source: src, label: SOURCE_LABELS[src] || src, campaign: o.signup_campaign, content: o.signup_content }, o);
+    }
+  }
+  const sort = (m) => [...m.values()].sort((a, b) => b.signups - a.signups);
+  const total = (results || []).length;
+  return ok(env, { days: days || 'all', total, by_source: sort(bySource), by_campaign: sort(byCampaign) });
+}
 
 // تواريخ D1 بتتخزن 'YYYY-MM-DD HH:MM:SS' (UTC) أو ISO
 function parseDate(s) {
@@ -67,7 +107,7 @@ export function pickTemplate(templates, office, seg, now = new Date()) {
 
 async function listFollowups({ env }) {
   const { results: offices } = await env.DB.prepare(
-    `SELECT o.id, COALESCE(o.name_ar, o.name) AS office_name, o.created_at,
+    `SELECT o.id, COALESCE(o.name_ar, o.name) AS office_name, o.created_at, o.signup_source, o.signup_campaign,
             COALESCE(s.trial_ends_at, o.trial_ends_at) AS trial_ends_at,
             s.status AS sub_status, s.plan AS sub_plan,
             (SELECT full_name FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id LIMIT 1) AS owner_name,
@@ -102,6 +142,7 @@ async function listFollowups({ env }) {
       cases_count: o.cases_count, clients_count: o.clients_count,
       sent_count: o.sent_count, last_sent_at: o.last_sent_at, sent_keys: o.sent_keys ? String(o.sent_keys).split(',') : [],
       stopped: !!o.stopped, note: o.note || '',
+      source: o.signup_source || null, source_label: o.signup_source ? (SOURCE_LABELS[o.signup_source] || o.signup_source) : null, campaign: o.signup_campaign || null,
       ...seg,
       due_key: pick.due?.key || null, status: pick.reason,
     });
