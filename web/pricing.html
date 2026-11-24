@@ -3,67 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0F172A">
+  <meta name="theme-color" content="#070C18">
   <title>الباقات والأسعار — مُوكِّل</title>
 
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/app/favicon-48.png">
   <link rel="stylesheet" href="/assets/fonts.css">
   <link rel="stylesheet" href="/assets/design-system.css">
   <link rel="stylesheet" href="/assets/styles.css">
+  <!-- نفس هوية النظام: توكنز theme.css + شريط وأزرار الصفحة الرئيسية (landing.css) -->
+  <link rel="stylesheet" href="/assets/theme.css">
+  <link rel="stylesheet" href="/assets/landing.css">
   <link rel="stylesheet" href="/assets/pricing.css">
-  <link rel="stylesheet" href="/assets/brand-theme.css">
-  <style>
-    .billing-toggle {
-      display: inline-flex;
-      background: var(--paper);
-      border-radius: 50px;
-      padding: 4px;
-      margin: 0 auto 30px;
-      border: 1px solid var(--line);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    .billing-toggle button {
-      border: none;
-      background: transparent;
-      padding: 10px 24px;
-      border-radius: 50px;
-      font-family: inherit;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-soft);
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-    .billing-toggle button.active {
-      background: var(--primary);
-      color: #fff;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    }
-    .billing-toggle button:hover:not(.active) {
-      color: var(--primary);
-    }
-    .lifetime-badge {
-      background: linear-gradient(135deg, #D4AF37, #B8860B);
-      color: #0F172A;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 800;
-      display: inline-block;
-      margin-bottom: 10px;
-    }
-  </style>
 </head>
 <body class="pricing-page">
 
-<header class="topbar pricing-topbar">
-  <a href="/" class="brand" style="text-decoration:none;color:inherit">
-    <span class="brand-logo"><img src="/assets/logos/logo-md.png" alt="مُوكِّل"></span>
-    <h1>مُوكِّل</h1>
+<header class="landing-topbar pricing-topbar">
+  <a href="/" class="landing-brand">
+    <span class="landing-logo"><img src="/assets/logos/logo-md.png" alt="مُوكِّل"></span>
+    <span class="landing-brand-name">مُوكِّل</span>
   </a>
-
-  <div class="topbar-actions">
-    <a href="/" class="btn btn-ghost btn-sm" id="login-link">تسجيل الدخول</a>
-    <a href="/signup" class="btn btn-primary btn-sm">🚀 ابدأ مجاناً</a>
+  <nav class="landing-nav">
+    <a href="/#features">المميزات</a>
+    <a href="/pricing" aria-current="page">الباقات</a>
+    <a href="#faq-title">الأسئلة</a>
+  </nav>
+  <div class="landing-actions">
+    <a href="/#login" class="landing-btn-ghost" id="login-link">تسجيل الدخول</a>
+    <a href="/signup" class="landing-btn-primary">🚀 ابدأ مجاناً</a>
   </div>
 </header>
 
@@ -105,13 +71,13 @@
   <section class="pricing-cta">
     <h2 id="cta-title">جاهز للبدء وتطوير مكتبك؟</h2>
     <p id="cta-sub">استمتع بتجربة كاملة لنظام مُوكِّل لمدة 15 يوماً دون أي التزام بنكي.</p>
-    <a href="/signup" class="btn btn-primary btn-lg" id="cta-btn">
+    <a href="/signup" class="landing-cta-primary landing-cta-large" id="cta-btn">
       🚀 ابدأ مجاناً لمدة 15 يوم
     </a>
     <div style="margin-top:16px">
       <a href="https://wa.me/201013917789?text=مرحباً،%20أود%20الاستفسار%20عن%20باقات%20منصة%20مُوكِّل" 
          target="_blank" rel="noopener" 
-         style="color:rgba(255,255,255,0.85);font-size:14px;text-decoration:none;font-weight:600">
+         class="pricing-cta-wa">
         أو تواصل مع فريق المبيعات عبر واتساب 💬
       </a>
     </div>
