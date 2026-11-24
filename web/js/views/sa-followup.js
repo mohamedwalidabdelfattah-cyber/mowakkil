@@ -78,6 +78,9 @@ async function load(host) {
   try { state.data = await saApiJson('/api/superadmin/followups'); }
   catch (e) { list.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
   renderChips(host); renderList(host);
+  // الرقم اللي على تاب "متابعة التجربة"
+  const badge = document.querySelector('[data-badge="followup"]');
+  if (badge) { badge.textContent = state.data.due_today || 0; badge.hidden = !state.data.due_today; }
 }
 
 function renderChips(host) {

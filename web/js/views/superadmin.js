@@ -12,6 +12,15 @@ let currentFilter = { search: '', plan: '', status: '' };
 let currentOfficeId = null;
 let currentPRStatus = 'pending';
 
+const SA_TABS = [
+  ['offices', '🏢 المكاتب'],
+  ['followup', '📣 متابعة التجربة'],
+  ['payments', '💳 طلبات الدفع'],
+  ['sources', '📊 مصادر التسجيل'],
+  ['ai', '🤖 الذكاء الاصطناعي'],
+];
+const SA_TAB_KEY = 'mowakkil_sa_tab';
+
 // ============================================================
 // Gate toggle
 // ============================================================
@@ -111,8 +120,13 @@ async function renderSABody() {
 
     <div id="sa-stats" class="stats"></div>
 
+    <!-- التابات: كل قسم لوحده بدل صفحة واحدة طويلة -->
+    <nav class="sa-tabs" role="tablist" aria-label="أقسام لوحة المسؤول">
+      ${SA_TABS.map(([k, label]) => `<button class="sa-tab" role="tab" data-sa-tab="${k}" aria-selected="false">${label}<span class="sa-tab-badge" data-badge="${k}" hidden></span></button>`).join('')}
+    </nav>
+
     <!-- 🤖 أدوات الذكاء الاصطناعي -->
-    <div class="card" style="margin-bottom:20px">
+    <div class="card sa-pane" data-pane="ai" hidden>
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <h3 style="margin:0">🤖 الذكاء الاصطناعي (نماذج مجانية)</h3>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -126,7 +140,7 @@ async function renderSABody() {
     </div>
 
     <!-- 💳 طلبات الدفع -->
-    <div class="card" style="margin-bottom:20px">
+    <div class="card sa-pane" data-pane="payments" hidden>
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <h3 style="margin:0">💳 طلبات الدفع</h3>
         <select id="sa-pr-status" class="select" style="max-width:180px">
@@ -140,13 +154,13 @@ async function renderSABody() {
     </div>
 
     <!-- 📣 متابعة الفترة التجريبية -->
-    <div class="card" id="sa-followup" style="margin-bottom:20px"></div>
+    <div class="card sa-pane" id="sa-followup" data-pane="followup" hidden></div>
 
     <!-- 📊 مصادر التسجيل -->
-    <div class="card" id="sa-sources" style="margin-bottom:20px"></div>
+    <div class="card sa-pane" id="sa-sources" data-pane="sources" hidden></div>
 
     <!-- 🏢 المكاتب -->
-    <div class="card">
+    <div class="card sa-pane" data-pane="offices" hidden>
       <div class="section-header" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
         <h3 style="margin:0">🏢 المكاتب</h3>
         <input id="sa-search" class="input" placeholder="ابحث باسم المكتب..." style="max-width:240px">
@@ -200,7 +214,39 @@ async function renderSABody() {
     loadPaymentRequests();
   });
 
-  await Promise.all([loadStats(), loadOffices(), loadPaymentRequests(), mountFollowup(host.querySelector('#sa-followup')), mountSources(host.querySelector('#sa-sources'))]);
+  // كل تاب بيتحمّل أول مرة يتفتح بس
+  const loaders = {
+    offices: () => loadOffices(),
+    followup: () => mountFollowup(host.querySelector('#sa-followup')),
+    payments: () => loadPaymentRequests(),
+    sources: () => mountSources(host.querySelector('#sa-sources')),
+    ai: () => {},
+  };
+  const loaded = new Set();
+  const openTab = (k) => {
+    if (!loaders[k]) k = 'offices';
+    host.querySelectorAll('[data-sa-tab]').forEach(b => {
+      const on = b.dataset.saTab === k;
+      b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on));
+    });
+    host.querySelectorAll('.sa-pane').forEach(p => { p.hidden = p.dataset.pane !== k; });
+    try { localStorage.setItem(SA_TAB_KEY, k); } catch {}
+    if (!loaded.has(k)) { loaded.add(k); loaders[k](); }
+  };
+  host.querySelectorAll('[data-sa-tab]').forEach(b => b.addEventListener('click', () => openTab(b.dataset.saTab)));
+  let last = 'offices';
+  try { last = localStorage.getItem(SA_TAB_KEY) || 'offices'; } catch {}
+  openTab(last);
+
+  loadStats();
+  loadTabBadges(host);
+}
+
+// أرقام صغيرة على التابات: كام مكتب مستني رسالة النهارده، وكام طلب دفع مستني مراجعة
+async function loadTabBadges(host) {
+  const set = (k, n) => { const el = host.querySelector(`[data-badge="${k}"]`); if (el) { el.textContent = n; el.hidden = !n; } };
+  saApiJson('/api/superadmin/followups').then(d => set('followup', d.due_today || 0)).catch(() => {});
+  saApiJson('/api/superadmin/payment-requests?status=pending').then(l => set('payments', (l || []).length)).catch(() => {});
 }
 
 // ============================================================
