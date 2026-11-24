@@ -2,7 +2,7 @@
 import { apiJson, api, uploadDocument, downloadDocument } from '../api.js';
 import { esc, empty, toast, skeleton, fmtMoney, fmtDate } from '../ui.js';
 import { getClients, setCases } from '../state.js';
-import { caseTypeOptions } from '../case-types.js';
+import { caseTypeOptions, degreeOptions } from '../case-types.js';
 import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
@@ -63,7 +63,7 @@ export async function render(host) {
         <div class="row">
           <div><label>المحكمة</label><input id="c-court" placeholder="محكمة شمال القاهرة"></div>
           <div><label>الدرجة</label>
-            <select id="c-degree"><option>جزئي</option><option selected>ابتدائي</option><option>استئناف</option></select>
+            <select id="c-degree">${degreeOptions('ابتدائي')}</select>
           </div>
           <div><label>النوع</label>
             <select id="c-type">

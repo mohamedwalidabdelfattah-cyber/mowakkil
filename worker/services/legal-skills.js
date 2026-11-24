@@ -269,25 +269,35 @@ export const CASE_TYPES = [
   { group: 'مدني', types: [
     ['مدني', 'civil'], ['تعويضات', 'compensation'], ['عقود (فسخ/تنفيذ/صحة ونفاذ)', 'contracts'],
     ['ملكية وحيازة', 'property'], ['قسمة', 'property'], ['إيجارات', 'rent'],
+    ['صحة توقيع', 'contracts'], ['طرد للغصب وريع', 'property'], ['نزع ملكية للمنفعة العامة', 'property'],
   ]},
   { group: 'جنائي', types: [
     ['جنائي', 'misdemeanor'], ['جنح', 'misdemeanor'], ['جنايات', 'felony'], ['مخدرات', 'drugs'],
     ['شيكات وإيصالات أمانة', 'cheques'], ['جرائم إلكترونية', 'cyber'],
+    ['تبديد وخيانة أمانة', 'misdemeanor'], ['سب وقذف', 'misdemeanor'], ['ضرب وإصابة', 'misdemeanor'], ['سرقة', 'misdemeanor'],
+    ['نصب واحتيال', 'misdemeanor'], ['جنح مرور', 'misdemeanor'], ['تزوير', 'felony'], ['قتل', 'felony'], ['أموال عامة', 'felony'],
   ]},
   { group: 'أحوال شخصية', types: [
     ['أحوال شخصية', 'family_divorce'], ['أسرة', 'family_divorce'], ['نفقات', 'family_alimony'],
     ['طلاق وخلع', 'family_divorce'], ['حضانة ورؤية', 'family_custody'], ['مواريث ووصايا', 'inheritance'],
+    ['تمكين من مسكن الزوجية', 'family_divorce'], ['إثبات نسب', 'family_custody'], ['ولاية على المال', 'inheritance'],
+    ['أحوال شخصية لغير المسلمين', 'family_divorce'],
   ]},
   { group: 'تجاري واقتصادي', types: [
     ['تجاري', 'commercial'], ['اقتصادي', 'commercial'], ['شركات', 'commercial'],
     ['إفلاس وصلح واقٍ', 'commercial'], ['ملكية فكرية وعلامات تجارية', 'intellectual'],
+    ['بنوك وقروض', 'commercial'], ['أوراق تجارية', 'commercial'], ['حماية المستهلك', 'commercial'],
   ]},
-  { group: 'عمالي', types: [['عمالي', 'labor'], ['تأمينات اجتماعية', 'labor']] },
+  { group: 'عمالي', types: [['عمالي', 'labor'], ['فصل تعسفي', 'labor'], ['تأمينات اجتماعية', 'labor']] },
   { group: 'إداري (مجلس الدولة)', types: [
     ['إداري', 'admin_cancel'], ['إلغاء قرار إداري', 'admin_cancel'],
     ['تأديب ووظيفة عامة', 'admin_disciplinary'], ['ضرائب', 'tax'],
+    ['عقود إدارية', 'admin_cancel'], ['تسويات ومستحقات وظيفية', 'admin_disciplinary'], ['جمارك', 'tax'],
   ]},
-  { group: 'أخرى', types: [['تنفيذ وإشكالات', 'execution'], ['تحكيم', 'arbitration'], ['أخرى', 'general']] },
+  { group: 'أخرى', types: [
+    ['تنفيذ وإشكالات', 'execution'], ['أوامر أداء وعرائض', 'execution'], ['تحكيم', 'arbitration'],
+    ['دستوري', 'general'], ['صلح وتسوية ودية', 'general'], ['أخرى', 'general'],
+  ]},
 ];
 
 const TYPE_TO_SKILL = new Map(CASE_TYPES.flatMap(g => g.types.map(([label, key]) => [label, key])));

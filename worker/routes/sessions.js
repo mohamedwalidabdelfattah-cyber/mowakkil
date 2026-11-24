@@ -23,9 +23,10 @@ async function createSession({ request, env, authUser, officeId, access }) {
   ).bind(b.case_id, officeId).first();
   if (!c) return fail(env, 'القضية مش موجودة', 400);
 
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(b.session_time || '') ? b.session_time : null;
   const r = await env.DB.prepare(
-    `INSERT INTO sessions (case_id, session_date, notes) VALUES (?,?,?)`
-  ).bind(b.case_id, b.session_date, b.notes ?? null).run();
+    `INSERT INTO sessions (case_id, session_date, notes, session_time) VALUES (?,?,?,?)`
+  ).bind(b.case_id, b.session_date, b.notes ?? null, time).run();
 
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,
@@ -39,7 +40,7 @@ async function createSession({ request, env, authUser, officeId, access }) {
     userId: null,
     type: 'session_created',
     title: '📅 جلسة جديدة',
-    body: `قضية ${caseNumber}${c.court ? ' · ' + c.court : ''}\n📅 ${b.session_date}`,
+    body: `قضية ${caseNumber}${c.court ? ' · ' + c.court : ''}\n📅 ${b.session_date}${time ? ' · ' + time : ''}`,
     link: `#case-${b.case_id}`,
     icon: '📅',
     priority: 'normal',

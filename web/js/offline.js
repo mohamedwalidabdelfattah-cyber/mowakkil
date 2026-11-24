@@ -94,7 +94,8 @@ async function calendarFromWide(path) {
   const type = q.get('type');
   return (wide.data || []).filter(e => {
     const d = String(e.start).slice(0, 10);
-    return d >= from && d <= to && (!type || e.category === type);
+    const kindOk = !type || e.category === type || (type.startsWith('ev:') && e.category === 'event' && e.raw?.kind === type.slice(3));
+    return d >= from && d <= to && kindOk;
   });
 }
 
@@ -292,8 +293,10 @@ async function applyLocally(method, path, b, tempId) {
     if (method === 'PATCH' && cm && b.date) await editWide(l => l.map(e => (e.id === `${cm[1]}-${cm[2]}` ? { ...e, start: b.date, end: b.date, _pending: true } : e)));
     if (method === 'DELETE' && cm) await editWide(l => l.filter(e => e.id !== `${cm[1]}-${cm[2]}`));
     if (method === 'POST' && !cm && b.date) {
-      await editWide(l => l.concat({ id: `pending-${tempId}`, calendarId: b.type === 'task' ? 'tasks' : 'sessions', category: b.type || 'task', isAllDay: true,
-        title: `⏳ ${b.title || ''}`, body: '(مستني النت عشان يتبعت)', start: b.date, end: b.date, _pending: true }));
+      const isEv = b.type === 'event';
+      const st = isEv && b.start_time ? `${b.date}T${b.start_time}:00` : b.date;
+      await editWide(l => l.concat({ id: `pending-${tempId}`, calendarId: isEv ? `ev-${b.kind || 'other'}` : (b.type === 'task' ? 'tasks' : 'sessions'), category: b.type || 'task', isAllDay: !(isEv && b.start_time),
+        title: `⏳ ${b.title || ''}`, body: '(مستني النت عشان يتبعت)', start: st, end: st, _pending: true, raw: isEv ? { kind: b.kind, title: b.title, location: b.location, notes: b.notes } : {} }));
     }
     return;
   }
