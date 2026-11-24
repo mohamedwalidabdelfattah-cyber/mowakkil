@@ -251,7 +251,14 @@ if (getToken()) {
   });
   showView('dashboard');
   // الشاشات الأكتر استخداماً تتحمل في الخلفية عشان التنقل يبقى فوري
-  prefetchViews(['cases', 'clients', 'tasks', 'agenda', 'fees', 'search']);
+  // كل الشاشات بتتحمّل في الخلفية (وبتتحفظ على الجهاز) عشان أي شاشة تفتح من غير نت
+  prefetchViews(['cases', 'clients', 'tasks', 'agenda', 'fees', 'search', 'money', 'accounting', 'reports',
+    'lawyers', 'calc', 'settings', 'subscription', 'team']);
+  // موديولات بتتحمّل جوه الشاشات وقت الحاجة — نحمّلها كمان عشان تبقى متاحة من غير نت
+  setTimeout(() => {
+    import('./views/invoice-detail.js').catch(() => {});
+    import('./ai-privacy.js').catch(() => {});
+  }, 6000);
   initSubscription();
   startNotifications();
   initBottomNav();

@@ -1,7 +1,7 @@
 // web/js/api.js
 import { STORAGE_KEYS, API_BASE } from './config.js';
 import { onAuthExpired, onTrialExpired, showUpgradeModal, showLimitModal, toast } from './ui.js';
-import { enqueue, queueLabel, readResponse, saveResponse, isCacheable, updateBanner, clearOffline } from './offline.js';
+import { enqueue, enqueueUpload, queueLabel, readResponse, saveResponse, isCacheable, updateBanner, clearOffline } from './offline.js';
 
 export function getToken()   { return localStorage.getItem(STORAGE_KEYS.TOKEN) || ''; }
 export function getSAToken() { return localStorage.getItem(STORAGE_KEYS.SA_TOKEN) || ''; }
@@ -143,14 +143,20 @@ export async function api(path, opts = {}) {
   const method = (opts.method || 'GET').toUpperCase();
 
   // من غير نت: العمليات المسموحة (تسجيل جلسة/تأجيل/مهمة) بتتحفظ على الجهاز وتتبعت لما النت يرجع
+  // من غير نت: أي إضافة/تعديل/حذف بتتحفظ على الجهاز وتتبعت لما النت يرجع (web/js/offline.js)
   const queueOffline = async () => {
-    await enqueue(method, path, opts.body);
+    const q = await enqueue(method, path, opts.body);
     clearCache();
     toast('📴 اتحفظ على الجهاز — هيتبعت لوحده أول ما النت يرجع', 'ok');
-    return new Response(JSON.stringify({ queued: true, data: { queued: true } }),
+    // الإضافات بترجع رقم مؤقت زي السيرفر بالظبط (الشاشة تقدر تكمّل عليه)
+    return new Response(JSON.stringify({ queued: true, id: q.id }),
       { status: 202, headers: { 'content-type': 'application/json' } });
   };
-  if (method !== 'GET' && !navigator.onLine && queueLabel(method, path)) return queueOffline();
+  const needsInternet = () => new Error('📴 العملية دي محتاجة إنترنت (ذكاء اصطناعي / دفع / دعوات / الفريق) — جرّب لما النت يرجع');
+  if (method !== 'GET' && !navigator.onLine) {
+    if (queueLabel(method, path)) return queueOffline();
+    throw needsInternet();
+  }
 
   let res;
   try {
@@ -158,6 +164,7 @@ export async function api(path, opts = {}) {
   } catch (e) {
     // الشبكة وقعت أثناء الطلب
     if (method !== 'GET' && queueLabel(method, path)) return queueOffline();
+    if (method !== 'GET') throw needsInternet();
     throw e;
   }
   // أي تعديل (إضافة/تعديل/حذف) ناجح → نمسح كاش القراءة عشان القوايم تتحدث فوراً
@@ -187,6 +194,10 @@ export async function apiJson(path, opts = {}) {
   } catch (e) {
     if (isGet && e instanceof TypeError && isCacheable(path)) return fromDevice();
     throw e;
+  }
+  // السيرفر واقع (5xx) → النسخة اللي على الجهاز أحسن من رسالة خطأ
+  if (!res.ok && isGet && res.status >= 500 && isCacheable(path)) {
+    try { return await fromDevice(); } catch {}
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -231,15 +242,30 @@ export async function uploadDocument(file, { caseId = null, taskId = null, docTy
   if (docType) params.set('doc_type', docType);
   if (notes) params.set('notes', String(notes).slice(0, 500));
   params.set('file_name', file.name);
+  const path = `/api/documents?${params.toString()}`;
 
-  const res = await fetch(`${API_BASE}/api/documents?${params.toString()}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${getToken()}`,
-      'Content-Type': file.type || 'application/octet-stream',
-    },
-    body: file, // الملف يمر عبر Worker (10 ميجا كحد أقصى)
-  });
+  // من غير نت: الملف بيتحفظ على الجهاز ويترفع أول ما النت يرجع
+  const queueUpload = async () => {
+    const q = await enqueueUpload(path, file, file.type || 'application/octet-stream');
+    clearCache();
+    toast(`📴 «${file.name}» اتحفظ على الجهاز — هيترفع أول ما النت يرجع`, 'ok');
+    return { queued: true, id: q.id };
+  };
+  if (!navigator.onLine) return queueUpload();
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': file.type || 'application/octet-stream',
+      },
+      body: file, // الملف يمر عبر Worker (10 ميجا كحد أقصى)
+    });
+  } catch {
+    return queueUpload();
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

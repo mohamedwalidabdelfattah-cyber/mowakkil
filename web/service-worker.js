@@ -18,6 +18,7 @@ const PRECACHE_LIBS = [
   'https://cdn.jsdelivr.net/npm/@toast-ui/calendar@2.1.3/dist/toastui-calendar.min.js',
   'https://cdn.jsdelivr.net/npm/@toast-ui/calendar@2.1.3/dist/toastui-calendar.min.css',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
+  'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js', // تصدير Excel من غير نت
 ];
 
 self.addEventListener('install', (event) => {
@@ -94,6 +95,7 @@ self.addEventListener('fetch', (event) => {
   // مكتبات CDN بإصدار ثابت (التقويم، الرسوم البيانية...) → من المحفوظ الأول عشان الأجندة تشتغل من غير نت.
   // الإصدار مكتوب في الرابط (@2.1.3) فمش بتتغير — تحديث الإصدار = رابط جديد.
   if (url.hostname === 'cdn.jsdelivr.net' && /@\d/.test(url.pathname)) { event.respondWith(cacheFirst(req)); return; }
+  if (url.hostname === 'cdn.sheetjs.com' && /xlsx-\d/.test(url.pathname)) { event.respondWith(cacheFirst(req)); return; }
 
   // API، ملف الـ APK، ملفات التحقق، وأي دومين خارجي تاني → المتصفح يتصرف عادي
   if (url.origin !== self.location.origin) return;
