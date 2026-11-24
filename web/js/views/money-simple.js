@@ -111,6 +111,24 @@ export async function renderSimple(host) {
         <div><strong>📤 تصدير للمحاسب الخارجي</strong><div class="meta">ملف Excel فيه الدفعات والمصروفات والفواتير والأتعاب والأمانات للشهر ده.</div></div>
         <div class="ms-adv-acts"><button class="btn btn-ghost btn-sm" data-ms="export">⬇️ تصدير ${esc(monthLabel)}</button></div>
       </div>
+      <div class="ms-adv-row">
+        <div><strong>✋ موافقة المدير على المصروفات الكبيرة</strong><div class="meta">أي مصروف يسجّله حد من الفريق فوق المبلغ ده بيستنى موافقتك قبل ما يتخصم من الخزنة. سيبه فاضي لو مش عاوز موافقات.</div></div>
+        <div class="ms-adv-acts">
+          <input type="number" id="appr-limit" class="input" min="0" step="1" placeholder="مثلاً 2000" style="max-width:130px" aria-label="حد الموافقة">
+          <button class="btn btn-ghost btn-sm" data-ms="appr-save">حفظ</button>
+        </div>
+      </div>
+      <div class="ms-adv-row ms-branches-row">
+        <div style="flex:1;min-width:0">
+          <strong>🏢 الفروع (مراكز التكلفة)</strong>
+          <div class="meta">اربط كل قضية ومصروف بفرع، وشوف ربح كل فرع لوحده في صفحة الربحية.</div>
+          <div id="ms-branches" class="ms-branches"><span class="meta">جاري التحميل…</span></div>
+        </div>
+        <div class="ms-adv-acts">
+          <input type="text" id="branch-name" class="input" maxlength="80" placeholder="اسم الفرع" style="max-width:160px" aria-label="اسم الفرع الجديد">
+          <button class="btn btn-ghost btn-sm" data-ms="branch-add">➕ إضافة فرع</button>
+        </div>
+      </div>
     </div>` : ''}
 
     <div class="card">
@@ -156,12 +174,64 @@ export async function renderSimple(host) {
     catch (e) { toast('⚠️ ' + e.message, 'bad'); }
   });
   host.querySelector('[data-ms="export"]')?.addEventListener('click', () => exportForAccountant(from, to, monthLabel));
+  if (host.querySelector('#ms-branches')) wireAdvanced(host);
 
   const goto = async (v) => { const { showView } = await import('../router.js'); showView(v); };
   host.querySelector('[data-ms="expense"]')?.addEventListener('click', () => goto('money-expenses'));
   host.querySelector('[data-ms="fee"]')?.addEventListener('click', () => goto('fees'));
   host.querySelector('[data-ms="invoice"]')?.addEventListener('click', () => goto('money-invoices'));
   host.querySelector('[data-ms="pay"]')?.addEventListener('click', () => quickPayment(() => renderSimple(host)));
+}
+
+// الفروع وحد الموافقة (الباقة المتقدمة)
+async function wireAdvanced(host) {
+  const box = host.querySelector('#ms-branches');
+  const limitIn = host.querySelector('#appr-limit');
+  apiJson('/api/settings', { silent: true, skipCache: true }).then(st => {
+    const v = (st && (st.settings || st))?.expense_approval_limit;
+    if (v != null && limitIn) limitIn.value = v;
+  }).catch(() => {});
+  host.querySelector('[data-ms="appr-save"]')?.addEventListener('click', async () => {
+    const raw = limitIn.value.trim();
+    try {
+      await apiJson('/api/settings', { method: 'PATCH', body: JSON.stringify({ expense_approval_limit: raw === '' ? null : Number(raw) }) });
+      toast(raw === '' ? 'اتلغت الموافقات — كل المصروفات بتتسجل على طول' : `✅ أي مصروف فوق ${fmtMoney(Number(raw))} ${cur()} هيستنى موافقتك`, 'ok');
+    } catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+  });
+
+  const load = async () => {
+    let list = [];
+    try { list = await apiJson('/api/branches', { skipCache: true }); } catch (e) { box.innerHTML = `<span class="meta">⚠️ ${esc(e.message)}</span>`; return; }
+    box.innerHTML = list.length ? list.map(b => `
+      <span class="ms-branch">
+        <span>${esc(b.name)}</span><span class="meta">${b.cases_count} قضية</span>
+        <button class="icon-btn" data-br-ren="${b.id}" title="تغيير الاسم" aria-label="تغيير اسم ${esc(b.name)}">✏️</button>
+        <button class="icon-btn" data-br-del="${b.id}" title="حذف" aria-label="حذف ${esc(b.name)}">🗑️</button>
+      </span>`).join('') : '<span class="meta">لسه مفيش فروع</span>';
+    box.querySelectorAll('[data-br-ren]').forEach(btn => btn.addEventListener('click', async () => {
+      const b = list.find(x => String(x.id) === btn.dataset.brRen);
+      const name = prompt('الاسم الجديد للفرع', b?.name || '');
+      if (!name || name.trim() === b?.name) return;
+      try { await apiJson(`/api/branches/${b.id}`, { method: 'PATCH', body: JSON.stringify({ name: name.trim() }) }); load(); }
+      catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+    }));
+    box.querySelectorAll('[data-br-del]').forEach(btn => btn.addEventListener('click', async () => {
+      const b = list.find(x => String(x.id) === btn.dataset.brDel);
+      if (!confirm(`تحذف فرع "${b?.name}"؟ القضايا والمصروفات بتاعته هتفضل موجودة بس من غير فرع.`)) return;
+      try { await apiJson(`/api/branches/${b.id}`, { method: 'DELETE' }); toast('اتحذف الفرع', 'ok'); load(); }
+      catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+    }));
+  };
+  const nameIn = host.querySelector('#branch-name');
+  const add = async () => {
+    const name = nameIn.value.trim();
+    if (name.length < 2) return toast('اكتب اسم الفرع', 'bad');
+    try { await apiJson('/api/branches', { method: 'POST', body: JSON.stringify({ name }) }); nameIn.value = ''; toast('✅ اتضاف الفرع', 'ok'); load(); }
+    catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+  };
+  host.querySelector('[data-ms="branch-add"]')?.addEventListener('click', add);
+  nameIn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+  load();
 }
 
 // دفعة سريعة: موكل → (أتعاب لو فيه) → المبلغ

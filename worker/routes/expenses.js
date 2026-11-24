@@ -3,6 +3,10 @@
 
 import { ok, fail } from '../lib/response.js';
 import { assertOpen } from '../lib/period-lock.js';
+import { validBranch } from './branches.js';
+import { can } from '../lib/permissions.js';
+import { createNotification } from './notifications.js';
+import { checkFeature } from '../middleware/feature-gate.js';
 import { trustBalance, autoEntryTrustExpense, payrollPreview, runPayroll, generateRecurring } from '../services/finance-advanced.js';
 import { requireFeature as needFeature } from '../middleware/feature-gate.js';
 import { audit } from '../lib/audit.js';
@@ -16,6 +20,7 @@ export const routes = [
   { method: 'GET',    path: '/api/expenses/stats',                 handler: stats },
   { method: 'GET',    path: '/api/expenses/recurring',             handler: recurringList },
   { method: 'GET',    path: '/api/expenses/payroll',               handler: payrollGet },
+  { method: 'POST',   path: /^\/api\/expenses\/(\d+)\/approve$/, handler: approve },
   { method: 'POST',   path: '/api/expenses/payroll',               handler: payrollPost },
   { method: 'GET',    path: /^\/api\/expenses\/(\d+)$/,            handler: get },
   { method: 'PATCH',  path: /^\/api\/expenses\/(\d+)$/,            handler: update },
@@ -47,7 +52,8 @@ async function list({ env, officeId, url }) {
               NULL as task_title,
               u.full_name as created_by_name,
               e.is_recurring, e.recurring_frequency, e.recurring_parent_id,
-              COALESCE(e.is_reimbursable, 0) AS on_client, COALESCE(e.paid_from_trust, 0) AS from_trust
+              COALESCE(e.is_reimbursable, 0) AS on_client, COALESCE(e.paid_from_trust, 0) AS from_trust,
+              e.approval_status, e.branch_id, (SELECT name FROM branches br WHERE br.id = e.branch_id) AS branch_name
             FROM expenses e
             LEFT JOIN accounts a ON a.id = e.account_id
             LEFT JOIN cases c ON c.id = e.case_id
@@ -70,7 +76,8 @@ async function list({ env, officeId, url }) {
               NULL as task_title,
               NULL as created_by_name,
               0 AS is_recurring, NULL AS recurring_frequency, NULL AS recurring_parent_id,
-              COALESCE(se.billable, 0) AS on_client, 0 AS from_trust
+              COALESCE(se.billable, 0) AS on_client, 0 AS from_trust,
+              'approved' AS approval_status, NULL AS branch_id, NULL AS branch_name
             FROM session_expenses se
             JOIN sessions s ON s.id = se.session_id
             JOIN cases c ON c.id = s.case_id
@@ -92,7 +99,8 @@ async function list({ env, officeId, url }) {
               t.title as task_title,
               NULL as created_by_name,
               0 AS is_recurring, NULL AS recurring_frequency, NULL AS recurring_parent_id,
-              COALESCE(te.billable, 0) AS on_client, 0 AS from_trust
+              COALESCE(te.billable, 0) AS on_client, 0 AS from_trust,
+              'approved' AS approval_status, NULL AS branch_id, NULL AS branch_name
             FROM task_expenses te
             JOIN tasks t ON t.id = te.task_id
             LEFT JOIN cases c ON c.id = t.case_id
@@ -172,7 +180,7 @@ async function get({ env, officeId, params, url }) {
 // ============================================================
 // إنشاء مصروف عام
 // ============================================================
-async function create({ request, env, authUser, officeId }) {
+async function create({ request, env, authUser, officeId, access }) {
   const gate = await requireFeature(env, officeId, 'finance');
   if (gate) return gate;
 
@@ -203,6 +211,22 @@ async function create({ request, env, authUser, officeId }) {
   }
   if (b.is_recurring && !['monthly', 'quarterly', 'yearly'].includes(b.recurring_frequency)) b.recurring_frequency = 'monthly';
 
+  // الفرع: لو المصروف على قضية بياخد فرعها
+  let branchId = await validBranch(env, officeId, b.branch_id);
+  if (branchId === undefined) return fail(env, 'الفرع مش موجود', 400);
+  if (!branchId && b.case_id) {
+    const cb = await env.DB.prepare('SELECT branch_id FROM cases WHERE id = ? AND office_id = ?').bind(b.case_id, officeId).first();
+    branchId = cb?.branch_id || null;
+  }
+
+  // الموافقة (المتقدمة): مصروف فوق الحد من غير المدير → مستني موافقة ومش بيدخل الحسابات
+  let approvalStatus = 'approved';
+  const isManager = access?.role === 'admin' || can(access, 'settings.manage');
+  if (!isManager && await checkFeature(env, officeId, 'finance_advanced')) {
+    const lim = await env.DB.prepare('SELECT expense_approval_limit AS l FROM office_settings WHERE office_id = ?').bind(officeId).first();
+    if (lim?.l != null && Number(lim.l) >= 0 && total > Number(lim.l)) approvalStatus = 'pending';
+  }
+
   let accountId = b.account_id || null;
   if (accountId) {
     const acc = await env.DB.prepare(
@@ -220,8 +244,8 @@ async function create({ request, env, authUser, officeId }) {
     `INSERT INTO expenses
       (office_id, expense_date, description, account_id, amount, tax_amount, total_amount,
        payment_method, vendor, reference_number, case_id, client_id,
-       is_reimbursable, is_recurring, recurring_frequency, receipt_url, notes, created_by, paid_from_trust)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       is_reimbursable, is_recurring, recurring_frequency, receipt_url, notes, created_by, paid_from_trust, branch_id, approval_status)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     officeId,
     b.expense_date,
@@ -241,8 +265,20 @@ async function create({ request, env, authUser, officeId }) {
     b.receipt_url || null,
     b.notes || null,
     authUser.user_id,
-    b.paid_from_trust ? 1 : 0
+    b.paid_from_trust ? 1 : 0,
+    branchId,
+    approvalStatus
   ).run();
+
+  if (approvalStatus === 'pending') {
+    await createNotification(env, {
+      officeId, type: 'expense_approval', title: 'مصروف مستني موافقة المدير',
+      body: `${b.description} — ${total.toLocaleString('en-US')}${authUser.name ? '\nسجّله: ' + authUser.name : ''}`,
+      link: '#money-expenses', icon: '🧾', priority: 'high', referenceType: 'expense', referenceId: r.meta.last_row_id,
+    });
+    await audit(env, { office_id: officeId, user_id: authUser.user_id, action: 'create', entity: 'expense', entity_id: r.meta.last_row_id, metadata: { pending_approval: true, total }, request });
+    return ok(env, { id: r.meta.last_row_id, pending_approval: true }, 201);
+  }
 
   if (b.paid_from_trust) {
     await autoEntryTrustExpense(env, { officeId, expenseId: r.meta.last_row_id, amount: total, date: b.expense_date, description: b.description, method: b.payment_method, userId: authUser.user_id });
@@ -369,6 +405,11 @@ async function update({ request, env, authUser, officeId, params }) {
   if (b.notes !== undefined)              { fields.push('notes = ?'); binds.push(b.notes); }
   if (b.is_reimbursable !== undefined)    { fields.push('is_reimbursable = ?'); binds.push(b.is_reimbursable ? 1 : 0); }
   if (b.is_recurring !== undefined)       { fields.push('is_recurring = ?'); binds.push(b.is_recurring ? 1 : 0); }
+  if (b.branch_id !== undefined) {
+    const br = await validBranch(env, officeId, b.branch_id);
+    if (br === undefined) return fail(env, 'الفرع مش موجود', 400);
+    fields.push('branch_id = ?'); binds.push(br);
+  }
   if (b.recurring_frequency !== undefined && ['monthly', 'quarterly', 'yearly'].includes(b.recurring_frequency)) { fields.push('recurring_frequency = ?'); binds.push(b.recurring_frequency); }
   try { await assertOpen(env, officeId, existing.expense_date); if (b.expense_date) await assertOpen(env, officeId, b.expense_date); } catch (e) { return fail(env, e.message, 423); }
 
@@ -381,7 +422,9 @@ async function update({ request, env, authUser, officeId, params }) {
 
   // القيد يتحدّث بالمبلغ/الحساب/طريقة الدفع الجديدة
   const e2 = await env.DB.prepare('SELECT e.*, a.code AS account_code FROM expenses e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.id = ? AND e.office_id = ?').bind(id, officeId).first();
-  if (e2 && e2.paid_from_trust) {
+  if (e2 && e2.approval_status !== 'approved') {
+    // مستني موافقة أو مرفوض: ملوش قيد
+  } else if (e2 && e2.paid_from_trust) {
     await deleteEntriesFor(env, officeId, REF.expense, id);
     await autoEntryTrustExpense(env, { officeId, expenseId: id, amount: Number(e2.total_amount) || 0, date: e2.expense_date, description: e2.description, method: e2.payment_method, userId: authUser.user_id });
   } else if (e2) {
@@ -628,4 +671,37 @@ async function payrollPost({ request, env, officeId, authUser }) {
     await audit(env, { office_id: officeId, user_id: authUser.user_id, action: 'create', entity: 'payroll', metadata: { month: b?.month, ...r }, request });
     return ok(env, r, 201);
   } catch (e) { return fail(env, e.message, e.status || 400); }
+}
+
+
+// ============================================================
+// موافقة المدير على مصروف (المتقدمة)
+// ============================================================
+async function approve({ request, env, officeId, authUser, access, params }) {
+  if (!(access?.role === 'admin' || can(access, 'settings.manage'))) return fail(env, 'الموافقة لمدير المكتب بس', 403, { code: 'PERMISSION_DENIED' });
+  const id = Number(params[0]);
+  const b = await safeJson(request);
+  const decision = b?.decision === 'reject' ? 'rejected' : 'approved';
+  const e = await env.DB.prepare('SELECT e.*, a.code AS account_code FROM expenses e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.id = ? AND e.office_id = ?').bind(id, officeId).first();
+  if (!e) return fail(env, 'المصروف مش موجود', 404);
+  if (e.approval_status !== 'pending') return fail(env, 'المصروف ده مش مستني موافقة', 400);
+  try { await assertOpen(env, officeId, e.expense_date); } catch (err) { return fail(env, err.message, 423); }
+  if (decision === 'approved' && e.paid_from_trust) {
+    const bal = await trustBalance(env, officeId, e.client_id);
+    if (Number(e.total_amount) > bal + 0.009) return fail(env, `رصيد أمانة الموكل ${bal} — أقل من المصروف`, 400);
+  }
+  await env.DB.prepare(`UPDATE expenses SET approval_status = ?, approved_by = ?, approved_at = datetime('now') WHERE id = ? AND office_id = ?`)
+    .bind(decision, authUser.user_id, id, officeId).run();
+  if (decision === 'approved') {
+    const amt = Number(e.total_amount) || Number(e.amount) || 0;
+    if (e.paid_from_trust) await autoEntryTrustExpense(env, { officeId, expenseId: id, amount: amt, date: e.expense_date, description: e.description, method: e.payment_method, userId: authUser.user_id });
+    else await autoEntryExpense(env, { officeId, expenseId: id, amount: amt, date: e.expense_date, description: e.description, accountCode: e.account_code || '5406', method: e.payment_method, refType: REF.expense, billable: !!e.is_reimbursable, userId: authUser.user_id });
+  }
+  if (e.created_by && e.created_by !== authUser.user_id) {
+    await createNotification(env, { officeId, userId: e.created_by, type: 'expense_decision',
+      title: decision === 'approved' ? 'اتوافق على المصروف' : 'المصروف اترفض',
+      body: `${e.description} — ${Number(e.total_amount).toLocaleString('en-US')}`, link: '#money-expenses', icon: decision === 'approved' ? '✅' : '⛔' });
+  }
+  await audit(env, { office_id: officeId, user_id: authUser.user_id, action: decision === 'approved' ? 'approve' : 'reject', entity: 'expense', entity_id: id, request });
+  return ok(env, { status: decision });
 }

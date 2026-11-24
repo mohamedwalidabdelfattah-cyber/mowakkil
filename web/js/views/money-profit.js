@@ -39,6 +39,21 @@ export async function renderProfit(host) {
       <div class="ms-card net pos"><span>✅ صافي القضايا</span><strong>${fmtMoney(sum('net'))} ${cur()}</strong><small>${esc(r.label)}</small></div>
     </div>
 
+    ${d.branches?.some(b => b.branch_id) ? `
+    <div class="card">
+      <h3>🏢 الفروع</h3>
+      <div class="meta" style="margin-bottom:8px">كل فرع = قضاياه + المصروفات العامة المسجلة عليه. المصروفات العامة اللي من غير فرع بتظهر في "بدون فرع".</div>
+      <div class="st-table-wrap"><table class="st-table">
+        <thead><tr><th>الفرع</th><th>القضايا</th><th>اتحصّل</th><th>مصاريف القضايا</th><th>مصاريف عامة</th><th>الصافي</th></tr></thead>
+        <tbody>${d.branches.map(b => `<tr>
+          <td>${esc(b.name)}</td><td class="mono">${b.cases}</td>
+          <td class="mono ok">${fmtMoney(b.collected)}</td>
+          <td class="mono">${b.office_expenses ? fmtMoney(b.office_expenses) : ''}</td>
+          <td class="mono">${b.general_expenses ? fmtMoney(b.general_expenses) : ''}</td>
+          <td class="mono" style="font-weight:800;color:${b.net < 0 ? 'var(--c-danger, #d92d20)' : 'inherit'}">${fmtMoney(b.net)}</td>
+        </tr>`).join('')}</tbody></table></div>
+    </div>` : ''}
+
     <div class="card">
       <h3>⚖️ القضايا</h3>
       ${d.cases.length ? `<div class="st-table-wrap"><table class="st-table">
@@ -74,6 +89,10 @@ export async function renderProfit(host) {
       { type: 'table', heading: 'المحامين', columns: [
         { key: 'name', label: 'المحامي' }, { key: 'cases', label: 'القضايا', type: 'number' }, { key: 'collected', label: 'اتحصّل', type: 'money' },
         { key: 'office_expenses', label: 'مصاريف', type: 'money' }, { key: 'net', label: 'الصافي', type: 'money' }], rows: d.lawyers },
+      ...(d.branches?.some(b => b.branch_id) ? [{ type: 'table', heading: 'الفروع', columns: [
+        { key: 'name', label: 'الفرع' }, { key: 'cases', label: 'القضايا', type: 'number' }, { key: 'collected', label: 'اتحصّل', type: 'money' },
+        { key: 'office_expenses', label: 'مصاريف القضايا', type: 'money' }, { key: 'general_expenses', label: 'مصاريف عامة', type: 'money' },
+        { key: 'net', label: 'الصافي', type: 'money' }], rows: d.branches }] : []),
     ],
   }, 'ربحية القضايا'));
 }

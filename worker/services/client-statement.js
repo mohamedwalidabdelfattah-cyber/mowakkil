@@ -41,7 +41,7 @@ export async function buildStatement(env, officeId, clientId) {
   for (const e of await all(env,
     `SELECT e.id, e.expense_date AS d, e.description, e.total_amount AS amount, c.case_number
      FROM expenses e LEFT JOIN cases c ON c.id = e.case_id
-     WHERE e.office_id = ? AND e.is_reimbursable = 1 AND (e.client_id = ? OR (e.client_id IS NULL AND c.client_id = ?))`, officeId, clientId, clientId)) {
+     WHERE e.office_id = ? AND e.approval_status = 'approved' AND e.is_reimbursable = 1 AND (e.client_id = ? OR (e.client_id IS NULL AND c.client_id = ?))`, officeId, clientId, clientId)) {
     lines.push({ date: day(e.d), kind: 'expense', description: `مصاريف: ${e.description}${e.case_number ? ' — قضية ' + e.case_number : ''}`, charge: Number(e.amount) || 0, paid: 0, ref: `expense-${e.id}` });
   }
   for (const e of await all(env,
@@ -82,7 +82,7 @@ export async function clientBalances(env, officeId) {
     ['SELECT COALESCE(f.client_id, c.client_id) AS cid, SUM(f.amount_due) AS amt FROM fees f LEFT JOIN cases c ON c.id = f.case_id WHERE f.office_id = ? GROUP BY cid', 1],
     ["SELECT client_id AS cid, SUM(total) AS amt FROM invoices WHERE office_id = ? AND fee_id IS NULL AND status NOT IN ('مسودة', 'ملغاة') GROUP BY cid", 1],
     ["SELECT client_id AS cid, SUM(tax_amount) AS amt FROM invoices WHERE office_id = ? AND fee_id IS NOT NULL AND tax_amount > 0 AND status NOT IN ('مسودة', 'ملغاة') GROUP BY cid", 1],
-    ['SELECT COALESCE(e.client_id, c.client_id) AS cid, SUM(e.total_amount) AS amt FROM expenses e LEFT JOIN cases c ON c.id = e.case_id WHERE e.office_id = ? AND e.is_reimbursable = 1 GROUP BY cid', 1],
+    ["SELECT COALESCE(e.client_id, c.client_id) AS cid, SUM(e.total_amount) AS amt FROM expenses e LEFT JOIN cases c ON c.id = e.case_id WHERE e.office_id = ? AND e.approval_status = 'approved' AND e.is_reimbursable = 1 GROUP BY cid", 1],
     ['SELECT c.client_id AS cid, SUM(se.amount) AS amt FROM session_expenses se JOIN sessions s ON s.id = se.session_id JOIN cases c ON c.id = s.case_id WHERE c.office_id = ? AND se.billable = 1 GROUP BY cid', 1],
     ['SELECT c.client_id AS cid, SUM(te.amount) AS amt FROM task_expenses te JOIN tasks t ON t.id = te.task_id JOIN cases c ON c.id = t.case_id WHERE te.office_id = ? AND te.billable = 1 GROUP BY cid', 1],
     ['SELECT client_id AS cid, SUM(amount) AS amt FROM payments WHERE office_id = ? GROUP BY cid', -1],
@@ -121,14 +121,14 @@ export async function cashSummary(env, officeId, from, to) {
      FROM payments WHERE office_id = ? AND payment_date BETWEEN ? AND ?`, officeId, from, to);
   const office = await one(
     `SELECT
-       (SELECT COALESCE(SUM(total_amount), 0) FROM expenses WHERE office_id = ?1 AND COALESCE(is_reimbursable, 0) = 0 AND expense_date BETWEEN ?2 AND ?3)
+       (SELECT COALESCE(SUM(total_amount), 0) FROM expenses WHERE office_id = ?1 AND approval_status = 'approved' AND COALESCE(is_reimbursable, 0) = 0 AND expense_date BETWEEN ?2 AND ?3)
      + (SELECT COALESCE(SUM(se.amount), 0) FROM session_expenses se JOIN sessions s ON s.id = se.session_id JOIN cases c ON c.id = s.case_id
           WHERE c.office_id = ?1 AND se.billable = 0 AND substr(se.created_at, 1, 10) BETWEEN ?2 AND ?3)
      + (SELECT COALESCE(SUM(amount), 0) FROM task_expenses WHERE office_id = ?1 AND billable = 0 AND substr(created_at, 1, 10) BETWEEN ?2 AND ?3) AS total`,
     officeId, from, to);
   const forClients = await one(
     `SELECT
-       (SELECT COALESCE(SUM(total_amount), 0) FROM expenses WHERE office_id = ?1 AND is_reimbursable = 1 AND expense_date BETWEEN ?2 AND ?3)
+       (SELECT COALESCE(SUM(total_amount), 0) FROM expenses WHERE office_id = ?1 AND approval_status = 'approved' AND is_reimbursable = 1 AND expense_date BETWEEN ?2 AND ?3)
      + (SELECT COALESCE(SUM(se.amount), 0) FROM session_expenses se JOIN sessions s ON s.id = se.session_id JOIN cases c ON c.id = s.case_id
           WHERE c.office_id = ?1 AND se.billable = 1 AND substr(se.created_at, 1, 10) BETWEEN ?2 AND ?3)
      + (SELECT COALESCE(SUM(amount), 0) FROM task_expenses WHERE office_id = ?1 AND billable = 1 AND substr(created_at, 1, 10) BETWEEN ?2 AND ?3) AS total`,
@@ -144,7 +144,7 @@ export async function cashSummary(env, officeId, from, to) {
   // الأمانات اللي عندك للموكلين (جزء من فلوس الصندوق/البنك بس مش بتاعتك)
   const trust = await one(
     `SELECT (SELECT COALESCE(SUM(CASE WHEN kind = 'deposit' THEN amount ELSE -amount END), 0) FROM trust_transactions WHERE office_id = ?1)
-          - (SELECT COALESCE(SUM(total_amount), 0) FROM expenses WHERE office_id = ?1 AND paid_from_trust = 1) AS held`, officeId).catch(() => ({ held: 0 }));
+          - (SELECT COALESCE(SUM(total_amount), 0) FROM expenses WHERE office_id = ?1 AND approval_status = 'approved' AND paid_from_trust = 1) AS held`, officeId).catch(() => ({ held: 0 }));
   const lock = await one('SELECT lock_before FROM office_settings WHERE office_id = ?', officeId).catch(() => ({}));
   const owed = balances.filter(r => r.balance > 0);
   return {

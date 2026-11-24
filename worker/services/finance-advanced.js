@@ -23,7 +23,7 @@ export async function trustBalance(env, officeId, clientId) {
     `SELECT
        (SELECT COALESCE(SUM(CASE WHEN kind = 'deposit' THEN amount ELSE -amount END), 0) FROM trust_transactions WHERE office_id = ?1 AND client_id = ?2)
      - (SELECT COALESCE(SUM(e.total_amount), 0) FROM expenses e LEFT JOIN cases c ON c.id = e.case_id
-         WHERE e.office_id = ?1 AND e.paid_from_trust = 1 AND COALESCE(e.client_id, c.client_id) = ?2) AS bal`,
+         WHERE e.office_id = ?1 AND e.approval_status = 'approved' AND e.paid_from_trust = 1 AND COALESCE(e.client_id, c.client_id) = ?2) AS bal`,
     officeId, clientId);
   return round(r.bal);
 }
@@ -35,7 +35,7 @@ export async function trustLedger(env, officeId, clientId) {
   }
   for (const e of await all(env,
     `SELECT e.id, e.expense_date, e.description, e.total_amount, c.case_number FROM expenses e LEFT JOIN cases c ON c.id = e.case_id
-     WHERE e.office_id = ? AND e.paid_from_trust = 1 AND COALESCE(e.client_id, c.client_id) = ?`, officeId, clientId)) {
+     WHERE e.office_id = ? AND e.approval_status = 'approved' AND e.paid_from_trust = 1 AND COALESCE(e.client_id, c.client_id) = ?`, officeId, clientId)) {
     rows.push({ date: e.expense_date, kind: 'spend', description: `صرف: ${e.description}${e.case_number ? ' — قضية ' + e.case_number : ''}`, in: 0, out: e.total_amount, ref: `expense-${e.id}` });
   }
   rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -89,7 +89,7 @@ export async function profitability(env, officeId, from, to) {
   for (const r of await all(env, `SELECT case_id, SUM(amount) AS s FROM payments WHERE office_id = ? AND case_id IS NOT NULL AND payment_date BETWEEN ? AND ? GROUP BY case_id`, officeId, from, to)) get(r.case_id).collected += r.s || 0;
   for (const r of await all(env, `SELECT case_id, SUM(amount_due) AS s FROM fees WHERE office_id = ? AND case_id IS NOT NULL AND substr(created_at, 1, 10) BETWEEN ? AND ? GROUP BY case_id`, officeId, from, to)) get(r.case_id).agreed += r.s || 0;
   for (const r of await all(env, `SELECT case_id, SUM(CASE WHEN is_reimbursable = 1 OR paid_from_trust = 1 THEN 0 ELSE total_amount END) AS office, SUM(CASE WHEN is_reimbursable = 1 OR paid_from_trust = 1 THEN total_amount ELSE 0 END) AS client
-       FROM expenses WHERE office_id = ? AND case_id IS NOT NULL AND expense_date BETWEEN ? AND ? GROUP BY case_id`, officeId, from, to)) { const c = get(r.case_id); c.office_expenses += r.office || 0; c.client_expenses += r.client || 0; }
+       FROM expenses WHERE office_id = ? AND approval_status = 'approved' AND case_id IS NOT NULL AND expense_date BETWEEN ? AND ? GROUP BY case_id`, officeId, from, to)) { const c = get(r.case_id); c.office_expenses += r.office || 0; c.client_expenses += r.client || 0; }
   for (const r of await all(env, `SELECT s.case_id, SUM(CASE WHEN se.billable = 1 THEN 0 ELSE se.amount END) AS office, SUM(CASE WHEN se.billable = 1 THEN se.amount ELSE 0 END) AS client
        FROM session_expenses se JOIN sessions s ON s.id = se.session_id JOIN cases c ON c.id = s.case_id
        WHERE c.office_id = ? AND substr(se.created_at, 1, 10) BETWEEN ? AND ? GROUP BY s.case_id`, officeId, from, to)) { const c = get(r.case_id); c.office_expenses += r.office || 0; c.client_expenses += r.client || 0; }
@@ -136,9 +136,26 @@ export async function profitability(env, officeId, from, to) {
 
   // المصاريف العامة (مش على قضية) — عشان الصورة تبقى كاملة
   const general = await one(env,
-    `SELECT COALESCE(SUM(total_amount), 0) AS s FROM expenses WHERE office_id = ? AND case_id IS NULL AND COALESCE(is_reimbursable, 0) = 0 AND COALESCE(paid_from_trust, 0) = 0 AND expense_date BETWEEN ? AND ?`, officeId, from, to);
+    `SELECT COALESCE(SUM(total_amount), 0) AS s FROM expenses WHERE office_id = ? AND approval_status = 'approved' AND case_id IS NULL AND COALESCE(is_reimbursable, 0) = 0 AND COALESCE(paid_from_trust, 0) = 0 AND expense_date BETWEEN ? AND ?`, officeId, from, to);
   const unlinked = await one(env, `SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE office_id = ? AND case_id IS NULL AND payment_date BETWEEN ? AND ?`, officeId, from, to);
-  return { from, to, cases: caseRows, lawyers: lawyerRows, unassigned_cases: unassigned,
+  // الفروع: القضايا اللي فيها + المصروفات العامة المتسجلة على الفرع
+  const branchOf = new Map();
+  const branchNames = new Map((await all(env, 'SELECT id, name FROM branches WHERE office_id = ?', officeId)).map(b => [b.id, b.name]));
+  if (branchNames.size) {
+    for (let i = 0; i < ids.length; i += 80) {
+      const chunk = ids.slice(i, i + 80);
+      for (const c of await all(env, `SELECT id, branch_id FROM cases WHERE office_id = ? AND id IN (${chunk.map(() => '?').join(',')})`, officeId, ...chunk)) branchOf.set(c.id, c.branch_id);
+    }
+  }
+  const byBranch = new Map();
+  const bget = (id) => { const k = id || 0; if (!byBranch.has(k)) byBranch.set(k, { branch_id: id || null, name: id ? (branchNames.get(id) || 'فرع') : 'بدون فرع', cases: 0, collected: 0, office_expenses: 0, general_expenses: 0 }); return byBranch.get(k); };
+  if (branchNames.size) {
+    for (const c of caseRows) { const g = bget(branchOf.get(c.case_id)); g.cases++; g.collected += c.collected; g.office_expenses += c.office_expenses; }
+    for (const r of await all(env, `SELECT branch_id, SUM(total_amount) AS s FROM expenses WHERE office_id = ? AND approval_status = 'approved' AND case_id IS NULL AND COALESCE(is_reimbursable, 0) = 0 AND COALESCE(paid_from_trust, 0) = 0 AND expense_date BETWEEN ? AND ? GROUP BY branch_id`, officeId, from, to)) bget(r.branch_id).general_expenses += r.s || 0;
+  }
+  const branchRows = [...byBranch.values()].map(b => ({ ...b, collected: round(b.collected), office_expenses: round(b.office_expenses), general_expenses: round(b.general_expenses), net: round(b.collected - b.office_expenses - b.general_expenses) }))
+    .sort((a, b) => (a.branch_id ? 0 : 1) - (b.branch_id ? 0 : 1) || b.net - a.net);
+  return { from, to, cases: caseRows, lawyers: lawyerRows, branches: branchRows, unassigned_cases: unassigned,
     general_expenses: round(general.s), unlinked_collected: round(unlinked.s) };
 }
 
@@ -192,7 +209,7 @@ export async function generateRecurring(env, { officeId = null, today = null } =
      FROM expenses e
      LEFT JOIN accounts a ON a.id = e.account_id
      JOIN subscriptions s ON s.office_id = e.office_id
-     WHERE e.is_recurring = 1 AND e.recurring_frequency IN ('monthly', 'quarterly', 'yearly')
+     WHERE e.is_recurring = 1 AND e.approval_status = 'approved' AND e.recurring_frequency IN ('monthly', 'quarterly', 'yearly')
        ${officeId ? 'AND e.office_id = ?' : ''}`, ...(officeId ? [officeId] : []));
   let made = 0;
   for (const t of templates) {
@@ -203,9 +220,9 @@ export async function generateRecurring(env, { officeId = null, today = null } =
       const lock = await lockDate(env, t.office_id);
       if (!(lock && next < lock)) {
         const ins = await env.DB.prepare(
-          `INSERT INTO expenses (office_id, expense_date, description, account_id, amount, tax_amount, total_amount, payment_method, vendor, case_id, client_id, is_reimbursable, recurring_parent_id, notes, created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-        ).bind(t.office_id, next, t.description, t.account_id, t.amount, t.tax_amount || 0, t.total_amount, t.payment_method, t.vendor, t.case_id, t.client_id, t.is_reimbursable || 0, t.id, 'اتسجل تلقائي (مصروف متكرر)', t.created_by).run();
+          `INSERT INTO expenses (office_id, expense_date, description, account_id, amount, tax_amount, total_amount, payment_method, vendor, case_id, client_id, is_reimbursable, recurring_parent_id, notes, created_by, branch_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).bind(t.office_id, next, t.description, t.account_id, t.amount, t.tax_amount || 0, t.total_amount, t.payment_method, t.vendor, t.case_id, t.client_id, t.is_reimbursable || 0, t.id, 'اتسجل تلقائي (مصروف متكرر)', t.created_by, t.branch_id || null).run();
         await autoEntryExpense(env, { officeId: t.office_id, expenseId: ins.meta.last_row_id, amount: t.total_amount, date: next, description: t.description,
           accountCode: t.account_code || '5406', method: t.payment_method, refType: REF.expense, billable: !!t.is_reimbursable, userId: t.created_by });
         made++;

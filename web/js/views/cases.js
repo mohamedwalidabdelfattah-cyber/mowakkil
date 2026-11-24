@@ -73,6 +73,9 @@ export async function render(host) {
               ${caseTypeOptions()}
             </select>
           </div>
+          <div id="c-branch-wrap" hidden><label>الفرع</label>
+            <select id="c-branch"><option value="">— من غير فرع —</option></select>
+          </div>
         </div>
         <button class="primary" style="margin-top:10px" id="add-case">حفظ القضية</button>
       </div>
@@ -192,6 +195,9 @@ export async function render(host) {
       loadAndRender();
     }));
 
+    // الفروع (المتقدمة): بتظهر بس لو المكتب عامل فروع
+    fillBranchSelect(host.querySelector('#c-branch'), host.querySelector('#c-branch-wrap'));
+
     // === الأحداث القديمة ===
     host.querySelector('#add-case')?.addEventListener('click', async () => {
       const body = {
@@ -200,6 +206,7 @@ export async function render(host) {
         court: host.querySelector('#c-court').value.trim(),
         degree: host.querySelector('#c-degree').value,
         case_type: host.querySelector('#c-type').value || null,
+        branch_id: host.querySelector('#c-branch')?.value || null,
       };
       if (!body.case_number && !body.court) return toast('اكتب رقم القضية أو المحكمة', 'bad');
       await apiJson('/api/cases', { method: 'POST', body: JSON.stringify(body) });
@@ -386,6 +393,10 @@ async function showCaseDetail(id, initialTab = 'overview') {
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
               <span>الحالة:</span><strong>${esc(c.status)}</strong>
             </div>
+            <div id="cp-branch-wrap" style="display:none;justify-content:space-between;align-items:center;gap:8px;font-size:13.5px;margin-top:6px">
+              <span>الفرع:</span>
+              ${can('cases.edit') ? '<select id="cp-branch" style="max-width:180px;padding:4px 8px"><option value="">— من غير فرع —</option></select>' : '<strong id="cp-branch-name">—</strong>'}
+            </div>
           </div>
           <div class="card" style="background:var(--gray-50)" id="case-team-card">
             <h4 style="margin:0 0 8px;font-size:14px">👥 فريق القضية</h4>
@@ -393,6 +404,7 @@ async function showCaseDetail(id, initialTab = 'overview') {
           </div>
         `;
         renderCaseTeam(document.getElementById('case-team-card'), c.id);
+        fillCaseBranch(el, c);
       }
 
       if (tab === 'sessions') {
@@ -848,4 +860,35 @@ function renderCaseAnalysis(r = {}, provider = '') {
         <br>⚠️ تحليل مساعد بالذكاء الاصطناعي — لازم مراجعته من محامٍ قبل الاعتماد عليه، وأي ميعاد أو رقم مادة يُراجع على النص الرسمي.
       </div>
     </div>`;
+}
+// ============================================================
+// الفروع (الباقة المتقدمة)
+// ============================================================
+async function loadBranches() {
+  if (!hasFeatureFn('finance_advanced')) return [];
+  try { const l = await apiJson('/api/branches', { silent: true }); return (l || []).filter(b => b.active); } catch { return []; }
+}
+async function fillBranchSelect(sel, wrap) {
+  if (!sel) return;
+  const list = await loadBranches();
+  if (!list.length || !sel.isConnected) return;
+  sel.insertAdjacentHTML('beforeend', list.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join(''));
+  if (wrap) wrap.hidden = false;
+}
+async function fillCaseBranch(root, c) {
+  const wrap = root.querySelector('#cp-branch-wrap');
+  if (!wrap) return;
+  const list = await loadBranches();
+  if (!list.length || !wrap.isConnected) return;
+  wrap.style.display = 'flex';
+  const sel = root.querySelector('#cp-branch');
+  if (!sel) { const n = root.querySelector('#cp-branch-name'); if (n) n.textContent = list.find(b => b.id === c.branch_id)?.name || '—'; return; }
+  sel.insertAdjacentHTML('beforeend', list.map(b => `<option value="${b.id}" ${b.id === c.branch_id ? 'selected' : ''}>${esc(b.name)}</option>`).join(''));
+  sel.addEventListener('change', async () => {
+    try {
+      await apiJson(`/api/cases/${c.id}`, { method: 'PATCH', body: JSON.stringify({ branch_id: sel.value || null }) });
+      c.branch_id = sel.value ? Number(sel.value) : null;
+      toast('✅ اتغيّر الفرع', 'ok');
+    } catch (e) { toast('⚠️ ' + e.message, 'bad'); sel.value = c.branch_id || ''; }
+  });
 }

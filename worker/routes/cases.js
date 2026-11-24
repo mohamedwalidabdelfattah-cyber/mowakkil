@@ -1,4 +1,5 @@
 import { ok, fail } from '../lib/response.js';
+import { validBranch } from './branches.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson } from '../lib/validation.js';
 import { createNotification } from './notifications.js';
@@ -71,16 +72,19 @@ async function create({ request, env, authUser, officeId }) {
     if (!c) return fail(env, 'الموكل مش موجود', 400);
   }
 
+  const branchId = await validBranch(env, officeId, b.branch_id);
+  if (branchId === undefined) return fail(env, 'الفرع مش موجود', 400);
   const r = await env.DB.prepare(
-    `INSERT INTO cases (office_id, client_id, case_number, court, degree, case_type)
-     VALUES (?,?,?,?,?,?)`
+    `INSERT INTO cases (office_id, client_id, case_number, court, degree, case_type, branch_id)
+     VALUES (?,?,?,?,?,?,?)`
   ).bind(
     officeId,
     b.client_id ?? null,
     b.case_number ?? null,
     b.court ?? null,
     b.degree ?? null,
-    b.case_type ?? null
+    b.case_type ?? null,
+    branchId
   ).run();
 
   await audit(env, {
@@ -200,7 +204,15 @@ async function profile({ env, officeId, params, access }) {
 async function updateStatus({ request, env, authUser, officeId, params }) {
   const id = toInt(params[0]);
   const b = await safeJson(request);
-  if (!b || !b.status) return fail(env, 'status مطلوب', 400);
+  if (!b || (!b.status && b.branch_id === undefined)) return fail(env, 'status مطلوب', 400);
+
+  // الفرع (المتقدمة)
+  if (b.branch_id !== undefined) {
+    const branchId = await validBranch(env, officeId, b.branch_id);
+    if (branchId === undefined) return fail(env, 'الفرع مش موجود', 400);
+    await env.DB.prepare('UPDATE cases SET branch_id = ? WHERE id = ? AND office_id = ?').bind(branchId, id, officeId).run();
+    if (!b.status) return ok(env, { updated: true });
+  }
 
   const r = await env.DB.prepare(
     `UPDATE cases SET status = ? WHERE id = ? AND office_id = ?`

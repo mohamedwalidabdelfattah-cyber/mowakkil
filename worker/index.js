@@ -20,6 +20,7 @@ import * as reportsRoutes         from './routes/reports.js';
 import * as toolsRoutes           from './routes/tools.js';
 import * as accountsRoutes        from './routes/accounts.js';
 import * as journalRoutes         from './routes/journal.js';
+import * as branchesRoutes        from './routes/branches.js';
 import * as expensesRoutes        from './routes/expenses.js';
 import * as invoicesRoutes        from './routes/invoices.js';
 import * as clientPortalRoutes    from './routes/client-portal.js';
@@ -68,6 +69,7 @@ const OFFICE_ROUTES = [
   ...toolsRoutes.routes,
   ...accountsRoutes.routes,
   ...journalRoutes.routes,
+  ...branchesRoutes.routes,
   ...expensesRoutes.routes,
   ...invoicesRoutes.routes,
   ...subscriptionRoutes.routes,

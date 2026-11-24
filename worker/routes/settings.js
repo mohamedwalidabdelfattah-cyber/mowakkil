@@ -87,7 +87,13 @@ async function update({ request, env, authUser, officeId }) {
     'doc_storage_default', // مكان حفظ المستندات الافتراضي: cloud | device
     'wa_templates', // قوالب رسايل واتساب (JSON: session/fee/update/general)
     'notif_events', // تذكيرات مواعيد الأجندة
+    'expense_approval_limit', // المصروفات اللي فوقه محتاجة موافقة المدير (المتقدمة)
   ];
+  if (b.expense_approval_limit !== undefined) {
+    if (b.expense_approval_limit === null || b.expense_approval_limit === '') b.expense_approval_limit = null;
+    else if (!(Number(b.expense_approval_limit) >= 0)) return fail(env, 'حد الموافقة لازم يكون رقم', 400);
+    else b.expense_approval_limit = Number(b.expense_approval_limit);
+  }
   if (b.session_reminder_days !== undefined) {
     const d = Number(b.session_reminder_days);
     if (!Number.isInteger(d) || d < 0 || d > 7) return fail(env, 'تذكير الجلسات لازم يكون من 0 لـ 7 أيام', 400);

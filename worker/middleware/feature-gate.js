@@ -32,7 +32,7 @@ const FEATURES = {
   },
   lifetime_pro: {
     cases: true, clients: true, agenda: true, portal: true,
-    finance: true, invoices: true, accounting: true, finance_advanced: false, ai: true,
+    finance: true, invoices: true, accounting: true, finance_advanced: true, ai: true,
     advanced_reports: true, whatsapp: true,
     multi_office: false, api: true,
   },

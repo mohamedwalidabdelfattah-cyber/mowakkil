@@ -1099,3 +1099,9 @@ body .search-result-item.selected, body .search-result-item:hover { background: 
 .ms-adv-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--border); }
 .ms-adv-acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ms-adv-acts .input { width: auto; padding: 6px 10px; }
+.ms-branches { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ms-branch { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2, var(--bg)); font-size: 13px; }
+.ms-branch .icon-btn { width: 24px; height: 24px; font-size: 12px; padding: 0; }
+.exp-pending { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--warn, #d97706) 15%, transparent); color: var(--warn, #b45309); }
+.exp-rejected { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--danger, #dc2626) 12%, transparent); color: var(--danger, #b91c1c); }
+.exp-branch { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 11px; background: var(--surface-2, var(--bg)); border: 1px solid var(--border); color: var(--muted, inherit); }

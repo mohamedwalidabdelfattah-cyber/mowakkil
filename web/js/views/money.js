@@ -6,6 +6,7 @@ import { renderSimple } from './money-simple.js';
 import { renderProfit } from './money-profit.js';
 import { esc, toast, empty, skeleton, fmtMoney, cur, curName, localISO, monthStartISO, monthEndISO, defaultVat } from '../ui.js';
 import { openModal } from '../modal.js';
+import { can } from '../access.js';
 
 let currentSub = 'money';
 let moneyCharts = {};
@@ -308,14 +309,19 @@ async function drawMoneyOverviewChart() {
 // 2) المصاريف (عام + جلسات + مهام)
 // ============================================================
 async function renderExpenses(host) {
-  const [expenses, accounts] = await Promise.all([
-    apiJson('/api/expenses'),
+  const adv = hasFeature('finance_advanced');
+  const [expenses, accounts, branches] = await Promise.all([
+    apiJson('/api/expenses', { skipCache: true }),
     apiJson('/api/accounts?type=expense'),
+    adv ? apiJson('/api/branches', { silent: true }).catch(() => []) : [],
   ]);
+  const isManager = can('settings.manage');
+  const pending = expenses.filter(e => e.approval_status === 'pending');
+  const branchOpts = (branches || []).filter(b => b.active).map(b => ({ value: b.id, label: b.name }));
 
   const expenseAccounts = accounts.filter(a => a.category === 'expense');
   const now = new Date();
-  const monthExpenses = expenses.filter(e => (e.date || '').startsWith(localISO(now).slice(0, 7)));
+  const monthExpenses = expenses.filter(e => (!e.approval_status || e.approval_status === 'approved') && (e.date || '').startsWith(localISO(now).slice(0, 7)));
   const monthTotal = monthExpenses.reduce((s, e) => s + (e.amount || 0), 0);
 
   host.innerHTML = `
@@ -331,12 +337,30 @@ async function renderExpenses(host) {
       ${hasFeature('accounting') ? '<button class="btn btn-ghost btn-block" id="payroll-btn" style="margin-top:8px">💼 صرف مرتبات الشهر</button>' : ''}
     </div>
 
-    <div id="expenses-list">
-      ${expenses.length ? expenses.map(e => `
+    ${pending.length ? `
+    <div class="card" style="border-inline-start:4px solid var(--warn, #d97706)">
+      <h3>✋ مستني ${isManager ? 'موافقتك' : 'موافقة المدير'} (${pending.length})</h3>
+      <div class="meta" style="margin-bottom:8px">المصروفات دي لسه متخصمتش من الخزنة ومش داخلة في أي حساب لحد ما ${isManager ? 'توافق عليها' : 'المدير يوافق عليها'}.</div>
+      ${pending.map(e => `
         <div class="item">
           <div class="top">
             <span class="name">${esc(e.description)}</span>
-            <span class="num mono" style="color:var(--danger);font-weight:700">${fmtMoney(e.amount)} ${cur()}</span>
+            <span class="num mono" style="font-weight:700">${fmtMoney(e.amount)} ${cur()}</span>
+          </div>
+          <div class="meta">📅 ${esc(e.date || '')}${e.created_by_name ? ' · سجّله: ' + esc(e.created_by_name) : ''}${e.case_number ? ' · 📁 ' + esc(e.case_number) : ''}${e.branch_name ? ' · 🏢 ' + esc(e.branch_name) : ''}</div>
+          ${isManager ? `<div class="acts">
+            <button class="btn btn-primary btn-sm" data-approve="${e.id}">✅ موافقة</button>
+            <button class="btn btn-ghost btn-sm" data-reject="${e.id}" style="color:var(--danger)">⛔ رفض</button>
+          </div>` : ''}
+        </div>`).join('')}
+    </div>` : ''}
+
+    <div id="expenses-list">
+      ${expenses.length ? expenses.map(e => `
+        <div class="item"${e.approval_status === 'rejected' ? ' style="opacity:.6"' : ''}>
+          <div class="top">
+            <span class="name">${esc(e.description)} ${e.approval_status === 'pending' ? '<span class="exp-pending">⏳ مستني موافقة</span>' : e.approval_status === 'rejected' ? '<span class="exp-rejected">⛔ مرفوض</span>' : ''}</span>
+            <span class="num mono" style="color:var(--danger);font-weight:700${e.approval_status && e.approval_status !== 'approved' ? ';text-decoration:line-through' : ''}">${fmtMoney(e.amount)} ${cur()}</span>
           </div>
           <div class="meta">
             ${e.source === 'session' ? '⚖️ مصروف جلسة' : e.source === 'task' ? '✅ مصروف مهمة' : (e.case_number ? '📁 مصروف قضية' : '🏢 مصروف عام')}
@@ -345,6 +369,7 @@ async function renderExpenses(host) {
             ${e.account_name ? ' · ' + esc(e.account_name) : ''}
             · 📅 ${esc(e.date || '')}
             ${e.case_number ? ' · 📁 ' + esc(e.case_number) : ''}
+            ${e.branch_name ? ` · <span class="exp-branch">🏢 ${esc(e.branch_name)}</span>` : ''}
           </div>
           <div class="acts">
             ${e.is_recurring ? `<button class="btn btn-ghost" data-stop-recurring="${e.id}">⏹ إيقاف التكرار</button>` : ''}
@@ -359,6 +384,7 @@ async function renderExpenses(host) {
     let casesList = [];
     try { const cs = await apiJson('/api/cases'); casesList = Array.isArray(cs) ? cs : (cs.items || []); } catch {}
     const accountOpts = expenseAccounts.map(a => ({ value: a.id, label: a.name }));
+    let saved = null;
     const result = await openModal({
       title: '➕ إضافة مصروف',
       submitText: 'حفظ',
@@ -376,17 +402,21 @@ async function renderExpenses(host) {
         { name: 'is_reimbursable', label: '👤 مين هيتحمّله؟', type: 'select', options: [{ value: '0', label: 'المكتب (مصروف على المكتب)' }, { value: '1', label: 'الموكل (يتضاف لحسابه وكشف حسابه)' },
           ...(hasFeature('accounting') ? [{ value: '2', label: 'من أمانة الموكل (مقدم المصاريف اللي دفعه)' }] : [])] },
         ...(hasFeature('accounting') ? [{ name: 'recurring_frequency', label: '🔁 يتكرر؟', type: 'select', options: [{ value: '', label: 'لأ، مرة واحدة' }, { value: 'monthly', label: 'كل شهر (إيجار، اشتراكات…)' }, { value: 'quarterly', label: 'كل 3 شهور' }, { value: 'yearly', label: 'كل سنة' }] }] : []),
+        ...(branchOpts.length ? [{ name: 'branch_id', label: '🏢 الفرع', type: 'select', options: [{ value: '', label: '— فرع القضية / من غير فرع —' }, ...branchOpts] }] : []),
         { name: 'vendor', label: '🏢 الجهة / المورد', placeholder: 'مالك العقار' },
         { name: 'notes', label: '📝 ملاحظات', type: 'textarea' },
       ],
       onSubmit: async (d) => {
         if ((d.is_reimbursable === '1' || d.is_reimbursable === '2') && !d.case_id) throw new Error('اختار القضية عشان نعرف الموكل');
-        await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, case_id: d.case_id || null,
+        saved = await apiJson('/api/expenses', { method: 'POST', body: JSON.stringify({ ...d, case_id: d.case_id || null, branch_id: d.branch_id || null,
           is_reimbursable: d.is_reimbursable === '1' ? 1 : 0, paid_from_trust: d.is_reimbursable === '2' ? 1 : 0,
           is_recurring: d.recurring_frequency ? 1 : 0, recurring_frequency: d.recurring_frequency || null }) });
       },
     });
-    if (result) { toast('اتحفظ ✓', 'ok'); render(host, { subView: 'money-expenses' }); }
+    if (result) {
+      toast(saved && saved.pending_approval ? '⏳ اتسجل ومستني موافقة المدير — مش هيتخصم من الخزنة غير بعد الموافقة' : 'اتحفظ ✓', 'ok');
+      render(host, { subView: 'money-expenses' });
+    }
   });
 
   host.querySelectorAll('[data-stop-recurring]').forEach(b => b.addEventListener('click', async () => {
@@ -394,6 +424,16 @@ async function renderExpenses(host) {
     try { await apiJson(`/api/expenses/${b.dataset.stopRecurring}`, { method: 'PATCH', body: JSON.stringify({ is_recurring: 0 }) }); toast('اتوقف التكرار', 'ok'); render(host, { subView: 'money-expenses' }); }
     catch (e) { toast('⚠️ ' + e.message, 'bad'); }
   }));
+  const decide = async (id, decision) => {
+    if (decision === 'reject' && !confirm('ترفض المصروف ده؟ مش هيتخصم من الخزنة.')) return;
+    try {
+      await apiJson(`/api/expenses/${id}/approve`, { method: 'POST', body: JSON.stringify({ decision }) });
+      toast(decision === 'approve' ? '✅ اتوافق واتخصم من الخزنة' : 'اترفض المصروف', 'ok');
+      render(host, { subView: 'money-expenses' });
+    } catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+  };
+  host.querySelectorAll('[data-approve]').forEach(b => b.addEventListener('click', () => decide(b.dataset.approve, 'approve')));
+  host.querySelectorAll('[data-reject]').forEach(b => b.addEventListener('click', () => decide(b.dataset.reject, 'reject')));
   host.querySelector('#payroll-btn')?.addEventListener('click', () => openPayroll(() => render(host, { subView: 'money-expenses' })));
 
   host.querySelectorAll('[data-del-expense]').forEach(b => b.addEventListener('click', async () => {

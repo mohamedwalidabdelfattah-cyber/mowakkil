@@ -37,6 +37,8 @@ export const NOTIF_TYPES = {
   limit_reached:    { pref: null, perm: 'subscription.manage', cat: 'system' },
   limit_warning:    { pref: null, perm: 'subscription.manage', cat: 'system' },
   test:             { pref: null, perm: null, cat: 'system' },
+  expense_approval: { pref: null, perm: 'settings.manage', cat: 'fee' },
+  expense_decision: { pref: null, perm: null, cat: 'fee' },
 };
 
 // إعدادات المكتب (كاش قصير عشان الـ cron بيعمل إشعارات كتير ورا بعض)

@@ -114,7 +114,7 @@ function renderPlanCard(plan, currentPlan) {
   const featureLabels = {
     cases: 'إدارة القضايا', clients: 'إدارة الموكلين',
     agenda: 'الأجندة', portal: 'بوابة الموكل',
-    finance: 'الأتعاب والتحصيل والمصروفات', invoices: 'الفواتير', accounting: 'المحاسبة الكاملة',
+    finance: 'الأتعاب والتحصيل والمصروفات', invoices: 'الفواتير', accounting: 'المحاسبة الكاملة', finance_advanced: 'أدوات المكاتب الكبيرة (فروع، موافقات، مرتبات)',
     ai: 'الذكاء الاصطناعي', advanced_reports: 'تقارير متقدمة',
     whatsapp: 'تكامل واتساب', multi_office: 'مكاتب متعددة',
     api: 'API Access',

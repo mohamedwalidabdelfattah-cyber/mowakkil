@@ -97,7 +97,7 @@ export async function repairOffice(env, officeId) {
   for (const e of await all(
     `SELECT e.id, e.total_amount, e.amount, e.expense_date, e.description, e.payment_method, e.is_reimbursable, a.code AS account_code
      FROM expenses e LEFT JOIN accounts a ON a.id = e.account_id
-     WHERE e.office_id = ? AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.office_id = e.office_id AND je.reference_type = 'expense' AND je.reference_id = e.id)`, officeId)) {
+     WHERE e.office_id = ? AND e.approval_status = 'approved' AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.office_id = e.office_id AND je.reference_type = 'expense' AND je.reference_id = e.id)`, officeId)) {
     const amt = Number(e.total_amount) || Number(e.amount) || 0;
     if (amt > 0 && await autoEntryExpense(env, { officeId, expenseId: e.id, amount: amt, date: e.expense_date, description: e.description,
       accountCode: e.account_code || '5406', method: e.payment_method, refType: REF.expense, billable: !!e.is_reimbursable })) report.restored_expenses++;
