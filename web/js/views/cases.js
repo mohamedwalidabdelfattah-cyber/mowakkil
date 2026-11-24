@@ -7,6 +7,7 @@ import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
 import { can } from '../access.js';
+import { openWhatsAppComposer, localDateStr } from '../whatsapp.js';
 
 let currentFilters = {
   archived: false,
@@ -273,10 +274,14 @@ async function showCaseDetail(id, initialTab = 'overview') {
   `;
   document.body.appendChild(modal);
 
+  let waCtx = null; // بيتملى بعد ما ملف القضية يتحمّل
   modal.addEventListener('click', (e) => {
     if (e.target === modal || e.target.closest('[data-action="close"]')) {
       modal.remove();
+      return;
     }
+    const wb = e.target.closest('[data-wa]');
+    if (wb && waCtx) waCtx(wb.dataset.wa, wb.dataset.waId);
   });
 
   try {
@@ -284,6 +289,25 @@ async function showCaseDetail(id, initialTab = 'overview') {
     const { case: c, sessions, expenses, fees, documents, tasks, stats } = d;
     const hideFees = d.hidden?.fees || !can('fees.view');
     const hideExp = d.hidden?.expenses || !can('expenses.view');
+    const todayStr = localDateStr();
+    const nextSession = sessions
+      .filter(s => String(s.session_date).slice(0, 10) >= todayStr)
+      .sort((a, b) => String(a.session_date).localeCompare(String(b.session_date)))[0];
+    waCtx = (what, rowId) => {
+      const base = { phone: c.client_phone, client_name: c.client_name, case_number: c.case_number, court: c.court };
+      if (what === 'session') {
+        const s = sessions.find(x => String(x.id) === String(rowId)) || nextSession;
+        return openWhatsAppComposer({ ...base, kind: 'session', kinds: ['session', 'update', 'general'], session_date: s?.session_date });
+      }
+      if (what === 'fee') {
+        const f = fees.find(x => String(x.id) === String(rowId));
+        if (!f) return;
+        return openWhatsAppComposer({ ...base, kind: 'fee', kinds: ['fee', 'general'],
+          remaining: (f.amount_due || 0) - (f.amount_paid || 0), due_date: f.due_date });
+      }
+      const kinds = nextSession ? ['update', 'session', 'general'] : ['general'];
+      return openWhatsAppComposer({ ...base, kind: kinds[0], kinds, session_date: nextSession?.session_date });
+    };
 
     const tabsHtml = `
       <div class="case-tabs" style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border-soft);overflow-x:auto">
@@ -340,6 +364,7 @@ async function showCaseDetail(id, initialTab = 'overview') {
                 <strong style="font-family:var(--font-mono)">${esc(c.client_phone)}</strong>
               </div>
             ` : ''}
+            ${c.client_id ? `<button class="btn btn-sm wa-send" data-wa="client" style="margin-top:10px">💬 رسالة واتساب للموكل</button>` : ''}
           </div>
           <div class="card" style="background:var(--gray-50)">
             <h4 style="margin:0 0 12px;font-size:14px">📁 بيانات القضية</h4>
@@ -370,11 +395,13 @@ async function showCaseDetail(id, initialTab = 'overview') {
               <div class="item" style="padding:12px 0;border-bottom:1px solid var(--border-soft)">
                 <div class="top">
                   <span class="name">${esc(s.session_date)}</span>
-                  <span class="badge ${new Date(s.session_date) >= new Date() ? 'active' : 'trial'}">
-                    ${new Date(s.session_date) >= new Date() ? 'قادمة' : 'منتهية'}
+                  <span class="badge ${String(s.session_date).slice(0, 10) >= todayStr ? 'active' : 'trial'}">
+                    ${String(s.session_date).slice(0, 10) >= todayStr ? 'قادمة' : 'منتهية'}
                   </span>
                 </div>
                 ${s.notes ? `<div class="meta">📝 ${esc(s.notes)}</div>` : ''}
+                ${c.client_id && String(s.session_date).slice(0, 10) >= todayStr
+                  ? `<button class="btn btn-ghost btn-sm wa-ghost" data-wa="session" data-wa-id="${s.id}" style="margin-top:6px">💬 تذكير الموكل</button>` : ''}
               </div>
             `).join('')
           : empty('مفيش جلسات', '📅');
@@ -390,6 +417,8 @@ async function showCaseDetail(id, initialTab = 'overview') {
                 </div>
                 <div class="meta">مدفوع: ${fmtMoney(f.amount_paid)} ج · ${esc(f.due_date || '')}</div>
                 ${f.notes ? `<div class="meta">📝 ${esc(f.notes)}</div>` : ''}
+                ${c.client_id && f.status !== 'مدفوع بالكامل' && (f.amount_due || 0) > (f.amount_paid || 0)
+                  ? `<button class="btn btn-ghost btn-sm wa-ghost" data-wa="fee" data-wa-id="${f.id}" style="margin-top:6px">💬 تذكير بالأتعاب</button>` : ''}
               </div>
             `).join('')
           : empty('مفيش أتعاب', '💰');

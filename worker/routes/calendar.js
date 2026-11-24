@@ -41,7 +41,7 @@ async function listEvents({ env, officeId, url, access, authUser }) {
       env.DB.prepare(
         `SELECT s.id, s.session_date as date, s.notes,
                 c.id as case_id, c.case_number, c.court, c.degree,
-                cl.name as client_name
+                cl.name as client_name, cl.phone as client_phone
          FROM sessions s
          JOIN cases c ON c.id = s.case_id
          LEFT JOIN clients cl ON cl.id = c.client_id
@@ -78,7 +78,7 @@ async function listEvents({ env, officeId, url, access, authUser }) {
     promises.push(
       env.DB.prepare(
         `SELECT f.id, f.amount_due, f.amount_paid, f.due_date as date, f.status,
-                cl.name as client_name, c.case_number
+                cl.name as client_name, cl.phone as client_phone, c.case_number
          FROM fees f
          LEFT JOIN clients cl ON cl.id = f.client_id
          LEFT JOIN cases c ON c.id = f.case_id

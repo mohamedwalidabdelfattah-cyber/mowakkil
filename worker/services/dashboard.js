@@ -20,7 +20,7 @@ export async function dashboard(env, officeId, options = {}) {
   const promises = [
     // جلسات النهاردة
     env.DB.prepare(
-      `SELECT s.id, s.session_date, c.case_number, c.court, cl.name as client_name
+      `SELECT s.id, s.session_date, s.case_id, c.case_number, c.court, cl.name as client_name, cl.phone as client_phone
        FROM sessions s
        JOIN cases c ON c.id = s.case_id
        LEFT JOIN clients cl ON cl.id = c.client_id
@@ -38,7 +38,7 @@ export async function dashboard(env, officeId, options = {}) {
 
     // أتعاب متأخرة
     env.DB.prepare(
-      `SELECT f.id, f.amount_due, f.amount_paid, f.due_date, cl.name as client_name
+      `SELECT f.id, f.amount_due, f.amount_paid, f.due_date, cl.name as client_name, cl.phone as client_phone
        FROM fees f LEFT JOIN clients cl ON cl.id = f.client_id
        WHERE f.office_id = ? AND f.status != 'مدفوع بالكامل' AND f.due_date <= ?
        ORDER BY f.due_date LIMIT 20`

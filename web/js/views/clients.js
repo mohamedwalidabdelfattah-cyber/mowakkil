@@ -2,6 +2,7 @@
 import { apiJson } from '../api.js';
 import { esc, empty, waLink, toast, fmtMoney, fmtDate, skeleton, bindPanels } from '../ui.js';
 import { setClients } from '../state.js';
+import { openWhatsAppComposer } from '../whatsapp.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 
 // حالة الفلاتر
@@ -164,6 +165,8 @@ export async function render(host) {
       const res  = e.target.closest('[data-resend-invite]');
       const dacc = e.target.closest('[data-delete-account]');
 
+      const wa = e.target.closest('[data-wa-client]');
+      if (wa) return openWhatsAppComposer({ kind: 'general', phone: wa.dataset.waPhone, client_name: wa.dataset.waName });
       if (view) return showProfile(view.dataset.viewClient);
       if (del) {
         if (!confirm('متأكد من حذف الموكل؟')) return;
@@ -216,7 +219,7 @@ function clientItem(c, status) {
       </div>
       ${accountBadge ? `<div style="margin-top:6px">${accountBadge}</div>` : ''}
       <div class="acts">
-        ${c.phone ? `<a class="wa" href="${waLink(c.phone)}" target="_blank" rel="noopener">💬 واتساب</a>` : ''}
+        ${c.phone ? `<button class="ghost wa-ghost" data-wa-client="${c.id}" data-wa-phone="${esc(c.phone)}" data-wa-name="${esc(c.name)}">💬 واتساب</button>` : ''}
         ${!hasAccount || cancelledInvite ? `
           <button class="ghost" data-invite-client="${c.id}" style="color:var(--ok)">📱 إرسال دعوة</button>
         ` : ''}

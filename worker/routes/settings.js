@@ -83,7 +83,22 @@ async function update({ request, env, authUser, officeId }) {
     'theme', 'primary_color', 'font_size', 'language',
     'date_format', 'timezone',
     'doc_storage_default', // مكان حفظ المستندات الافتراضي: cloud | device
+    'wa_templates', // قوالب رسايل واتساب (JSON: session/fee/update/general)
   ];
+  if (b.wa_templates !== undefined && b.wa_templates !== null) {
+    let t = b.wa_templates;
+    if (typeof t === 'object') t = JSON.stringify(t);
+    let parsed;
+    try { parsed = JSON.parse(t); } catch { return fail(env, 'قوالب واتساب مش مظبوطة', 400); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || String(t).length > 8000) {
+      return fail(env, 'قوالب واتساب مش مظبوطة', 400);
+    }
+    const clean = {};
+    for (const k of ['session', 'fee', 'update', 'general']) {
+      if (typeof parsed[k] === 'string' && parsed[k].trim()) clean[k] = parsed[k].slice(0, 1500);
+    }
+    b.wa_templates = Object.keys(clean).length ? JSON.stringify(clean) : null;
+  }
   if (b.doc_storage_default !== undefined && !['cloud', 'device'].includes(b.doc_storage_default)) {
     return fail(env, 'مكان الحفظ لازم يكون cloud أو device', 400);
   }

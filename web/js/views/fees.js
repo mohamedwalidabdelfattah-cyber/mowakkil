@@ -2,6 +2,7 @@
 import { apiJson } from '../api.js';
 import { esc, empty, toast, fmtMoney, skeleton } from '../ui.js';
 import { openModal } from '../modal.js';
+import { openWhatsAppComposer } from '../whatsapp.js';
 import { getClients, getCases } from '../state.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 
@@ -407,6 +408,9 @@ function renderFeeItem(f) {
         ${f.status !== 'مدفوع بالكامل'
           ? `<button class="btn btn-success btn-sm" data-add-payment="${f.id}">💵 إضافة دفعة</button>`
           : ''}
+        ${f.status !== 'مدفوع بالكامل' && remaining > 0 && f.client_name
+          ? `<button class="btn btn-ghost wa-ghost" data-wa-fee="${f.id}" title="تذكير الموكل على واتساب">💬 تذكير</button>`
+          : ''}
         <button class="btn btn-ghost" data-view-payments="${f.id}">📋 الدفعات</button>
         <button class="btn btn-ghost" data-del-fee="${f.id}" style="color:var(--danger)">🗑 حذف</button>
       </div>
@@ -471,6 +475,15 @@ function openAddFeeModal(host, clients, cases, onDone) {
 // أحداث الأتعاب
 // ============================================================
 function attachFeeEvents(host, fees, onDone) {
+  host.querySelectorAll('[data-wa-fee]').forEach(b => b.addEventListener('click', () => {
+    const f = fees.find(x => x.id === Number(b.dataset.waFee));
+    if (!f) return;
+    openWhatsAppComposer({
+      kind: 'fee', kinds: ['fee', 'general'],
+      phone: f.client_phone, client_name: f.client_name, case_number: f.case_number,
+      remaining: (f.amount_due || 0) - (f.amount_paid || 0), due_date: f.due_date,
+    });
+  }));
   host.querySelectorAll('[data-add-payment]').forEach(b => b.addEventListener('click', async () => {
     const feeId = Number(b.dataset.addPayment);
     const fee = fees.find(f => f.id === feeId);

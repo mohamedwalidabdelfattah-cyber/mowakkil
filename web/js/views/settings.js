@@ -1,11 +1,89 @@
 // web/js/views/settings.js
 // صفحة الإعدادات الشاملة
 
-import { apiJson, getRole } from '../api.js';
+import { apiJson, getRole, clearCache } from '../api.js';
 import { can } from '../access.js';
 import { toast } from '../ui.js';
 import { pickerHTML, bindPicker } from '../ai-privacy.js';
 import { deviceSupported, getRootFolder, pickRootFolder, getDeviceLabel, setDeviceLabel } from '../device-storage.js';
+import { WA_KINDS, WA_DEFAULTS, WA_PLACEHOLDERS, fillTemplate, resetWaSettings } from '../whatsapp.js';
+
+// ============================================================
+// رسايل واتساب: تعديل القوالب الجاهزة
+// ============================================================
+function renderWhatsAppTab(content, settings, isAdmin, reload) {
+  let custom = {};
+  try { custom = settings.wa_templates ? JSON.parse(settings.wa_templates) : {}; } catch { custom = {}; }
+  const sample = {
+    client: 'أحمد محمود', case: '1234 لسنة 2026', court: 'محكمة شمال القاهرة',
+    date: 'الأحد، 6 ديسمبر 2026', amount: '5,000', due: 'الثلاثاء، 1 ديسمبر 2026',
+    office: `مكتب ${(settings.office_name_ar || 'المكتب').replace(/^مكتب\s+/, '')}`,
+  };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+
+  content.innerHTML = `
+    <div class="card">
+      <h3>💬 رسايل واتساب الجاهزة</h3>
+      <p class="meta" style="line-height:1.8;margin:0 0 10px">
+        الرسايل دي بتظهر لما تدوس «💬 تذكير» في الأجندة أو الأتعاب أو ملف القضية أو لوحة التحكم.
+        واتساب بيفتح والرسالة مكتوبة، وانت بتراجعها وتدوس إرسال بنفسك.
+        الكلمات اللي بين { } بتتبدّل لوحدها، وأي سطر فيه معلومة مش موجودة بيتشال.
+      </p>
+      <div class="wa-chips">${Object.entries(WA_PLACEHOLDERS).map(([k, v]) => `<code title="${esc(v)}" data-chip="${k}">${k} ${esc(v)}</code>`).join('')}</div>
+      <div class="wa-tpl">
+        ${Object.keys(WA_KINDS).map(k => `
+          <div>
+            <label class="wa-label" for="wa-tpl-${k}" style="font-weight:700;color:var(--text)">${WA_KINDS[k]}
+              ${custom[k] ? '<span class="badge" style="margin-inline-start:6px">معدّلة</span>' : ''}</label>
+            <textarea id="wa-tpl-${k}" class="wa-text" data-kind="${k}" ${isAdmin ? '' : 'readonly'}>${esc(custom[k] || WA_DEFAULTS[k])}</textarea>
+            <details style="margin-top:6px"><summary class="meta" style="cursor:pointer">معاينة</summary>
+              <pre class="wa-preview" data-preview="${k}" style="white-space:pre-wrap;font:inherit;background:var(--surface-2, #f8fafc);padding:10px;border-radius:10px;margin:6px 0 0"></pre>
+            </details>
+          </div>`).join('')}
+      </div>
+      ${isAdmin ? `
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="wa-tpl-save">💾 حفظ</button>
+          <button class="btn btn-ghost" id="wa-tpl-reset">↺ رجّع الرسايل الافتراضية</button>
+        </div>` : '<div class="meta" style="margin-top:12px">تعديل الرسايل لمدير المكتب بس.</div>'}
+    </div>`;
+
+  let lastFocused = content.querySelector('textarea.wa-text');
+  const refresh = () => content.querySelectorAll('textarea[data-kind]').forEach(ta => {
+    const pre = content.querySelector(`[data-preview="${ta.dataset.kind}"]`);
+    if (pre) pre.textContent = fillTemplate(ta.value, sample);
+  });
+  refresh();
+  content.addEventListener('input', refresh);
+  content.addEventListener('focusin', e => { if (e.target.matches('textarea.wa-text')) lastFocused = e.target; });
+  content.querySelectorAll('[data-chip]').forEach(c => c.addEventListener('click', () => {
+    if (!isAdmin || !lastFocused) return;
+    const ta = lastFocused; const p = ta.selectionStart ?? ta.value.length;
+    ta.value = ta.value.slice(0, p) + c.dataset.chip + ta.value.slice(ta.selectionEnd ?? p);
+    ta.focus(); ta.selectionStart = ta.selectionEnd = p + c.dataset.chip.length;
+    refresh();
+  }));
+
+  const save = async (templates) => {
+    try {
+      await apiJson('/api/settings', { method: 'PATCH', body: JSON.stringify({ wa_templates: templates }) });
+      clearCache(); resetWaSettings();
+      toast('اتحفظت الرسايل ✓', 'ok');
+      reload();
+    } catch (e) { toast('فشل الحفظ: ' + e.message, 'bad'); }
+  };
+  content.querySelector('#wa-tpl-save')?.addEventListener('click', () => {
+    const out = {};
+    content.querySelectorAll('textarea[data-kind]').forEach(ta => {
+      const v = ta.value.trim();
+      if (v && v !== WA_DEFAULTS[ta.dataset.kind].trim()) out[ta.dataset.kind] = v; // نحفظ المعدّل بس
+    });
+    save(out);
+  });
+  content.querySelector('#wa-tpl-reset')?.addEventListener('click', () => {
+    if (confirm('ترجّع كل الرسايل للنسخة الافتراضية؟')) save({});
+  });
+}
 
 // ============================================================
 // التخزين: مكان حفظ المستندات (سحابة / كمبيوتر المكتب) + إعداد الجهاز ده
@@ -104,6 +182,9 @@ export async function render(host) {
         <button class="settings-tab ${currentTab === 'storage' ? 'active' : ''}" data-tab="storage">
           <span>💾</span> التخزين
         </button>
+        <button class="settings-tab ${currentTab === 'whatsapp' ? 'active' : ''}" data-tab="whatsapp">
+          <span>💬</span> رسايل واتساب
+        </button>
         <button class="settings-tab ${currentTab === 'privacy' ? 'active' : ''}" data-tab="privacy">
           <span>🔒</span> الخصوصية
         </button>
@@ -149,6 +230,10 @@ async function loadTab(host, tab, isAdmin) {
     else if (tab === 'plan')          content.innerHTML = await renderPlanTab();
     else if (tab === 'storage') {
       await renderStorageTab(content, settings, isAdmin, () => loadTab(host, 'storage', isAdmin));
+      return;
+    }
+    else if (tab === 'whatsapp') {
+      renderWhatsAppTab(content, settings, isAdmin, () => loadTab(host, 'whatsapp', isAdmin));
       return;
     }
     else if (tab === 'privacy') {

@@ -4,6 +4,7 @@
 import { apiJson } from '../api.js';
 import { esc, empty, fmtMoney, skeleton } from '../ui.js';
 import { icon } from '../icons.js';
+import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
 import { PALETTE, SERIES, areaGradient } from '../chart-theme.js';
 
 let charts = {};
@@ -164,7 +165,10 @@ export async function render(host) {
           <div class="card">
             <div class="section-header">
               <h3>${icon('calendar')} الجلسات القادمة</h3>
-              <button class="btn btn-ghost btn-sm" data-goto="agenda">عرض الكل</button>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm wa-ghost" id="wa-tomorrow-btn" title="تذكير موكلين جلسات بكرة على واتساب">💬 تذكير جلسات بكرة</button>
+                <button class="btn btn-ghost btn-sm" data-goto="agenda">عرض الكل</button>
+              </div>
             </div>
             ${sessions.length ? sessions.slice(0, 5).map(s => `
               <div class="item">
@@ -173,6 +177,7 @@ export async function render(host) {
                   <span class="badge">${esc(fmtShortDate(s.session_date))}</span>
                 </div>
                 <div class="meta">${icon('landmark')} ${esc(s.court || '—')}${s.client_name ? ' · ' + esc(s.client_name) : ''}</div>
+                ${s.client_name ? `<button class="btn btn-ghost btn-sm wa-ghost" data-wa-session="${s.id}" style="margin-top:6px">💬 تذكير الموكل</button>` : ''}
               </div>`).join('') : empty('مفيش جلسات خلال الأسبوع الجاي', '📅')}
           </div>
 
@@ -197,6 +202,16 @@ export async function render(host) {
       </div>
     `;
 
+    host.querySelector('#wa-tomorrow-btn')?.addEventListener('click', () => openTomorrowReminders(sessions));
+    host.querySelectorAll('[data-wa-session]').forEach(b => b.addEventListener('click', () => {
+      const s = sessions.find(x => String(x.id) === b.dataset.waSession);
+      if (!s) return;
+      openWhatsAppComposer({
+        kind: 'session', kinds: ['session', 'update', 'general'],
+        phone: s.client_phone, client_name: s.client_name, case_number: s.case_number,
+        court: s.court, session_date: s.session_date,
+      });
+    }));
     host.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', async () => {
       const { showView } = await import('../router.js');
       showView(b.dataset.goto);

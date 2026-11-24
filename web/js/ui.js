@@ -22,9 +22,14 @@ export function esc(s) {
 
 // ============ WhatsApp ============
 export function waLink(phone) {
-  const digits = (phone || '').replace(/\D/g, '');
-  const prefixed = digits.startsWith('20') ? digits : '2' + digits;
-  return `https://wa.me/${prefixed}`;
+  // نفس منطق normalizePhone في whatsapp.js (مصر افتراضياً، والأرقام الدولية بـ + أو 00 زي ما هي)
+  const s = String(phone || '').trim();
+  let d = s.replace(/\D/g, '');
+  if (s.startsWith('+') || s.startsWith('00')) d = d.replace(/^00/, '');
+  else if (/^01\d{9}$/.test(d)) d = '20' + d.slice(1);
+  else if (/^1\d{9}$/.test(d)) d = '20' + d;
+  else if (!/^20\d{10}$/.test(d) && d.startsWith('0')) d = '20' + d.replace(/^0+/, '');
+  return `https://wa.me/${d}`;
 }
 
 // ============ Loading Helpers (Skeletons) ============

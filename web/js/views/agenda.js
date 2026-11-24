@@ -2,6 +2,7 @@
 // التقويم الفعلي — Toast UI Calendar
 
 import { apiJson, api } from '../api.js';
+import { openWhatsAppComposer } from '../whatsapp.js';
 import { esc, toast, empty, fmtMoney, skeleton } from '../ui.js';
 
 let calendar = null;
@@ -296,6 +297,11 @@ function showEventDetails(event) {
         <strong>${esc(formatDateAr(event.start?.toDate?.() || new Date()))}</strong>
       </div>
 
+      ${(() => {
+        const k = event.raw?.kind || event.category;
+        if ((k !== 'session' && k !== 'fee') || event.raw?.pending) return '';
+        return `<button class="btn wa-send" data-action="wa" style="width:100%;margin-bottom:8px">💬 ${k === 'session' ? 'تذكير الموكل بالجلسة' : 'تذكير الموكل بالأتعاب'} على واتساب</button>`;
+      })()}
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost" data-action="close" style="flex:1">إغلاق</button>
         <button class="btn btn-danger" data-action="delete" style="flex:1">🗑 حذف</button>
@@ -308,6 +314,21 @@ function showEventDetails(event) {
   modal.addEventListener('click', async (e) => {
     if (e.target === modal || e.target.closest('[data-action="close"]')) {
       modal.remove();
+      return;
+    }
+
+    if (e.target.closest('[data-action="wa"]')) {
+      const r = event.raw || {};
+      const isSession = (r.kind || event.category) === 'session';
+      modal.remove();
+      openWhatsAppComposer({
+        kind: isSession ? 'session' : 'fee',
+        kinds: isSession ? ['session', 'update', 'general'] : ['fee', 'general'],
+        phone: r.client_phone, client_name: r.client_name, case_number: r.case_number, court: r.court,
+        session_date: isSession ? r.date : null,
+        remaining: isSession ? null : (r.amount_due || 0) - (r.amount_paid || 0),
+        due_date: isSession ? null : r.date,
+      });
       return;
     }
 

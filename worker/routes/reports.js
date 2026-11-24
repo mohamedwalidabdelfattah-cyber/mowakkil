@@ -59,7 +59,7 @@ async function agenda({ env, officeId, url, access, authUser }) {
   const end = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 
   const { results } = await env.DB.prepare(
-    `SELECT s.id, s.session_date, c.case_number, c.court, cl.name as client_name
+    `SELECT s.id, s.session_date, s.case_id, c.case_number, c.court, cl.name as client_name, cl.phone as client_phone
      FROM sessions s
      JOIN cases c ON c.id = s.case_id
      LEFT JOIN clients cl ON cl.id = c.client_id

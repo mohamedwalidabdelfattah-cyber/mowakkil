@@ -20,7 +20,8 @@ async function list({ env, officeId, url }) {
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
 
-  let query = `SELECT f.*, cl.name as client_name FROM fees f
+  let query = `SELECT f.*, cl.name as client_name, cl.phone as client_phone, c.case_number FROM fees f
+               LEFT JOIN cases c ON c.id = f.case_id
                LEFT JOIN clients cl ON cl.id = f.client_id
                WHERE f.office_id = ?`;
   const binds = [officeId];
