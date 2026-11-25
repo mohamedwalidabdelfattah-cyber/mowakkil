@@ -3,7 +3,7 @@
 // ويحوّلها لمواد في law_articles (country = 'SA'). بياخد النص الساري بس (المواد الملغاة بتتشال).
 // الاستخدام: node build-moj-laws.mjs <ملف قائمة: serial,title في كل سطر> <ملف SQL الناتج> <ملف أسماء موجودة قبل كده (سطر لكل اسم)>
 import fs from 'node:fs';
-import { articleNumber } from './ordinal.mjs';
+import { articleNumber } from '../../worker/lib/ordinal.js';
 
 const [listFile, outSql, skipFile] = process.argv.slice(2);
 if (!listFile || !outSql) { console.error('usage: node build-moj-laws.mjs list.csv out.sql [skip.txt]'); process.exit(1); }

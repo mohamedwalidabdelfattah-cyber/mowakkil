@@ -7,6 +7,10 @@
 //   not_found     ⚠️ القانون موجود في القاعدة بس رقم المادة ده مش موجود (ممكن غلط/هلوسة أو نقص في القاعدة)
 //   law_unknown   ℹ️ القانون نفسه مش في القاعدة — لازم مراجعة يدوية
 // ملاحظة: قاعدة المواد مش كاملة لكل القوانين، فـ"مش موجود" معناها "مش متحقق" مش بالضرورة "غلط".
+// السعودية: "المادة الرابعة والثمانون من نظام العمل" / "المادة 1/3 من اللائحة التنفيذية لنظام المرافعات الشرعية".
+// كل مكتب بيتراجع على قوانين دولته بس (قانون العمل المصري ≠ نظام العمل السعودي).
+
+import { articleNumber } from './ordinal.js';
 
 const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 const latin = s => String(s).replace(/[٠-٩]/g, d => String(AR_DIGITS.indexOf(d)));
@@ -28,6 +32,8 @@ function lawTokens(name) {
     .replace(/[0-9]+/g, ' ')
     .split(/[\s\-–—،,/()]+/)
     .map(w => w.replace(/^و?ال/, '').replace(/ه$/, '').replace(/يه$/, 'ي'))
+    // المفرد والجمع واحد: "اللائحة التنفيذية" = "اللوائح التنفيذية"، "الأنظمة" = "النظام"
+    .map(w => (w === 'لوائح' ? 'لائح' : w === 'انظم' ? 'نظام' : w))
     .filter(w => w.length >= 3 && !STOP.has(w) && !STOP.has('ال' + w));
 }
 
@@ -39,6 +45,9 @@ const lawNumberKey = s => {
 // رقم المادة بشكل موحد: "147" / "306 مكرر ا"
 function articleKey(s) {
   const n = normalizeAr(s).replace(/^الماده\s*/, '');
+  // بنود اللوائح التنفيذية السعودية: "1/3" (البند 1 من المادة 3)
+  const sub = n.match(/^\(?\s*(\d+)\s*\/\s*(\d+)/);
+  if (sub) return `${sub[1]}/${sub[2]}`;
   const m = n.match(/(\d+)\s*(مكرر[اً]?)?\s*([ا-ي])?(?![ا-ي])/);
   if (!m) return null;
   let k = m[1];
@@ -49,7 +58,7 @@ function articleKey(s) {
 // ---------- فهرس القوانين ----------
 // بيتبني من law_articles كلها (~20 ألف صف) — فبنخزّنه في KV يوم كامل، وفي ذاكرة الـ isolate ساعة.
 // قبل كده كل isolate جديد كان بيقرا الجدول كله، وده بيستهلك حصة القراءة اليومية لـ D1 بسرعة.
-const CIT_KV_KEY = 'citations:index:v1';
+const CIT_KV_KEY = 'citations:index:v2'; // v2: دولة كل قانون
 let index = null;
 async function getIndex(env) {
   if (index && index.exp > Date.now()) return index.laws;
@@ -78,14 +87,15 @@ export async function resetCitationIndex(env) {
 
 async function buildIndex(env) {
   const { results } = await env.DB.prepare(
-    `SELECT law_name, law_number, article_number FROM law_articles`
+    `SELECT law_name, law_number, article_number, country FROM law_articles`
   ).all();
   const byLaw = new Map();
   for (const r of results || []) {
-    const key = `${r.law_name}|${r.law_number || ''}`;
+    const key = `${r.country || 'EG'}|${r.law_name}|${r.law_number || ''}`;
     if (!byLaw.has(key)) {
       byLaw.set(key, {
         name: r.law_name,
+        country: r.country || 'EG',
         tokens: new Set(lawTokens(r.law_name)),
         number: lawNumberKey(`${r.law_number || ''} ${r.law_name}`),
         articles: new Set(),
@@ -112,12 +122,19 @@ function matchLaws(laws, lawText) {
 
 // ---------- استخراج الاستشهادات من نص ----------
 // "المادة 147 من القانون المدني" / "المادتين 147 و148 من القانون المدني" / "م 18 مكرر من قانون العقوبات"
+const LAW_CHARS = '(?:(?!\\s+و?(?:ال|لل|ب)?(?:ماد|مواد))[^\\n،,.؛:()"\\[\\]{}])';
 const CITE_RE = new RegExp(
   // بادئة اختيارية: و/ب/ل/ف + ال/لل (والمادة، للمادة، بالمادة، وفقاً للمادتين...)
   '(?<![\\p{L}])(?:(?:[وبفل]?(?:ال|لل)|ل)(?:ماد(?:ة|ه|تين|تان|تا)|مواد)|م\\.?)\\s*\\(?\\s*' +
-  '([0-9٠-٩]+(?:\\s*مكرر(?:اً|ا)?(?:\\s*[أ-ي](?![أ-ي]))?)?(?:\\s*\\)?\\s*(?:،|,|و|-|إلى|الى|حتى)\\s*\\(?\\s*[0-9٠-٩]+)*)' +
+  '(' +
+    // أرقام: 147 / 18 مكرر أ / 1/3 / 147 و148 / من 10 إلى 15
+    '[0-9٠-٩]+(?:\\s*/\\s*[0-9٠-٩]+)?(?:\\s*مكرر(?:اً|ا)?(?:\\s*[أ-ي](?![أ-ي]))?)?(?:\\s*\\)?\\s*(?:،|,|و|-|إلى|الى|حتى)\\s*\\(?\\s*[0-9٠-٩]+)*' +
+    // أو بالحروف (الصياغة السعودية): الرابعة والثمانون / الحادية عشرة / الخامسة بعد المائة
+    '|ال\\p{L}+(?:\\s+(?:و?ال\\p{L}+|عشرة?|بعد))*' +
+  ')' +
   '\\s*\\)?\\s*(?:من|في|ب)?\\s*' +
-  '((?:ال)?قانون[^\\n،,.؛:()"\\[\\]{}]{2,70}|(?:ال)?دستور)',
+  // اسم القانون/النظام — وبيقف قبل "والمادة…" عشان استشهادين في جملة واحدة ميتلزقوش في بعض
+  '((?:ال)?قانون' + LAW_CHARS + '{2,70}|(?:ال|ل)?(?:نظام|لائح[ةه]|لوائح|قواعد|ضوابط)' + LAW_CHARS + '{2,90}|(?:ال)?دستور)',
   'gu'
 );
 
@@ -125,20 +142,33 @@ export function extractCitations(text) {
   const out = [];
   const s = String(text || '');
   for (const m of s.matchAll(CITE_RE)) {
-    const nums = latin(m[1]).split(/\s*(?:،|,|و|-|إلى|الى|حتى|\)|\()\s*/).map(x => x.trim()).filter(Boolean);
-    // نطاق "من 147 إلى 150" بنتحقق من أوله وآخره بس
-    const lawText = m[2].trim().replace(/\s+(?:بشأن|الخاص|والذي|التي|الذي|حيث|لأن|بما)\b.*$/u, '').trim();
-    out.push({ raw: m[0].trim(), index: m.index, end: m.index + m[0].length, articles: nums.map(articleKey).filter(Boolean), lawText });
+    let articles;
+    if (/[0-9٠-٩]/.test(m[1])) {
+      // نطاق "من 147 إلى 150" بنتحقق من أوله وآخره بس
+      const nums = latin(m[1]).split(/\s*(?:،|,|و|-|إلى|الى|حتى|\)|\()\s*/).map(x => x.trim()).filter(Boolean);
+      articles = nums.map(articleKey).filter(Boolean);
+    } else {
+      const n = articleNumber('المادة ' + m[1]);
+      articles = n ? [String(n)] : [];
+    }
+    // "المادة المذكورة من القانون" مش استشهاد برقم → مفيش حاجة نتحقق منها
+    if (!articles.length) continue;
+    const lawText = m[2].trim().replace(/\s+(?:بشأن|الخاص|والذي|التي|الذي|حيث|لأن|بما|على|وذلك|إذا|اذا)(?:\s.*)?$/u, '').trim();
+    out.push({ raw: m[0].trim(), index: m.index, end: m.index + m[0].length, articles, lawText });
   }
   return out;
 }
 
-/** يتحقق من كل استشهاد في نص واحد. */
-export async function verifyText(env, text) {
+/** قوانين دولة المكتب بس (لو الدولة مش معروفة → الكل) */
+const forCountry = (laws, country) =>
+  (country === 'SA' || country === 'EG') ? laws.filter(l => (l.country || 'EG') === country) : laws;
+
+/** يتحقق من كل استشهاد في نص واحد. country: دولة المكتب ('EG' | 'SA') */
+export async function verifyText(env, text, { country } = {}) {
   const cites = extractCitations(text);
   if (!cites.length) return [];
   let laws;
-  try { laws = await getIndex(env); } catch (e) { console.warn('citations index failed:', e.message); return []; }
+  try { laws = forCountry(await getIndex(env), country); } catch (e) { console.warn('citations index failed:', e.message); return []; }
   return cites.map(c => {
     if (/دستور/.test(c.lawText)) return { ...c, status: 'law_unknown', law: 'الدستور' };
     const cands = matchLaws(laws, c.lawText);
@@ -167,11 +197,11 @@ export function annotate(text, results) {
  * يمشي على نتيجة JSON (تحليل قضية/عقد...) ويعلّم على الاستشهادات + يرجّع ملخص.
  * applicable_laws بيتراجع بشكل خاص لأنه منظم: { law, articles }.
  */
-export async function verifyResult(env, result) {
+export async function verifyResult(env, result, { country } = {}) {
   const all = [];
   async function walk(v) {
     if (typeof v === 'string') {
-      const rs = await verifyText(env, v);
+      const rs = await verifyText(env, v, { country });
       all.push(...rs);
       return rs.length ? annotate(v, rs) : v;
     }
@@ -188,11 +218,11 @@ export async function verifyResult(env, result) {
   // applicable_laws: [{ law: "القانون المدني", articles: "147، 148" }]
   if (Array.isArray(out?.applicable_laws)) {
     let laws = null;
-    try { laws = await getIndex(env); } catch {}
+    try { laws = forCountry(await getIndex(env), country); } catch {}
     if (laws) {
       out.applicable_laws = out.applicable_laws.map(item => {
         if (!item || typeof item !== 'object' || !item.law || !item.articles) return item;
-        const nums = latin(String(item.articles)).match(/\d+(?:\s*مكرر(?:اً|ا)?)?/g) || [];
+        const nums = latin(String(item.articles)).match(/\d+(?:\s*\/\s*\d+)?(?:\s*مكرر(?:اً|ا)?)?/g) || [];
         if (!nums.length) return item;
         const keys = nums.map(articleKey).filter(Boolean);
         const cands = matchLaws(laws, item.law);

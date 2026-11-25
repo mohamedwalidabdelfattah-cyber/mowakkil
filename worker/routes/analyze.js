@@ -214,7 +214,7 @@ async function runAnalysis(env, officeId, userId, type, request) {
     const country = await officeCountry(env, officeId);
     ({ result, provider } = await runJsonPrompt(env, localizeLegalPrompt(SYSTEM_PROMPT, country), `${PROMPTS[type]}\n\nالنص:\n${text}`, 3000,
       { route: routeFor(privacy.mode), masker }));
-    const checked = await verifyResult(env, result);
+    const checked = await verifyResult(env, result, { country });
     result = checked.result;
     result._citations = checked.summary;
     result._privacy = { mode: privacy.mode, masked: masker.count };
@@ -356,7 +356,7 @@ ${docText ? `نص مستند لصقه المحامي:\n${docText}\n` : ''}`;
     return fail(env, 'فشل التحليل: ' + e.message, 503);
   }
 
-  const checked = await verifyResult(env, result);
+  const checked = await verifyResult(env, result, { country });
   result = checked.result;
 
   result._meta = {

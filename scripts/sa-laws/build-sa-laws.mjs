@@ -17,7 +17,7 @@ const LAWS = [
   { p: 27013, name: 'لائحة نظام الأحوال الشخصية', number: 'نُشرت بتاريخ 22/8/1446هـ', expected: 41 },
 ];
 
-import { ordinalToNumber } from './ordinal.mjs';
+import { ordinalToNumber } from '../../worker/lib/ordinal.js';
 
 // ============ صفحة → نص ============
 function decode(s) {

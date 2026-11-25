@@ -4,7 +4,7 @@
 // الاستخدام: node build-boe-laws.mjs <فولدر الصفحات> <ملف SQL الناتج> [أسماء أنظمة موجودة قبل كده، مفصولة بـ |]
 import fs from 'node:fs';
 import path from 'node:path';
-import { articleNumber } from './ordinal.mjs';
+import { articleNumber } from '../../worker/lib/ordinal.js';
 
 const [srcDir, outSql, skipNames = ''] = process.argv.slice(2);
 if (!srcDir || !outSql) { console.error('usage: node build-boe-laws.mjs pagesDir out.sql [skip|names]'); process.exit(1); }

@@ -6,9 +6,9 @@ import { localizeLegalPrompt } from '../lib/country.js';
 import { verifyText, annotate, summarize, summaryText } from '../lib/citations.js';
 
 // مراجعة الأسانيد في أي نص طالع من الذكاء الاصطناعي
-async function withCitationCheck(env, text) {
+async function withCitationCheck(env, text, country) {
   try {
-    const checks = await verifyText(env, text);
+    const checks = await verifyText(env, text, { country });
     return checks.length ? annotate(text, checks) + summaryText(summarize(checks)) : text;
   } catch (e) {
     console.warn('citation check failed:', e.message);
@@ -131,7 +131,7 @@ ${context}
 2. لو النصوص غير متعلقة بالسؤال أو غير كافية، قل ذلك صراحة في أول سطر، ثم أجب من معرفتك بالأنظمة السعودية مع التنبيه على ضرورة مراجعة النص الرسمي.
 3. الترتيب: الإجابة المباشرة، ثم التحليل النظامي، ثم النقاط العملية، ثم المصادر.`, 'SA');
         const answer = await callAI(env, prompt, 1400, localizeLegalPrompt(DEFAULT_SYSTEM, 'SA'));
-        return { answer: answer ? await withCitationCheck(env, answer) : buildFallbackAnswer(articles), sources: articles };
+        return { answer: answer ? await withCitationCheck(env, answer, 'SA') : buildFallbackAnswer(articles), sources: articles };
       }
       // مفيش نصوص قريبة: نجاوب من المعرفة العامة بالأنظمة وننبّه
       const answer = await callAI(env,
@@ -235,7 +235,7 @@ ${context}
 
   try {
     const answer = await callAI(env, prompt, 1200);
-    return { answer: answer ? await withCitationCheck(env, answer) : buildFallbackAnswer(results), sources: results };
+    return { answer: answer ? await withCitationCheck(env, answer, country) : buildFallbackAnswer(results), sources: results };
   } catch (e) {
     console.error('AI failed:', e.message);
     return { answer: buildFallbackAnswer(results), sources: results };
@@ -257,7 +257,7 @@ async function fallbackSearch(env, query) {
   const prompt = `أنت محامٍ مصري. حلل السؤال ده بناءً على النصوص دي:\n\n${context}\n\nالسؤال: ${query}\n\nجاوب بتحليل قانوني (مش مجرد سرد). لو النصوص مش متعلقة، قول "النصوص مش كافية".`;
   try {
     const answer = await callAI(env, prompt, 1000);
-    return { answer: answer ? await withCitationCheck(env, answer) : buildFallbackAnswer(results), sources: results };
+    return { answer: answer ? await withCitationCheck(env, answer, 'EG') : buildFallbackAnswer(results), sources: results };
   } catch {
     return { answer: buildFallbackAnswer(results), sources: results };
   }
@@ -371,7 +371,7 @@ ${safeExtra ? 'تفاصيل إضافية:\n' + safeExtra : ''}
     // المكتب السعودي: الصيغة والأنظمة السعودية
     const document = await callAI(env, localizeLegalPrompt(prompt, country), 1500, localizeLegalPrompt(DEFAULT_SYSTEM, country), { route, masker });
     return {
-      document: document ? await withCitationCheck(env, document) : buildTemplateDocument(doc_type, safeFacts, safeParties, safeExtra),
+      document: document ? await withCitationCheck(env, document, country) : buildTemplateDocument(doc_type, safeFacts, safeParties, safeExtra),
       doc_type,
       generated_at: new Date().toISOString(),
     };

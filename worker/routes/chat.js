@@ -5,6 +5,7 @@ import { chatWithAgent } from '../services/agent.js';
 import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { createMasker } from '../lib/redact.js';
 import { verifyText, annotate, summarize, summaryText } from '../lib/citations.js';
+import { officeCountry } from '../lib/country.js';
 
 const ATTACHMENT_MARK = '📎 **محتوى الملف المرفق';
 
@@ -85,7 +86,7 @@ async function chatHandler({ request, env, officeId, userId }) {
 
   // مراجعة الأسانيد آلياً: أي "المادة X من قانون Y" بتتراجع على قاعدة المواد
   try {
-    const checks = await verifyText(env, result.answer);
+    const checks = await verifyText(env, result.answer, { country: await officeCountry(env, officeId) });
     if (checks.length) result.answer = annotate(result.answer, checks) + summaryText(summarize(checks));
   } catch (e) {
     console.warn('citation check failed:', e.message);
