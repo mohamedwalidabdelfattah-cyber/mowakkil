@@ -6,6 +6,7 @@ import { apiJson, api, hasFeature } from '../api.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
 import { esc, toast, skeleton } from '../ui.js';
 import { can } from '../access.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 // ============================================================
 // الأنواع
@@ -156,7 +157,7 @@ function refresh() {
 function updateRangeLabel() {
   const el = hostEl?.querySelector('#ag-range');
   if (!el) return;
-  const fmt = (d, o) => d.toLocaleDateString('ar-EG-u-nu-latn', o);
+  const fmt = (d, o) => d.toLocaleDateString(dateLocale(), o);
   if (currentView === 'list') {
     const s = new Date(); s.setDate(s.getDate() + listOffset);
     const e = new Date(s); e.setDate(e.getDate() + 30);
@@ -224,7 +225,7 @@ function initCalendar(host, kinds) {
     template: {
       time(ev) {
         const t = ev.start?.toDate?.();
-        const hm = t ? t.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) : '';
+        const hm = t ? t.toLocaleTimeString(dateLocale(), { hour: 'numeric', minute: '2-digit' }) : '';
         return `<span class="ag-ev-time">${esc(hm)}</span> <span>${esc(ev.title)}</span>`;
       },
       allday(ev) { return `<span>${esc(ev.title)}</span>`; },
@@ -233,6 +234,15 @@ function initCalendar(host, kinds) {
       monthGridHeaderExceed(n) { return `<span class="ag-more">+${n} كمان</span>`; },
       weekGridFooterExceed(n) { return `+${n} كمان`; },
       alldayTitle() { return '<span class="ag-allday-title">طول اليوم</span>'; },
+      // خانة اليوم في عرض الشهر: رقم اليوم، وفي السعودية اليوم الهجري جنبه (وأول الشهر الهجري باسمه)
+      monthGridHeader(model) {
+        const n = parseInt(String(model.date).split('-')[2], 10);
+        const day = `<span class="toastui-calendar-weekday-grid-date${model.isToday ? ' toastui-calendar-weekday-grid-date-decorator' : ''}">${n}</span>`;
+        if (!isSaudi()) return day;
+        const hd = hijriDate(model.date, { day: 'numeric' });
+        const label = hd === '1' ? hijriDate(model.date, { day: 'numeric', month: 'short' }) : hd;
+        return `<span class="ag-mcell">${day}<small class="ag-hday${hd === '1' ? ' first' : ''}" title="هجري">${esc(label)}</small></span>`;
+      },
       // رأس الأسبوع/اليوم: الرقم فوق واسم اليوم تحته في النص (على الشاشات الضيقة بيظهر الاسم المختصر)
       weekDayName(m) {
         const d = m.dateInstance?.toDate?.(); const isToday = d ? d.toDateString() === new Date().toDateString() : false;
@@ -241,7 +251,7 @@ function initCalendar(host, kinds) {
       },
       timegridDisplayPrimaryTime({ time }) {
         const d = time.toDate ? time.toDate() : new Date(time);
-        return d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric' });
+        return d.toLocaleTimeString(dateLocale(), { hour: 'numeric' });
       },
     },
   });
@@ -380,7 +390,7 @@ function renderList() {
       <section class="ag-day ${d === today ? 'today' : ''} ${d < today ? 'past' : ''}">
         <div class="ag-day-head">
           <span class="ag-day-num">${dt.getDate()}</span>
-          <span class="ag-day-name">${esc(dt.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', month: 'long', year: 'numeric' }))}</span>
+          <span class="ag-day-name">${esc(dt.toLocaleDateString(dateLocale(), { weekday: 'long', month: 'long', year: 'numeric' }))}${isSaudi() ? ` <small class="ag-hijri">${esc(hijriDate(dt))}</small>` : ''}</span>
           ${d === today ? '<span class="badge active">النهارده</span>' : ''}
         </div>
         ${evs.map(ev => {
@@ -750,6 +760,6 @@ function fmt12(t) {
 }
 function formatDateAr(date) {
   try {
-    return date.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    return fmtDay(date, 'long');
   } catch { return ''; }
 }

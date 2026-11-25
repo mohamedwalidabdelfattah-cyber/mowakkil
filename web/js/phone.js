@@ -1,10 +1,18 @@
 // web/js/phone.js
 // تحويل أي رقم موبايل لصيغة واتساب الدولية (أرقام بس، من غير +)
 // مصر افتراضياً — والأرقام الدولية (+966… / 00966… / 0966… القديمة) بتفضل على كودها
+import { country } from './country.js';
+
 export function normalizePhone(phone) {
   const s = String(phone || '').trim();
   if (!s) return null;
   let d = s.replace(/\D/g, '');
+  const local = !s.startsWith('+') && !d.startsWith('00');
+  // مكتب سعودي: الموبايل المحلي 05XXXXXXXX أو 5XXXXXXXX → 9665XXXXXXXX
+  if (local && country() === 'SA') {
+    if (/^05\d{8}$/.test(d)) return '966' + d.slice(1);
+    if (/^5\d{8}$/.test(d)) return '966' + d;
+  }
   if (s.startsWith('+') || d.startsWith('00')) d = d.replace(/^00/, '');   // دولي صريح
   else if (/^01\d{9}$/.test(d)) d = '20' + d.slice(1);                       // 01xxxxxxxxx
   else if (/^1\d{9}$/.test(d)) d = '20' + d;                                 // 1xxxxxxxxx (من غير الصفر)

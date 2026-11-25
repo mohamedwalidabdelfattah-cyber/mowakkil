@@ -1,6 +1,7 @@
 // web/js/views/lawyers.js
 import { apiJson } from '../api.js';
-import { esc, empty, waLink, toast, fmtMoney, skeleton, bindPanels } from '../ui.js';
+import { esc, empty, waLink, toast, fmtMoney, skeleton, bindPanels, curName } from '../ui.js';
+import { countryInfo } from '../country.js';
 import { setLawyers } from '../state.js';
 
 // حالة الفلاتر
@@ -43,8 +44,8 @@ export async function render(host) {
           <div><label>الدرجة</label><input id="l-grade" placeholder="شريك / محامي أول"></div>
         </div>
         <div class="row">
-          <div><label>المرتب (جنيه)</label><input id="l-salary" type="number" placeholder="8000"></div>
-          <div><label>رقم واتساب</label><input id="l-phone" placeholder="01xxxxxxxxx"></div>
+          <div><label>المرتب (${curName()})</label><input id="l-salary" type="number" placeholder="8000"></div>
+          <div><label>رقم واتساب</label><input id="l-phone" placeholder="${countryInfo().phonePlaceholder}"></div>
         </div>
         <button class="primary" style="margin-top:10px" id="add-lawyer">حفظ</button>
       </div>

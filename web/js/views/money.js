@@ -7,6 +7,7 @@ import { renderProfit } from './money-profit.js';
 import { esc, toast, empty, skeleton, fmtMoney, cur, curName, localISO, monthStartISO, monthEndISO, defaultVat } from '../ui.js';
 import { openModal } from '../modal.js';
 import { can } from '../access.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 let currentSub = 'money';
 let moneyCharts = {};
@@ -169,7 +170,7 @@ async function renderDashboard(host) {
 }
 
 function monthName(date) {
-  return date.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long' });
+  return date.toLocaleDateString(dateLocale(), { year: 'numeric', month: 'long' });
 }
 
 function renderExpenseBreakdown(groups) {
@@ -221,7 +222,7 @@ async function drawMoneyOverviewChart() {
       const from = localISO(d);
       const to = monthEndISO(d);
 
-      months.push(d.toLocaleDateString('ar-EG-u-nu-latn', { month: 'short' }));
+      months.push(d.toLocaleDateString(dateLocale(), { month: 'short' }));
 
       try {
         const summary = await apiJson(`/api/reports/accounting-summary?from=${from}&to=${to}`);

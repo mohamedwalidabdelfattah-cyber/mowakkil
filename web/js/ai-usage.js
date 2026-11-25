@@ -2,6 +2,7 @@
 // عدّاد رصيد الذكاء الاصطناعي (الشهري حسب الباقة) + نافذة "الرصيد خلص"
 import { apiJson } from './api.js';
 import { esc } from './ui.js';
+import { dateLocale, fmtDay } from './country.js';
 
 const AI_PATH = /^\/api\/(chat|legal-search|generate-doc|analyze\/(contract|case|document)|cases\/\d+\/analyze)$/;
 export function isAiPath(path) {
@@ -27,7 +28,7 @@ export function notifyAiUsed() {
 }
 
 function fmtReset(d) {
-  try { return new Date(d + 'T00:00:00').toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long' }); }
+  try { return new Date(d + 'T00:00:00').toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long' }); }
   catch { return d; }
 }
 

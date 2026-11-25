@@ -2,6 +2,7 @@
 import { apiJson } from '../api.js';
 import { fmtMoney, esc, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { mountExportMenu } from '../exporter.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 let reportChart = null;
 let lastReport = null;
@@ -33,7 +34,7 @@ export async function render(host) {
   mountExportMenu(host.querySelector('#report-export'), () => {
     if (!lastReport) throw new Error('استنى لحد ما التقرير يحمّل');
     const { d, month } = lastReport;
-    const monthLabel = new Date(month + '-01').toLocaleDateString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' });
+    const monthLabel = new Date(month + '-01').toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
     return {
       title: 'التقرير المالي الشهري',
       subtitle: monthLabel,

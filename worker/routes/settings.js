@@ -7,6 +7,7 @@ import { safeJson } from '../lib/validation.js';
 import { can, caseScope } from '../lib/permissions.js';
 import { clearPrefsCache } from './notifications.js';
 import { getAiPrivacy, clearAiPrivacyCache, AI_PRIVACY_MODES } from '../lib/ai-privacy.js';
+import { COUNTRIES } from '../lib/country.js';
 
 export const routes = [
   { method: 'GET',   path: '/api/settings', handler: get },
@@ -88,7 +89,15 @@ async function update({ request, env, authUser, officeId }) {
     'wa_templates', // قوالب رسايل واتساب (JSON: session/fee/update/general)
     'notif_events', // تذكيرات مواعيد الأجندة
     'expense_approval_limit', // المصروفات اللي فوقه محتاجة موافقة المدير (المتقدمة)
+    'country', // دولة المكتب: EG | SA
   ];
+  if (b.country !== undefined) {
+    const c = String(b.country || '').toUpperCase();
+    if (!COUNTRIES[c]) return fail(env, 'الدولة مش مدعومة', 400);
+    b.country = c;
+    // التوقيت بيمشي مع الدولة (التذكيرات وحدود اليوم)
+    await env.DB.prepare('UPDATE offices SET timezone = ? WHERE id = ?').bind(COUNTRIES[c].timezone, officeId).run();
+  }
   if (b.expense_approval_limit !== undefined) {
     if (b.expense_approval_limit === null || b.expense_approval_limit === '') b.expense_approval_limit = null;
     else if (!(Number(b.expense_approval_limit) >= 0)) return fail(env, 'حد الموافقة لازم يكون رقم', 400);

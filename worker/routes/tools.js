@@ -6,6 +6,7 @@ import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { isStr, safeJson } from '../lib/validation.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 import { getAiUsage } from '../lib/ai-quota.js';
+import { officeCountry } from '../lib/country.js';
 
 export const routes = [
   { method: 'POST', path: '/api/fee-calc',         handler: feeCalc },
@@ -33,7 +34,7 @@ async function search({ request, env, officeId }) {
   if (!b || !isStr(b.query, 500) || b.query.length < 3) {
     return fail(env, 'اكتب سؤال أوضح', 400);
   }
-  return ok(env, await legalSearch(env, b.query));
+  return ok(env, await legalSearch(env, b.query, { country: await officeCountry(env, officeId) }));
 }
 
 async function generateDoc({ request, env, officeId }) {
@@ -54,5 +55,6 @@ async function generateDoc({ request, env, officeId }) {
     extra: b.extra || '',
     case_id: b.case_id || null,
     officeId,
+    country: await officeCountry(env, officeId),
   }));
 }

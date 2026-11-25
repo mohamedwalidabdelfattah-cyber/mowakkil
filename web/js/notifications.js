@@ -7,6 +7,7 @@
 import { apiJson } from './api.js';
 import { esc, toast } from './ui.js';
 import { openLink } from './nav-links.js';
+import { dateLocale, fmtDay } from './country.js';
 
 const POLL_MS = 45000;
 const DEVICE_KEY = 'mowakkil_notif_device'; // '1' = إشعارات الجهاز شغالة
@@ -384,6 +385,6 @@ function formatTime(dateStr) {
   if (diff < 60) return 'دلوقتي';
   if (diff < 3600) return `من ${Math.floor(diff / 60)} دقيقة`;
   if (diff < 86400) return `من ${Math.floor(diff / 3600)} ساعة`;
-  if (diff < 604800) return date.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long' }) + ' ' + date.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
-  return date.toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (diff < 604800) return date.toLocaleDateString(dateLocale(), { weekday: 'long' }) + ' ' + date.toLocaleTimeString(dateLocale(), { hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 }

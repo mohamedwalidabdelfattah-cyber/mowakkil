@@ -2,6 +2,7 @@
 // صلاحيات المستخدم الحالي في الواجهة: بتخفي الأقسام والأزرار اللي مش مسموحة.
 // ⚠️ ده للراحة بس — الحماية الحقيقية في السيرفر (worker/lib/permissions.js) على كل طلب.
 import { apiJson, getToken } from './api.js';
+import { countryInfo } from './country.js';
 
 const KEY = 'mowakkil_access';
 let state = null;
@@ -41,6 +42,8 @@ export function can(perm) {
 
 export function canView(view) {
   const base = String(view || '').split('-')[0];
+  // حاسبة الرسوم القضائية مبنية على القانون المصري — مش بتظهر للمكاتب السعودية
+  if (base === 'calc' && !countryInfo().feeCalculator) return false;
   return can(VIEW_PERMS[view] || VIEW_PERMS[base]);
 }
 

@@ -26,9 +26,17 @@ const escHtml = s => String(s ?? '')
 const today = () => new Date().toISOString().slice(0, 10);
 const safeFile = s => String(s || 'export').replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 80);
 
+// رمز عملة المكتب (ج / ر.س …) — من إعدادات المكتب المحفوظة على الجهاز
+const CUR_SYMBOLS = { EGP: 'ج', SAR: 'ر.س', AED: 'د.إ', KWD: 'د.ك', QAR: 'ر.ق', BHD: 'د.ب', OMR: 'ر.ع', JOD: 'د.أ', USD: 'USD', EUR: 'EUR' };
+function curSymbol() {
+  let c = 'EGP';
+  try { c = localStorage.getItem('mowakkil_currency') || 'EGP'; } catch {}
+  return CUR_SYMBOLS[c] || c;
+}
+
 function fmtValue(v, type) {
   if (v === null || v === undefined || v === '') return '—';
-  if (type === 'money') return Number(v || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 }) + ' ج.م';
+  if (type === 'money') return Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ' + curSymbol();
   if (type === 'number') return Number(v || 0).toLocaleString('ar-EG');
   if (type === 'date') return String(v).slice(0, 10);
   return String(v);

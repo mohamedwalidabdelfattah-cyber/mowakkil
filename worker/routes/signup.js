@@ -4,6 +4,7 @@
 
 import { ok, fail } from '../lib/response.js';
 import { normalizeAttribution } from '../lib/attribution.js';
+import { normalizeCountry, countryProfile } from '../lib/country.js';
 import { hashPassword } from '../lib/crypto.js';
 import { signJWT } from '../lib/jwt.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
@@ -58,7 +59,10 @@ async function signup({ request, env }) {
     return fail(env, 'صيغة الإيميل غلط', 400);
   }
 
-  const phone = normalizePhone(phoneRaw);
+  // دولة المكتب (مصر / السعودية) — بتحدد العملة والضريبة والتوقيت وصيغة الموبايل
+  const country = normalizeCountry(b.country);
+  const cp = countryProfile(country);
+  const phone = normalizePhone(phoneRaw, country);
 
   // 2) نتأكد إن مفيش مستخدم بنفس الرقم
   const variants = phoneVariants(phoneRaw);
@@ -83,12 +87,18 @@ async function signup({ request, env }) {
   const attr = normalizeAttribution(b.attribution);
   const trialEnds = new Date(Date.now() + 15 * 86400000).toISOString();
   const officeResult = await env.DB.prepare(
-    `INSERT INTO offices (name, name_ar, status, trial_ends_at,
+    `INSERT INTO offices (name, name_ar, status, trial_ends_at, timezone,
        signup_source, signup_medium, signup_campaign, signup_content, signup_referrer, signup_landing)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
-  ).bind(officeName, officeName, 'trial', trialEnds,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(officeName, officeName, 'trial', trialEnds, cp.timezone,
     attr.source, attr.medium, attr.campaign, attr.content, attr.referrer, attr.landing).run();
   const officeId = officeResult.meta.last_row_id;
+
+  // إعدادات المكتب حسب الدولة (العملة والضريبة)
+  await env.DB.prepare(
+    `INSERT INTO office_settings (office_id, country, currency, vat_rate) VALUES (?, ?, ?, ?)
+     ON CONFLICT(office_id) DO UPDATE SET country = excluded.country, currency = excluded.currency, vat_rate = excluded.vat_rate`
+  ).bind(officeId, country, cp.currency, cp.vat).run();
 
   // 5) نعمل المستخدم (admin)
   const { hash, salt } = await hashPassword(password);
@@ -139,5 +149,6 @@ async function signup({ request, env }) {
     name: fullName,
     office_name: officeName,
     trial_ends_at: trialEnds,
+    country, currency: cp.currency, vat_rate: cp.vat,
   }, 201);
 }

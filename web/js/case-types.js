@@ -1,6 +1,30 @@
 // web/js/case-types.js
 // أنواع القضايا (لازم تتطابق مع CASE_TYPES في worker/services/legal-skills.js) + درجات التقاضي
+// المكتب السعودي بياخد المحاكم وأنواع القضايا السعودية (القضاء العام + ديوان المظالم)
 import { esc } from './ui.js';
+import { isSaudi } from './country.js';
+
+export const CASE_TYPE_GROUPS_SA = [
+  { group: 'حقوقي (عام)', types: ['حقوقي', 'مطالبة مالية', 'تعويض', 'عقود', 'عقارات وملكية', 'إخلاء وأجرة (إيجار)', 'قسمة أموال مشتركة', 'شفعة', 'صكوك واستحكام'] },
+  { group: 'جزائي', types: ['جزائي', 'قضايا تعزيرية', 'حدود', 'قصاص ودية', 'مخدرات', 'شيكات', 'احتيال', 'تزوير', 'جرائم معلوماتية', 'اعتداء', 'سرقة', 'تستر تجاري', 'غسل أموال'] },
+  { group: 'أحوال شخصية', types: ['أحوال شخصية', 'نفقة', 'طلاق وخلع وفسخ نكاح', 'حضانة وزيارة', 'إثبات زواج أو نسب', 'تركات وقسمة مواريث', 'ولاية ووصاية', 'عضل', 'حجر'] },
+  { group: 'تجاري', types: ['تجاري', 'شركات', 'عقود تجارية', 'أوراق تجارية', 'إفلاس', 'وكالات تجارية', 'ملكية فكرية وعلامات تجارية', 'منافسة'] },
+  { group: 'عمالي', types: ['عمالي', 'أجور ومستحقات', 'فصل تعسفي', 'مكافأة نهاية الخدمة', 'إصابات عمل', 'تأمينات اجتماعية'] },
+  { group: 'إداري (ديوان المظالم)', types: ['إداري', 'إلغاء قرار إداري', 'عقود حكومية', 'تعويض من جهة حكومية', 'حقوق وظيفية', 'تأديب'] },
+  { group: 'تنفيذ وأخرى', types: ['تنفيذ (سند تنفيذي)', 'تنفيذ أحكام أجنبية', 'تحكيم', 'مصالحة وتسوية ودية', 'لجان شبه قضائية', 'أخرى'] },
+];
+
+export const DEGREE_GROUPS_SA = [
+  { group: 'القضاء العام', items: ['المحكمة العامة', 'المحكمة الجزائية', 'محكمة الأحوال الشخصية', 'المحكمة التجارية', 'المحكمة العمالية', 'محكمة التنفيذ'] },
+  { group: 'الاعتراض على الأحكام', items: ['محكمة الاستئناف', 'المحكمة العليا', 'التماس إعادة النظر'] },
+  { group: 'ديوان المظالم', items: ['المحكمة الإدارية', 'محكمة الاستئناف الإدارية', 'المحكمة الإدارية العليا'] },
+  { group: 'قبل التقاضي وأخرى', items: ['النيابة العامة (تحقيق)', 'التسوية الودية (عمالي)', 'مركز المصالحة', 'لجنة شبه قضائية', 'تحكيم', 'أخرى'] },
+];
+
+/** القوائم حسب دولة المكتب */
+export const caseTypeGroups = () => (isSaudi() ? CASE_TYPE_GROUPS_SA : CASE_TYPE_GROUPS);
+export const degreeGroups = () => (isSaudi() ? DEGREE_GROUPS_SA : DEGREE_GROUPS);
+export const defaultDegree = () => (isSaudi() ? 'المحكمة العامة' : 'ابتدائي');
 
 export const CASE_TYPE_GROUPS = [
   { group: 'مدني', types: ['مدني', 'تعويضات', 'عقود (فسخ/تنفيذ/صحة ونفاذ)', 'صحة توقيع', 'ملكية وحيازة', 'طرد للغصب وريع', 'قسمة', 'إيجارات', 'نزع ملكية للمنفعة العامة'] },
@@ -22,18 +46,20 @@ export const DEGREE_GROUPS = [
 ];
 
 export function caseTypeOptions(selected = '') {
-  const known = CASE_TYPE_GROUPS.some(g => g.types.includes(selected));
+  const groups = caseTypeGroups();
+  const known = groups.some(g => g.types.includes(selected));
   return (selected && !known ? `<option value="${esc(selected)}" selected>${esc(selected)}</option>` : '') +
-    CASE_TYPE_GROUPS.map(g => `
+    groups.map(g => `
       <optgroup label="${esc(g.group)}">
         ${g.types.map(t => `<option value="${esc(t)}" ${t === selected ? 'selected' : ''}>${esc(t)}</option>`).join('')}
       </optgroup>`).join('');
 }
 
-export function degreeOptions(selected = 'ابتدائي') {
-  const known = DEGREE_GROUPS.some(g => g.items.includes(selected));
+export function degreeOptions(selected = defaultDegree()) {
+  const groups = degreeGroups();
+  const known = groups.some(g => g.items.includes(selected));
   return (selected && !known ? `<option value="${esc(selected)}" selected>${esc(selected)}</option>` : '') +
-    DEGREE_GROUPS.map(g => `
+    groups.map(g => `
       <optgroup label="${esc(g.group)}">
         ${g.items.map(t => `<option value="${esc(t)}" ${t === selected ? 'selected' : ''}>${esc(t)}</option>`).join('')}
       </optgroup>`).join('');

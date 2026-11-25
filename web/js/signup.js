@@ -48,6 +48,7 @@ async function doSignup() {
         phone,
         email: email || null,
         password,
+        country: selectedCountry, // مصر / السعودية
         // مصدر الزيارة (إعلان فيسبوك/إنستجرام…) — من attribution.js
         attribution: (typeof window.mowakkilAttribution === 'function' && window.mowakkilAttribution()) || null,
       }),
@@ -64,6 +65,10 @@ async function doSignup() {
     localStorage.setItem(STORAGE_KEYS.ROLE, data.role);
     localStorage.setItem(STORAGE_KEYS.OFFICE, String(data.office_id));
     localStorage.setItem('mowakkil_name', data.name);
+    // دولة المكتب وعملته وضريبته من أول لحظة (قبل ما الإعدادات تتحمّل)
+    if (data.country) localStorage.setItem('mowakkil_country', data.country);
+    if (data.currency) localStorage.setItem('mowakkil_currency', data.currency);
+    if (data.vat_rate != null) localStorage.setItem('mowakkil_vat', String(data.vat_rate));
 
     showSuccess('✅ تم إنشاء الحساب! جاري التحويل...');
 
@@ -94,6 +99,32 @@ function showSuccess(msg) {
   status.textContent = msg;
   status.className = 'status ok';
 }
+
+// ============ دولة المكتب ============
+const COUNTRY_UI = {
+  EG: { placeholder: '01012345678', hint: 'العملة جنيه، والتواريخ ميلادي، والمحاكم والقوانين المصرية' },
+  SA: { placeholder: '0512345678', hint: 'العملة ريال وضريبة 15%، والتواريخ هجري وميلادي، والمحاكم والأنظمة السعودية' },
+};
+let selectedCountry = 'EG';
+// ويندوز مبيرسمش أعلام الدول — بيكتب EG/SA، فبنخفيها
+try { if (/Windows/.test(navigator.userAgent)) document.documentElement.classList.add('no-flags'); } catch {}
+function pickCountry(c) {
+  selectedCountry = COUNTRY_UI[c] ? c : 'EG';
+  document.querySelectorAll('.country-opt').forEach(b => {
+    const on = b.dataset.country === selectedCountry;
+    b.classList.toggle('active', on); b.setAttribute('aria-checked', String(on));
+  });
+  document.getElementById('phone').placeholder = COUNTRY_UI[selectedCountry].placeholder;
+  const hint = document.getElementById('country-hint');
+  if (hint) hint.textContent = COUNTRY_UI[selectedCountry].hint;
+}
+document.querySelectorAll('.country-opt').forEach(b => b.addEventListener('click', () => pickCountry(b.dataset.country)));
+// اختيار تلقائي: لينك فيه ?country=SA، أو جهاز على توقيت السعودية
+try {
+  const q = new URLSearchParams(location.search).get('country');
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  pickCountry(q ? q.toUpperCase() : (tz === 'Asia/Riyadh' ? 'SA' : 'EG'));
+} catch { pickCountry('EG'); }
 
 // تنسيق رقم الهاتف أثناء الكتابة
 document.getElementById('phone').addEventListener('input', (e) => {

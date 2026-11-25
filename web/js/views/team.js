@@ -2,6 +2,7 @@
 // الفريق والصلاحيات: أعضاء المكتب، أدوارهم، "القضايا المكلّف بيها بس"، والأدوار المخصصة (الباقة المتقدمة).
 import { apiJson } from '../api.js';
 import { esc, toast } from '../ui.js';
+import { countryInfo } from '../country.js';
 import { loadAccess } from '../access.js';
 
 const PLAN_LABEL = { starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة', lifetime_basic: 'مدى الحياة — أساسية', lifetime_pro: 'مدى الحياة — احترافية' };
@@ -60,7 +61,7 @@ function draw(host) {
       </div>
       <div class="row">
         <div><label>الإيميل (للدخول)</label><input id="tm-email" type="email" placeholder="name@office.com"></div>
-        <div><label>أو رقم الموبايل</label><input id="tm-phone" inputmode="numeric" placeholder="01xxxxxxxxx"></div>
+        <div><label>أو رقم الموبايل</label><input id="tm-phone" inputmode="numeric" placeholder="${countryInfo().phonePlaceholder}"></div>
       </div>
       <div class="row">
         <div><label>كلمة السر (8 حروف على الأقل)</label><input id="tm-pass" type="password" autocomplete="new-password"></div>

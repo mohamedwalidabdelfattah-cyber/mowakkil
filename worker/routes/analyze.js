@@ -10,6 +10,7 @@ import { toInt } from '../lib/validation.js';
 import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { createMasker } from '../lib/redact.js';
 import { verifyResult } from '../lib/citations.js';
+import { officeCountry, localizeLegalPrompt } from '../lib/country.js';
 
 export const routes = [
   { method: 'POST', path: '/api/analyze/contract', handler: analyzeContract },
@@ -210,7 +211,8 @@ async function runAnalysis(env, officeId, userId, type, request) {
   let result, provider;
   try {
     const masker = createMasker({ names: String(b.party_names || '').split(/[,،\n]/) });
-    ({ result, provider } = await runJsonPrompt(env, SYSTEM_PROMPT, `${PROMPTS[type]}\n\nالنص:\n${text}`, 3000,
+    const country = await officeCountry(env, officeId);
+    ({ result, provider } = await runJsonPrompt(env, localizeLegalPrompt(SYSTEM_PROMPT, country), `${PROMPTS[type]}\n\nالنص:\n${text}`, 3000,
       { route: routeFor(privacy.mode), masker }));
     const checked = await verifyResult(env, result);
     result = checked.result;
@@ -313,7 +315,11 @@ async function analyzeSavedCase({ request, env, officeId, userId, params }) {
   const skill = getSkill(caseType);
   const searchQuery = [caseType, facts, requests, docText.slice(0, 1500), readable[0]?.text.slice(0, 1500)]
     .filter(Boolean).join(' ').slice(0, 2500);
-  const { articles, method } = await findRelevantArticles(env, searchQuery, { lawHints: skill.lawHints, topK: 8 });
+  // قاعدة النصوص مصرية — المكتب السعودي بيتحلل وفق الأنظمة السعودية من غيرها
+  const country = await officeCountry(env, officeId);
+  const { articles, method } = country === 'SA'
+    ? { articles: [], method: 'sa_no_db' }
+    : await findRelevantArticles(env, searchQuery, { lawHints: skill.lawHints, topK: 8 });
 
   const caseBlock = `بيانات القضية:
 - رقم القضية: ${c.case_number || '—'}
@@ -337,8 +343,8 @@ ${docText ? `نص مستند لصقه المحامي:\n${docText}\n` : ''}`;
     ? articles.map((a, i) => `[${i + 1}] ${a.law_name}${a.law_number ? ' (' + a.law_number + ')' : ''} — ${a.article_number}:\n${a.article_text}`).join('\n\n')
     : '(لم يتم العثور على مواد مطابقة في قاعدة البيانات — اعتمد على المهارة القانونية واذكر "(يُراجع النص)" بجانب أي رقم مادة)';
 
-  const system = `${SYSTEM_PROMPT}\n\n${GENERAL_METHOD}\n\n${formatSkill(skill)}`;
-  const prompt = `${CASE_ANALYSIS_PROMPT}\n\n${caseBlock}\n\nالمواد القانونية من قاعدة البيانات:\n${articlesBlock}`;
+  const system = localizeLegalPrompt(`${SYSTEM_PROMPT}\n\n${GENERAL_METHOD}\n\n${formatSkill(skill)}`, country);
+  const prompt = localizeLegalPrompt(`${CASE_ANALYSIS_PROMPT}\n\n${caseBlock}\n\nالمواد القانونية من قاعدة البيانات:\n${articlesBlock}`, country);
 
   // أسماء الأطراف اللي بنعرفها بتتخفي قبل ما النص يطلع لأي نموذج
   const masker = createMasker({ names: [c.client_name, ...opponent.split(/[,،\n]/)] });

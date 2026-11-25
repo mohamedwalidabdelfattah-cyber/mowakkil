@@ -3,6 +3,7 @@ import { apiJson } from '../api.js';
 import { esc, toast, skeleton } from '../ui.js';
 import { mountExportMenu } from '../exporter.js';
 import { mountAiMeter } from '../ai-usage.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 const GOV_LINKS = [
   { name: 'منصة مصر الرقمية', desc: 'خدمات التوثيق والتقاضي الإلكتروني', url: 'https://digital.gov.eg', icon: '🇪🇬' },
@@ -14,6 +15,20 @@ const GOV_LINKS = [
   { name: 'هيئة الاستثمار', desc: 'قوانين وخدمات الاستثمار', url: 'https://www.gafi.gov.eg', icon: '🏢' },
   { name: 'جهاز حماية المستهلك', desc: 'شكاوى وقوانين حماية المستهلك', url: 'https://www.consumer.gov.eg', icon: '🛡️' },
 ];
+
+// المكتب السعودي: الجهات والمنصات العدلية السعودية
+const GOV_LINKS_SA = [
+  { name: 'منصة ناجز', desc: 'الخدمات العدلية الإلكترونية: رفع الدعاوى والجلسات والتنفيذ', url: 'https://najiz.sa', icon: '🇸🇦' },
+  { name: 'هيئة الخبراء بمجلس الوزراء', desc: 'نصوص الأنظمة واللوائح السعودية الرسمية', url: 'https://laws.boe.gov.sa', icon: '📖' },
+  { name: 'وزارة العدل', desc: 'الخدمات العدلية والتوثيق والمبادئ القضائية', url: 'https://www.moj.gov.sa', icon: '⚖️' },
+  { name: 'ديوان المظالم', desc: 'القضاء الإداري وأحكامه', url: 'https://www.bog.gov.sa', icon: '🏛️' },
+  { name: 'النيابة العامة', desc: 'خدمات النيابة والقضايا الجزائية', url: 'https://www.pp.gov.sa', icon: '📋' },
+  { name: 'هيئة الزكاة والضريبة والجمارك', desc: 'ضريبة القيمة المضافة والفوترة الإلكترونية', url: 'https://zatca.gov.sa', icon: '💰' },
+  { name: 'وزارة التجارة', desc: 'السجلات التجارية والأنظمة التجارية', url: 'https://mc.gov.sa', icon: '🏢' },
+  { name: 'الهيئة السعودية للمحامين', desc: 'شؤون المهنة والتراخيص', url: 'https://sba.gov.sa', icon: '🛡️' },
+];
+const govLinks = () => (isSaudi() ? GOV_LINKS_SA : GOV_LINKS);
+const legalSystemWord = () => (isSaudi() ? 'الأنظمة السعودية' : 'القانون المصري');
 
 export async function render(host) {
   host.innerHTML = `
@@ -59,8 +74,8 @@ export async function render(host) {
             <div class="chat-suggestions">
               <button class="chat-suggestion" data-suggestion="إيه شروط صحة عقد البيع؟">📄 شروط صحة عقد البيع؟</button>
               <button class="chat-suggestion" data-suggestion="عندي قضية تعويض عن ضرر، إيه نقاط الضعف اللي ممكن تكون ضدي؟">⚖️ نقاط ضعف قضية تعويض</button>
-              <button class="chat-suggestion" data-suggestion="إيه شروط الطلاق للضرر في القانون المصري؟">💔 شروط الطلاق للضرر</button>
-              <button class="chat-suggestion" data-suggestion="إيه أحكام قانون العمل بخصوص الفصل التعسفي؟">💼 الفصل التعسفي</button>
+              <button class="chat-suggestion" data-suggestion="إيه شروط الطلاق للضرر في ${legalSystemWord()}؟">💔 شروط الطلاق للضرر</button>
+              <button class="chat-suggestion" data-suggestion="إيه أحكام ${isSaudi() ? 'نظام العمل' : 'قانون العمل'} بخصوص الفصل التعسفي؟">💼 الفصل التعسفي</button>
             </div>
           </div>
         </div>
@@ -93,7 +108,7 @@ export async function render(host) {
       <div class="card" style="margin-top:16px">
         <h3>🌐 بوابات حكومية رسمية</h3>
         <div class="gov-links-grid">
-          ${GOV_LINKS.map(link => `
+          ${govLinks().map(link => `
             <a class="gov-link" href="${link.url}" target="_blank" rel="noopener">
               <div class="gov-link-icon">${link.icon}</div>
               <div class="gov-link-body">
@@ -280,8 +295,8 @@ export async function render(host) {
         </p>
         <div class="chat-suggestions">
           <button class="chat-suggestion" data-suggestion="إيه شروط صحة عقد البيع؟">📄 شروط صحة عقد البيع؟</button>
-          <button class="chat-suggestion" data-suggestion="إيه شروط الطلاق للضرر في القانون المصري؟">💔 شروط الطلاق للضرر</button>
-          <button class="chat-suggestion" data-suggestion="إيه أحكام قانون العمل بخصوص الفصل التعسفي؟">💼 الفصل التعسفي</button>
+          <button class="chat-suggestion" data-suggestion="إيه شروط الطلاق للضرر في ${legalSystemWord()}؟">💔 شروط الطلاق للضرر</button>
+          <button class="chat-suggestion" data-suggestion="إيه أحكام ${isSaudi() ? 'نظام العمل' : 'قانون العمل'} بخصوص الفصل التعسفي؟">💼 الفصل التعسفي</button>
         </div>
       </div>
     `;
@@ -412,7 +427,7 @@ export async function render(host) {
             <div class="chat-history-item" data-session-id="${s.id}">
               <div class="chat-history-title">${esc(s.title || 'محادثة')}</div>
               <div class="chat-history-meta">
-                ${new Date(s.updated_at).toLocaleDateString('ar-EG')}
+                ${new Date(s.updated_at).toLocaleDateString(dateLocale())}
               </div>
               <button class="chat-history-delete" data-delete-id="${s.id}" title="حذف">🗑</button>
             </div>

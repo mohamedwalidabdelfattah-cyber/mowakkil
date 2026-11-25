@@ -1,6 +1,7 @@
 // worker/services/agent.js
 // Agent ذكي — نماذج مجانية (Groq/Gemini/Workers AI) + دقة المصادر + عربية فصحى
 import { chatCompletion } from './llm.js';
+import { officeCountry, localizeLegalPrompt } from '../lib/country.js';
 
 const SYSTEM_PROMPT = `أنت مستشار قانوني مصري خبير، بتفكر زي محامٍ شاطر مش زي روبوت.
 
@@ -159,8 +160,11 @@ export async function chatWithAgent(env, messages, officeId, attachmentText = nu
     }
   }
 
+  // المكتب السعودي: تعليمات الأنظمة السعودية، ومن غير البحث في قاعدة النصوص المصرية
+  const country = await officeCountry(env, officeId);
+  const tools = country === 'SA' ? TOOLS.filter(t => t.function.name !== 'search_legal_db') : TOOLS;
   const currentMessages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: localizeLegalPrompt(SYSTEM_PROMPT, country) },
     ...processedMessages,
   ];
 
@@ -172,7 +176,7 @@ export async function chatWithAgent(env, messages, officeId, attachmentText = nu
     const lastRound = iterations === MAX_ITERATIONS;
     const { message, provider: p } = await chatCompletion(env, {
       messages: currentMessages,
-      tools: lastRound ? null : TOOLS,
+      tools: lastRound ? null : tools,
       maxTokens: 2500,
       temperature: 0.2,
       route,

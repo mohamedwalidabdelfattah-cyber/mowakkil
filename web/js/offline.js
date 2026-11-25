@@ -13,6 +13,7 @@
 // اللي لازم يكون فيه نت: الذكاء الاصطناعي، الدفع والاشتراك، دعوات بوابة الموكل، إدارة الفريق.
 // ⚠️ البيانات دي على جهاز المستخدم بس، وبتتمسح لما يعمل تسجيل خروج.
 import { API_BASE, STORAGE_KEYS } from './config.js';
+import { dateLocale, fmtDay } from './country.js';
 
 const DB_NAME = 'mowakkil-offline';
 const DB_VERSION = 1;
@@ -481,7 +482,7 @@ export async function updateBanner() {
     el.setAttribute('role', 'status');
     document.body.appendChild(el);
   }
-  const time = ls ? new Date(ls).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : '—';
+  const time = ls ? new Date(ls).toLocaleString(dateLocale(), { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : '—';
   el.className = offline ? 'offline' : 'pending';
   el.innerHTML = offline
     ? `📴 من غير إنترنت — شغّال على النسخة اللي على جهازك (آخر مزامنة ${time})${pending ? ` · ⏳ ${pending} عملية هتتبعت لما النت يرجع` : ''}`

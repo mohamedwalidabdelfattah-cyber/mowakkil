@@ -11,6 +11,7 @@ import { hasFeature as hasFeatureFn } from '../api.js';
 import { can } from '../access.js';
 import { openWhatsAppComposer, localDateStr } from '../whatsapp.js';
 import { mountAiMeter } from '../ai-usage.js';
+import { isSaudi } from '../country.js';
 
 let currentFilters = {
   archived: false,
@@ -60,12 +61,12 @@ export async function render(host) {
         <div class="row">
           <div><label>الموكل</label>
             <select id="c-client"><option value="">— بدون تحديد —</option>${clientOpts}</select></div>
-          <div><label>رقم القضية</label><input id="c-num" placeholder="1234 لسنة 2026"></div>
+          <div><label>${isSaudi() ? 'رقم القضية (ناجز)' : 'رقم القضية'}</label><input id="c-num" placeholder="${isSaudi() ? '4470123456' : '1234 لسنة 2026'}"></div>
         </div>
         <div class="row">
-          <div><label>المحكمة</label><input id="c-court" placeholder="محكمة شمال القاهرة"></div>
-          <div><label>الدرجة</label>
-            <select id="c-degree">${degreeOptions('ابتدائي')}</select>
+          <div><label>${isSaudi() ? 'المحكمة والدائرة' : 'المحكمة'}</label><input id="c-court" placeholder="${isSaudi() ? 'المحكمة العامة بالرياض — الدائرة 12' : 'محكمة شمال القاهرة'}"></div>
+          <div><label>${isSaudi() ? 'نوع المحكمة / الدرجة' : 'الدرجة'}</label>
+            <select id="c-degree">${degreeOptions()}</select>
           </div>
           <div><label>النوع</label>
             <select id="c-type">

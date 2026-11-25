@@ -5,6 +5,7 @@
 import { apiJson, hasFeature } from './api.js';
 import { esc, toast, showUpgradeModal } from './ui.js';
 import { normalizePhone } from './phone.js';
+import { dateLocale, fmtDay } from './country.js';
 
 export const WA_KINDS = {
   session: 'تذكير بجلسة',
@@ -87,7 +88,7 @@ export function fmtDateAr(d) {
   if (!d) return '';
   const dt = new Date(String(d).length <= 10 ? d + 'T00:00:00' : d);
   if (isNaN(dt)) return String(d);
-  return dt.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return fmtDay(dt, 'long');
 }
 
 function fmtAmount(n) {

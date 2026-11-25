@@ -2,6 +2,7 @@
 import { clearSession } from './api.js';
 import { clearState } from './state.js';
 import { normalizePhone } from './phone.js';
+import { setCountry, countryInfo, fmtDay } from './country.js';
 
 // ============ Toast ============
 export function toast(msg, type = '') {
@@ -153,9 +154,11 @@ export function setOfficeMoneyPrefs(s = {}) {
     if (s.currency) localStorage.setItem('mowakkil_currency', s.currency);
     if (s.vat_rate !== undefined && s.vat_rate !== null) localStorage.setItem('mowakkil_vat', String(s.vat_rate));
   } catch {}
+  if (s.country) setCountry(s.country); // دولة المكتب (مصر/السعودية)
 }
 export function defaultVat() {
-  try { const v = localStorage.getItem('mowakkil_vat'); return v === null ? 14 : Number(v) || 0; } catch { return 14; }
+  const fallback = countryInfo().vat;
+  try { const v = localStorage.getItem('mowakkil_vat'); return v === null ? fallback : Number(v) || 0; } catch { return fallback; }
 }
 
 // ============ تواريخ بالتوقيت المحلي (toISOString بيرجّع يوم لورا في مصر) ============
@@ -167,7 +170,7 @@ export function monthStartISO(d = new Date()) { return localISO(new Date(d.getFu
 export function monthEndISO(d = new Date()) { return localISO(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
 export function fmtDate(s) {
   if (!s) return '';
-  try { return new Date(s).toLocaleDateString('ar-EG'); } catch { return s; }
+  try { return fmtDay(s, 'short'); } catch { return s; } // في السعودية: ميلادي · هجري
 }
 
 // ============================================================

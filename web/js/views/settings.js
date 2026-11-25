@@ -267,7 +267,18 @@ async function loadTab(host, tab, isAdmin) {
 // 1. تبويب المكتب
 // ============================================================
 function renderOfficeTab(s, isAdmin) {
+  const c = (s.country || 'EG').toUpperCase();
   return `
+    <div class="card">
+      <h3>🌍 دولة المكتب</h3>
+      <div class="meta" style="margin:0 0 10px">بتحدد العملة والضريبة والتوقيت، والتواريخ (في السعودية هجري وميلادي)، والمحاكم ودرجات التقاضي وأنواع القضايا، والقوانين اللي الذكاء الاصطناعي بيجاوب بيها.</div>
+      <div class="country-pick" role="radiogroup" aria-label="دولة المكتب">
+        <button type="button" class="country-opt ${c === 'EG' ? 'active' : ''}" role="radio" aria-checked="${c === 'EG'}" data-set-country="EG" ${!isAdmin ? 'disabled' : ''}><span class="cf">🇪🇬</span> مصر</button>
+        <button type="button" class="country-opt ${c === 'SA' ? 'active' : ''}" role="radio" aria-checked="${c === 'SA'}" data-set-country="SA" ${!isAdmin ? 'disabled' : ''}><span class="cf">🇸🇦</span> السعودية</button>
+      </div>
+      ${!isAdmin ? '<div class="meta" style="margin-top:8px">مالك المكتب بس اللي يقدر يغيّر الدولة.</div>' : ''}
+    </div>
+
     <div class="card">
       <h3>🏢 معلومات المكتب</h3>
       <div class="form-grid">
@@ -765,6 +776,24 @@ function bindTabEvents(host, tab, settings) {
 
   // 1. المكتب
   if (tab === 'office') {
+    // دولة المكتب: بتغيّر العملة والضريبة والتوقيت وتعيد تحميل البرنامج بالإعدادات الجديدة
+    host.querySelectorAll('[data-set-country]').forEach(b => b.addEventListener('click', async () => {
+      const to = b.dataset.setCountry;
+      if (b.classList.contains('active')) return;
+      const msg = to === 'SA'
+        ? 'تحويل المكتب للسعودية؟\n\n• العملة: ريال سعودي، والضريبة 15%\n• التوقيت: الرياض، والتواريخ هجري وميلادي\n• المحاكم وأنواع القضايا والأنظمة السعودية\n\nالمبالغ المسجلة قبل كده مش بتتحوّل (بتفضل بأرقامها).'
+        : 'تحويل المكتب لمصر؟\n\n• العملة: جنيه مصري، والضريبة 14%\n• التوقيت: القاهرة، والتواريخ ميلادي\n• المحاكم وأنواع القضايا والقوانين المصرية\n\nالمبالغ المسجلة قبل كده مش بتتحوّل (بتفضل بأرقامها).';
+      if (!confirm(msg)) return;
+      const d = to === 'SA' ? { country: 'SA', currency: 'SAR', vat_rate: 15 } : { country: 'EG', currency: 'EGP', vat_rate: 14 };
+      try {
+        await apiJson('/api/settings', { method: 'PATCH', body: JSON.stringify(d) });
+        setOfficeMoneyPrefs(d);
+        clearCache?.();
+        toast('✅ اتغيّرت دولة المكتب', 'ok');
+        setTimeout(() => location.reload(), 600); // كل الشاشات تتبني بالإعدادات الجديدة
+      } catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+    }));
+
     save('save-office', 's-office-status', () => ({
       office_name_ar: val('s-office-name-ar'),
       office_name_en: val('s-office-name-en'),

@@ -9,6 +9,7 @@ import { can } from '../access.js';
 import { openStatement } from '../statement.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
 import { toExcel } from '../exporter.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 const ACC_KEY = 'mowakkil_acc_mode';
 export function accountantMode() {
@@ -29,7 +30,7 @@ export async function renderSimple(host) {
   const d = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
   const from = monthStartISO(d);
   const to = monthOffset === 0 ? localISO(base) : monthEndISO(d);
-  const monthLabel = d.toLocaleDateString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' });
+  const monthLabel = d.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
 
   host.innerHTML = `<div class="card">${skeleton(3, 'card')}</div>`;
   let s;

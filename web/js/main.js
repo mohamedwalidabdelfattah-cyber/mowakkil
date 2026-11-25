@@ -262,7 +262,13 @@ if (getToken()) {
     import('./ai-privacy.js').catch(() => {});
   }, 6000);
   initSubscription();
-  apiJson('/api/settings').then(setOfficeMoneyPrefs).catch(() => {}); // عملة المكتب ونسبة الضريبة
+  apiJson('/api/settings').then(setOfficeMoneyPrefs).catch(() => {}); // عملة المكتب ونسبة الضريبة ودولته
+  // لو دولة المكتب طلعت غير اللي كانت محفوظة على الجهاز: القايمة والشاشة الحالية تتبني تاني بالمسميات الصح
+  document.addEventListener('mowakkil:country-changed', () => {
+    document.dispatchEvent(new CustomEvent('mowakkil:access-changed'));
+    const v = getCurrentView();
+    if (v) showView(v);
+  });
   startNotifications();
   initBottomNav();
 

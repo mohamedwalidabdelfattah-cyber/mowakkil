@@ -5,6 +5,7 @@ import { audit } from '../lib/audit.js';
 import { safeJson, toInt, isStr, isValidEmail } from '../lib/validation.js';
 import { hashPassword } from '../lib/crypto.js';
 import { normalizeStoredPhone, phoneVariants } from '../lib/phone.js';
+import { officeCountry } from '../lib/country.js';
 import { requireLimit, getSubscription } from '../middleware/feature-gate.js';
 import {
   ROLES, CATALOG, ACTION_LABELS, ALL_PERMISSIONS, planAccess, rolesForPlan, clearAccessCache, canAccessCase,
@@ -109,9 +110,12 @@ async function create({ request, env, authUser, officeId }) {
   if (!isStr(fullName, 120) || fullName.length < 2) return fail(env, 'اكتب اسم العضو', 400);
   if (!email && !phone) return fail(env, 'لازم إيميل أو رقم موبايل للدخول', 400);
   if (email && !isValidEmail(email)) return fail(env, 'صيغة الإيميل غلط', 400);
-  if (phone && !/^(\+?20)?0?1[0125]\d{8}$/.test(phone)) return fail(env, 'رقم الموبايل غلط', 400);
+  // مصري 01… / سعودي 05… أو 5… / أي رقم دولي بـ +
+  if (phone && !/^(\+?20)?0?1[0125]\d{8}$/.test(phone) && !/^(\+?966|0)?5\d{8}$/.test(phone) && !/^(\+|00)\d{8,15}$/.test(phone)) {
+    return fail(env, 'رقم الموبايل غلط', 400);
+  }
   const phoneAlts = phone ? phoneVariants(phone) : [];
-  if (phone) phone = normalizeStoredPhone(phone);
+  if (phone) phone = normalizeStoredPhone(phone, await officeCountry(env, officeId));
   if (!isStr(b.password, 200) || b.password.length < 8) return fail(env, 'كلمة السر لازم 8 حروف على الأقل', 400);
 
   const role = String(b.role || 'lawyer');

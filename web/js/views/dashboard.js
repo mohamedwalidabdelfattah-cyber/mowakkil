@@ -6,6 +6,7 @@ import { esc, empty, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, 
 import { icon } from '../icons.js';
 import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
 import { PALETTE, SERIES, areaGradient } from '../chart-theme.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 let charts = {};
 
@@ -104,7 +105,7 @@ function paint(host, data, reload) {
         <div style="position:relative;z-index:1">
           <div class="welcome-label">${greeting}</div>
           <div class="welcome-title">${esc(userName)}</div>
-          <div class="welcome-sub">${esc(now.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))}</div>
+          <div class="welcome-sub">${esc(fmtDay(now, 'long'))}</div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1">
           ${hasFinance ? `
@@ -266,7 +267,7 @@ function fmtShortDate(s) {
   if (!s) return '—';
   const d = new Date(s);
   if (isNaN(d)) return s;
-  return d.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 // ============================================================

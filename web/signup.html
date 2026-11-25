@@ -38,6 +38,14 @@
         <input id="full_name" class="input" type="text" placeholder="أحمد محمد" required autocomplete="name">
       </div>
       <div class="form-row">
+        <span class="label" id="country-label">دولة المكتب *</span>
+        <div class="country-pick" role="radiogroup" aria-labelledby="country-label">
+          <button type="button" class="country-opt active" role="radio" aria-checked="true" data-country="EG"><span class="cf">🇪🇬</span> مصر</button>
+          <button type="button" class="country-opt" role="radio" aria-checked="false" data-country="SA"><span class="cf">🇸🇦</span> السعودية</button>
+        </div>
+        <div class="field-hint" id="country-hint">العملة جنيه، والتواريخ ميلادي، والمحاكم والقوانين المصرية</div>
+      </div>
+      <div class="form-row">
         <label class="label" for="phone">رقم الهاتف المحمول *</label>
         <input id="phone" class="input" type="tel" placeholder="01012345678" required autocomplete="tel" inputmode="numeric">
         <div class="field-hint">يُستخدم كرقم دخول رئيسي للنظام</div>

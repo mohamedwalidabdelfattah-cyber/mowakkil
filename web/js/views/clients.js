@@ -7,6 +7,7 @@ import { setClients } from '../state.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
 import { waLinkFor } from '../phone.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
+import { countryInfo } from '../country.js';
 
 // حالة الفلاتر
 let currentFilters = {
@@ -66,9 +67,9 @@ export async function render(host) {
         <h3>👥 إضافة موكل جديد</h3>
         <div class="row">
           <div><label>الاسم</label><input id="cl-name" placeholder="أحمد السيد"></div>
-          <div><label>رقم الهاتف</label><input id="cl-phone" placeholder="01xxxxxxxxx"></div>
+          <div><label>رقم الهاتف</label><input id="cl-phone" placeholder="${countryInfo().phonePlaceholder}"></div>
         </div>
-        <label>الرقم القومي (اختياري)</label><input id="cl-national">
+        <label>${countryInfo().idLabel} (اختياري)</label><input id="cl-national" inputmode="numeric" placeholder="${countryInfo().idHint}">
         <button class="primary" style="margin-top:10px" id="add-client">حفظ الموكل</button>
       </div>
 
@@ -127,7 +128,7 @@ export async function render(host) {
         columns: [
           { label: 'الاسم', key: 'name' },
           { label: 'الهاتف', key: 'phone' },
-          { label: 'الرقم القومي', key: 'national_id' },
+          { label: countryInfo().idLabel, key: 'national_id' },
           { label: 'حساب البوابة', value: c => accountLabel(statusMap[c.id]) },
           { label: 'تاريخ الإضافة', key: 'created_at', type: 'date' },
         ],

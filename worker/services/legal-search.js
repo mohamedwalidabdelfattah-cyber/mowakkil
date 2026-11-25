@@ -2,6 +2,7 @@
 // بحث قانوني + توليد مستندات — Vectorize (RAG) + bge-m3 + نماذج مجانية (Groq/Gemini/Workers AI)
 import { completeText } from './llm.js';
 import { createMasker } from '../lib/redact.js';
+import { localizeLegalPrompt } from '../lib/country.js';
 import { verifyText, annotate, summarize, summaryText } from '../lib/citations.js';
 
 // مراجعة الأسانيد في أي نص طالع من الذكاء الاصطناعي
@@ -103,8 +104,26 @@ const UNSUPPORTED_TOPICS = [
   'رؤية', 'حضانة أطفال', 'ولاية', 'وصاية', 'قوامة',
 ];
 
-export async function legalSearch(env, query) {
+export async function legalSearch(env, query, { country = 'EG' } = {}) {
   const safeQuery = String(query).slice(0, 500);
+
+  // المكتب السعودي: قاعدة النصوص الحالية مصرية — نجاوب من الأنظمة السعودية مباشرة وننبّه
+  if (country === 'SA') {
+    try {
+      const answer = await callAI(env,
+        localizeLegalPrompt(`السؤال: ${safeQuery}\n\nجاوب كاستشارة قانونية لزميل: الملخص، ثم التحليل وفق الأنظمة السعودية، ثم التوصيات العملية، ثم الأنظمة والمواد ذات الصلة (لو متأكد منها).`, 'SA'),
+        1400, localizeLegalPrompt(DEFAULT_SYSTEM, 'SA'));
+      return {
+        answer: (answer || 'تعذر الحصول على إجابة الآن، حاول مرة أخرى.') +
+          '\n\n---\nℹ️ قاعدة نصوص الأنظمة السعودية قيد الإضافة؛ الإجابة مبنية على المعرفة العامة بالأنظمة، فراجع النص الرسمي قبل الاعتماد عليها.',
+        sources: [],
+        notice: 'sa_db_pending',
+      };
+    } catch (e) {
+      console.error('SA legal search failed:', e.message);
+      return { answer: 'تعذر الحصول على إجابة الآن، حاول مرة أخرى.', sources: [] };
+    }
+  }
 
   const lowerQuery = safeQuery.toLowerCase();
   const unsupportedTopic = UNSUPPORTED_TOPICS.find(t => lowerQuery.includes(t));
@@ -268,7 +287,7 @@ export async function searchLegalDb(env, query) {
 // ============================================================
 // توليد المستندات
 // ============================================================
-export async function generateDocument(env, { doc_type, facts, parties, extra, case_id, officeId, route = 'balanced' }) {
+export async function generateDocument(env, { doc_type, facts, parties, extra, case_id, officeId, route = 'balanced', country = 'EG' }) {
   const safeFacts = String(facts || '').trim().slice(0, 3000);
   const safeParties = String(parties || '').trim().slice(0, 500);
   const safeExtra = String(extra || '').trim().slice(0, 800);
@@ -325,7 +344,8 @@ ${safeExtra ? 'تفاصيل إضافية:\n' + safeExtra : ''}
   try {
     // الوقائع والأطراف بيانات موكلين → إخفاء الأسماء/الأرقام + توجيه حسب خصوصية المكتب
     const masker = createMasker({ names: knownNames });
-    const document = await callAI(env, prompt, 1500, null, { route, masker });
+    // المكتب السعودي: الصيغة والأنظمة السعودية
+    const document = await callAI(env, localizeLegalPrompt(prompt, country), 1500, localizeLegalPrompt(DEFAULT_SYSTEM, country), { route, masker });
     return {
       document: document ? await withCitationCheck(env, document) : buildTemplateDocument(doc_type, safeFacts, safeParties, safeExtra),
       doc_type,
