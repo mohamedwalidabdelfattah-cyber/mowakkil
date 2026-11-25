@@ -10,6 +10,7 @@ import { applyChartTheme } from './chart-theme.js';
 import { loadAccess, canView, guardActions, clearAccess } from './access.js';
 import { startOffline } from './offline.js';
 import { apiJson } from './api.js';
+import { startMSA } from './msa.js';
 import { getCurrentView } from './router.js';
 
 applyChartTheme();
@@ -262,9 +263,12 @@ if (getToken()) {
     import('./ai-privacy.js').catch(() => {});
   }, 6000);
   initSubscription();
+  // الفصحى المبسطة للمكاتب السعودية (طبقة عرض — المصري زي ما هو)
+  startMSA();
   apiJson('/api/settings').then(setOfficeMoneyPrefs).catch(() => {}); // عملة المكتب ونسبة الضريبة ودولته
   // لو دولة المكتب طلعت غير اللي كانت محفوظة على الجهاز: القايمة والشاشة الحالية تتبني تاني بالمسميات الصح
   document.addEventListener('mowakkil:country-changed', () => {
+    startMSA(); // بتقفل نفسها لو المكتب مصري
     document.dispatchEvent(new CustomEvent('mowakkil:access-changed'));
     const v = getCurrentView();
     if (v) showView(v);

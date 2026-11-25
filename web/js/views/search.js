@@ -28,6 +28,18 @@ const GOV_LINKS_SA = [
   { name: 'الهيئة السعودية للمحامين', desc: 'شؤون المهنة والتراخيص', url: 'https://sba.gov.sa', icon: '🛡️' },
 ];
 const govLinks = () => (isSaudi() ? GOV_LINKS_SA : GOV_LINKS);
+
+// ترحيب الشات: المكتب السعودي بالفصحى ومن غير ذكر قاعدة النصوص المصرية
+function chatWelcome(withFiles) {
+  const p = (inner) => `<h3 style="margin:0 0 8px;font-size:20px">${isSaudi() ? 'أهلاً بك!' : 'أهلاً بيك!'}</h3>
+    <p style="color:var(--text-soft);margin:0 0 20px;font-size:14px;line-height:1.7">${inner}</p>`;
+  if (isSaudi()) {
+    return p(`أنا مساعدك القانوني، أجيب وفق <strong>الأنظمة السعودية</strong>، ويمكنني البحث في <strong>الإنترنت</strong> عند الحاجة.`
+      + (withFiles ? '<br>يمكنك أيضًا رفع ملف (PDF/Word/صورة) لأحلّله.' : ''));
+  }
+  return p(`أنا مساعدك القانوني. بستخدم قاعدة بيانات فيها <strong>5,828 مادة قانونية</strong>
+    + بقدر أدور في <strong>الإنترنت</strong> لو محتاج.` + (withFiles ? '<br>ممكن كمان ترفع ملف (PDF/Word/صورة) وأنا أحلله.' : ''));
+}
 const legalSystemWord = () => (isSaudi() ? 'الأنظمة السعودية' : 'القانون المصري');
 
 export async function render(host) {
@@ -65,12 +77,7 @@ export async function render(host) {
         <div id="chat-messages" class="chat-messages">
           <div class="chat-welcome">
             <div style="font-size:48px;margin-bottom:12px">⚖️</div>
-            <h3 style="margin:0 0 8px;font-size:20px">أهلاً بيك!</h3>
-            <p style="color:var(--text-soft);margin:0 0 20px;font-size:14px;line-height:1.7">
-              أنا مساعدك القانوني. بستخدم قاعدة بيانات فيها <strong>5,828 مادة قانونية</strong>
-              + بقدر أدور في <strong>الإنترنت</strong> لو محتاج.<br>
-              ممكن كمان ترفع ملف (PDF/Word/صورة) وأنا أحلله.
-            </p>
+            ${chatWelcome(true)}
             <div class="chat-suggestions">
               <button class="chat-suggestion" data-suggestion="إيه شروط صحة عقد البيع؟">📄 شروط صحة عقد البيع؟</button>
               <button class="chat-suggestion" data-suggestion="عندي قضية تعويض عن ضرر، إيه نقاط الضعف اللي ممكن تكون ضدي؟">⚖️ نقاط ضعف قضية تعويض</button>
@@ -288,11 +295,7 @@ export async function render(host) {
     chatMessages.innerHTML = `
       <div class="chat-welcome">
         <div style="font-size:48px;margin-bottom:12px">⚖️</div>
-        <h3 style="margin:0 0 8px;font-size:20px">أهلاً بيك!</h3>
-        <p style="color:var(--text-soft);margin:0 0 20px;font-size:14px;line-height:1.7">
-          أنا مساعدك القانوني. بستخدم قاعدة بيانات فيها <strong>5,828 مادة قانونية</strong>
-          + بقدر أدور في <strong>الإنترنت</strong> لو محتاج.
-        </p>
+        ${chatWelcome(false)}
         <div class="chat-suggestions">
           <button class="chat-suggestion" data-suggestion="إيه شروط صحة عقد البيع؟">📄 شروط صحة عقد البيع؟</button>
           <button class="chat-suggestion" data-suggestion="إيه شروط الطلاق للضرر في ${legalSystemWord()}؟">💔 شروط الطلاق للضرر</button>
