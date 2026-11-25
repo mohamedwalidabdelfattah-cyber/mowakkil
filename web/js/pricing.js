@@ -14,6 +14,9 @@ const MOCK_PLANS = [
   { plan: 'lifetime_basic', display_name: 'التأسيس (مدى الحياة)', display_name_en: 'Lifetime Basic', price_egp: 4999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true, finance: true }, limits: { max_users: 3, max_cases: -1, max_clients: -1, max_storage_mb: 500 } },
   { plan: 'lifetime_pro', display_name: 'المكتب المتكامل (مدى الحياة)', display_name_en: 'Lifetime Pro', price_egp: 9999, billing_type: 'lifetime', features: { cases: true, clients: true, agenda: true, portal: true, finance: true, invoices: true, accounting: true, finance_advanced: true, ai: true, advanced_reports: true, whatsapp: true, api: true }, limits: { max_users: 10, max_cases: -1, max_clients: -1, max_storage_mb: 2000, ai_monthly: 300 } },
 ];
+// السعر بالريال للتجربة المحلية (زي قاعدة البيانات الحية: migration 045)
+const MOCK_SAR = { free: 0, starter: 149, pro: 299, plus: 599, lifetime_basic: 3999, lifetime_pro: 7999 };
+MOCK_PLANS.forEach(p => { p.price_sar = MOCK_SAR[p.plan] ?? null; });
 
 const I18N = {
   ar: {
@@ -74,6 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderPlans();
   renderComparison();
   renderFaq();
+  setupCountryToggle();
   setupBillingToggle();
 });
 
@@ -95,6 +99,38 @@ function applyLang(lang) {
   document.getElementById('footer-home').textContent = t.footerHome;
   document.getElementById('footer-wa').textContent = t.footerWa;
   document.getElementById('login-link').textContent = t.login;
+}
+
+// ============ الدولة (مصر / السعودية): العملة والأسعار ============
+// اختيار تلقائي: ?country= في اللينك ← اللي اختاره قبل كده ← دولة مكتبه (لو داخل) ← جهاز على توقيت الرياض
+const SUPPORT_WA = '201013917789';
+let currentCountry = (() => {
+  try {
+    const q = (new URLSearchParams(location.search).get('country') || '').toUpperCase();
+    if (q === 'SA' || q === 'EG') return q;
+    const saved = localStorage.getItem('mowakkil_pricing_country') || localStorage.getItem('mowakkil_country');
+    if (saved === 'SA' || saved === 'EG') return saved;
+    return Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Riyadh' ? 'SA' : 'EG';
+  } catch { return 'EG'; }
+})();
+const isSA = () => currentCountry === 'SA';
+function planPrice(p) {
+  const v = isSA() ? (p.price_sar ?? MOCK_SAR[p.plan]) : p.price_egp;
+  return v == null ? '—' : Number(v).toLocaleString('en-US');
+}
+const curLabel = () => (isSA() ? (currentLang === 'ar' ? 'ر.س' : 'SAR') : 'EGP');
+
+function setupCountryToggle() {
+  const toggle = document.getElementById('country-toggle');
+  if (!toggle) return;
+  const paint = () => toggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.country === currentCountry));
+  paint();
+  toggle.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    currentCountry = btn.dataset.country;
+    try { localStorage.setItem('mowakkil_pricing_country', currentCountry); } catch {}
+    paint();
+    renderPlans();
+  }));
 }
 
 function setupBillingToggle() {
@@ -149,6 +185,13 @@ function renderPlans() {
     const limits = p.limits || {};
     const limitText = `👥 ${limits.max_users === -1 ? '∞' : limits.max_users} · 📁 ${limits.max_cases === -1 ? '∞' : limits.max_cases} · 👤 ${limits.max_clients === -1 ? '∞' : limits.max_clients} · 💾 ${fmtStorage(limits.max_storage_mb)}`;
     let ctaUrl = isFree ? '/signup' : (isLoggedIn ? `/pay?plan=${p.plan}` : `/signup?plan=${p.plan}`);
+    // السعودية: التسجيل بالسعودية مختارة، والاشتراك (للمسجّل) من خلال واتساب الدعم لحد ما يتفعّل الدفع السعودي
+    if (isSA() && !isFree) {
+      const name = currentLang === 'ar' ? p.display_name : (p.display_name_en || p.display_name);
+      ctaUrl = isLoggedIn
+        ? `https://wa.me/${SUPPORT_WA}?text=${encodeURIComponent(`مرحباً، حابب أشترك في باقة ${name} (${planPrice(p)} ر.س) لمكتبي في السعودية.`)}`
+        : `/signup?plan=${p.plan}&country=SA`;
+    }
     const ctaText = isFree ? t.subscribeFree : t.subscribe;
 
     return `
@@ -165,8 +208,8 @@ function renderPlans() {
           (currentLang === 'ar' ? 'للمكاتب الكبيرة' : 'For large firms')
         }</div>
         <div class="plan-price-lg">
-          <span class="plan-price-num-lg">${p.price_egp}</span>
-          <span class="plan-price-cur-lg">EGP<br>${isFree ? t.forever : (isLifetime ? t.once : t.perMonth)}</span>
+          <span class="plan-price-num-lg">${planPrice(p)}</span>
+          <span class="plan-price-cur-lg">${curLabel()}<br>${isFree ? t.forever : (isLifetime ? t.once : t.perMonth)}</span>
         </div>
         <ul class="plan-features-lg">
           ${features.slice(0, 6).map(f => `<li>${f}</li>`).join('')}

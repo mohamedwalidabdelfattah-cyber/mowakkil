@@ -3,6 +3,11 @@
 
 import { fetchSubscription, fetchPlans, apiJson } from '../api.js';
 import { esc, fmtMoney, fmtDate, toast, skeleton, empty } from '../ui.js';
+import { isSaudi } from '../country.js';
+
+// المكتب السعودي: السعر بالريال، والاشتراك من خلال واتساب الدعم لحد ما الدفع السعودي يتفعّل
+const SUPPORT_WA = '201013917789';
+const planPrice = (plan) => (isSaudi() ? plan.price_sar : plan.price_egp);
 
 function fmtStorage(mb) {
   if (mb === -1) return '∞';
@@ -138,8 +143,8 @@ function renderPlanCard(plan, currentPlan) {
 
       <div class="plan-name">${esc(plan.display_name)}</div>
       <div class="plan-price">
-        <span class="plan-price-num">${plan.price_egp}</span>
-        <span class="plan-price-cur">ج / ${isLifetime ? 'مرة واحدة' : 'شهر'}</span>
+        <span class="plan-price-num">${planPrice(plan) == null ? '—' : Number(planPrice(plan)).toLocaleString('en-US')}</span>
+        <span class="plan-price-cur">${isSaudi() ? 'ر.س' : 'ج'} / ${isLifetime ? 'مرة واحدة' : 'شهر'}</span>
       </div>
 
       <ul class="plan-features-list">
@@ -156,11 +161,13 @@ function renderPlanCard(plan, currentPlan) {
 
       ${isCurrent ? `
         <button class="btn btn-ghost btn-block" disabled>باقتك الحالية</button>
-      ` : plan.price_egp === 0 ? `
+      ` : planPrice(plan) === 0 ? `
         <button class="btn btn-ghost btn-block" disabled>الباقة المجانية</button>
       ` : `
-        <a href="/pay?plan=${plan.plan}" class="btn btn-primary btn-block" style="text-decoration:none;display:block;text-align:center">
-          💳 ${isLifetime ? 'اشترِ الآن' : 'ترقية الآن'}
+        <a href="${isSaudi()
+          ? `https://wa.me/${SUPPORT_WA}?text=${encodeURIComponent(`مرحباً، حابب أشترك في باقة ${plan.display_name} (${planPrice(plan)} ر.س) لمكتبي في السعودية.`)}`
+          : `/pay?plan=${plan.plan}`}" ${isSaudi() ? 'target="_blank" rel="noopener"' : ''} class="btn btn-primary btn-block" style="text-decoration:none;display:block;text-align:center">
+          ${isSaudi() ? '💬 اشترك عبر واتساب' : `💳 ${isLifetime ? 'اشترِ الآن' : 'ترقية الآن'}`}
         </a>
       `}
     </div>

@@ -13,6 +13,29 @@ import { apiJson } from './api.js';
   }
 })();
 
+// المكتب السعودي: طرق الدفع هنا مصرية (فودافون كاش/إنستاباي) — الاشتراك عبر واتساب الدعم بالريال لحد ما الدفع السعودي يتفعّل
+(function saudiOffice() {
+  if (localStorage.getItem('mowakkil_country') !== 'SA') return;
+  const SAR = { starter: 149, pro: 299, plus: 599, lifetime_basic: 3999, lifetime_pro: 7999 };
+  const NAMES = { starter: 'الأساسية', pro: 'الاحترافية', plus: 'المتقدمة', lifetime_basic: 'التأسيس (مدى الحياة)', lifetime_pro: 'المكتب المتكامل (مدى الحياة)' };
+  const plan = new URLSearchParams(location.search).get('plan') || 'pro';
+  const name = NAMES[plan] || NAMES.pro;
+  const price = SAR[plan] ?? SAR.pro;
+  const msg = encodeURIComponent(`مرحباً، حابب أشترك في باقة ${name} (${price} ر.س) لمكتبي في السعودية.`);
+  const form = document.getElementById('pay-form');
+  if (form) form.style.display = 'none';
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.cssText = 'margin-bottom:20px;text-align:center';
+  card.innerHTML = `
+    <div style="font-size:40px;margin-bottom:8px">🇸🇦</div>
+    <h2 style="margin:0 0 6px">باقة ${name}</h2>
+    <div style="font-size:30px;font-weight:900;margin:6px 0">${price.toLocaleString('en-US')} <span style="font-size:16px">ر.س</span></div>
+    <p class="meta" style="margin:0 0 16px">لتفعيل اشتراك مكتبك في السعودية، تواصل معنا على واتساب وسنرسل لك طريقة الدفع المناسبة ونفعّل الباقة فورًا.</p>
+    <a href="https://wa.me/201013917789?text=${msg}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-block;text-decoration:none;padding:12px 28px">💬 اشترك عبر واتساب</a>`;
+  form?.insertAdjacentElement('beforebegin', card);
+})();
+
 let paymentInfo = null;
 let selectedPlan = null;
 let selectedMethod = null;

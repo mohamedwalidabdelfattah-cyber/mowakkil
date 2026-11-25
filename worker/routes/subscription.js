@@ -25,7 +25,7 @@ export const routes = [
 async function getPlans({ env }) {
   // ✅ تم إضافة billing_type هنا
   const { results } = await env.DB.prepare(
-    `SELECT plan, display_name, display_name_en, price_egp, features, limits, sort_order, billing_type
+    `SELECT plan, display_name, display_name_en, price_egp, price_sar, features, limits, sort_order, billing_type
      FROM plan_features WHERE is_active = 1 ORDER BY sort_order`
   ).all();
 
@@ -34,6 +34,7 @@ async function getPlans({ env }) {
     display_name: p.display_name,
     display_name_en: p.display_name_en,
     price_egp: p.price_egp,
+    price_sar: p.price_sar ?? null, // السعر بالريال للمكاتب السعودية
     features: JSON.parse(p.features || '{}'),
     limits: { ...JSON.parse(p.limits || '{}'), ai_monthly: AI_MONTHLY_LIMITS[p.plan] ?? 0 },
     billing_type: p.billing_type || 'monthly', // ✅ الحقل الجديد
