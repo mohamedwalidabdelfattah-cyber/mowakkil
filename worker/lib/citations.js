@@ -46,10 +46,37 @@ function articleKey(s) {
   return k;
 }
 
-// ---------- فهرس القوانين (مرة لكل isolate، ساعة) ----------
+// ---------- فهرس القوانين ----------
+// بيتبني من law_articles كلها (~20 ألف صف) — فبنخزّنه في KV يوم كامل، وفي ذاكرة الـ isolate ساعة.
+// قبل كده كل isolate جديد كان بيقرا الجدول كله، وده بيستهلك حصة القراءة اليومية لـ D1 بسرعة.
+const CIT_KV_KEY = 'citations:index:v1';
 let index = null;
 async function getIndex(env) {
   if (index && index.exp > Date.now()) return index.laws;
+  try {
+    const cached = await env.RATE_LIMIT_KV?.get(CIT_KV_KEY, 'json');
+    if (cached?.length) {
+      const laws = cached.map(l => ({ ...l, tokens: new Set(l.tokens), articles: new Set(l.articles) }));
+      index = { exp: Date.now() + 60 * 60 * 1000, laws };
+      return laws;
+    }
+  } catch {}
+  const laws = await buildIndex(env);
+  try {
+    const plain = laws.map(l => ({ ...l, tokens: [...l.tokens], articles: [...l.articles] }));
+    await env.RATE_LIMIT_KV?.put(CIT_KV_KEY, JSON.stringify(plain), { expirationTtl: 24 * 60 * 60 });
+  } catch {}
+  index = { exp: Date.now() + 60 * 60 * 1000, laws };
+  return laws;
+}
+
+/** بعد إضافة قوانين جديدة: امسح النسخة المخزنة عشان تتبني من جديد */
+export async function resetCitationIndex(env) {
+  index = null;
+  try { await env.RATE_LIMIT_KV?.delete(CIT_KV_KEY); } catch {}
+}
+
+async function buildIndex(env) {
   const { results } = await env.DB.prepare(
     `SELECT law_name, law_number, article_number FROM law_articles`
   ).all();
@@ -67,9 +94,7 @@ async function getIndex(env) {
     const k = articleKey(r.article_number);
     if (k) byLaw.get(key).articles.add(k);
   }
-  const laws = [...byLaw.values()].filter(l => l.tokens.size || l.number);
-  index = { exp: Date.now() + 60 * 60 * 1000, laws };
-  return laws;
+  return [...byLaw.values()].filter(l => l.tokens.size || l.number);
 }
 
 // القوانين اللي ممكن يقصدها الاستشهاد: نفس رقم القانون، أو كلمات أحدهما جوه التاني بالكامل

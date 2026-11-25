@@ -283,23 +283,28 @@ async function runAiHealth() {
   }
 }
 
+// لو الفهرسة وقفت في النص (حصة/نت) الضغطة الجاية بتكمّل من نفس المكان بدل ما تبدأ من الأول
+let reindexAfter = 0;
 async function runReindex() {
   const out = document.getElementById('sa-ai-out');
-  if (!confirm('هيتم فهرسة كل المواد القانونية على دفعات (ممكن ياخد كام دقيقة). نكمل؟')) return;
-  let after = 0;
-  let total = 0;
+  const resume = reindexAfter > 0;
+  if (!confirm(resume
+    ? `هنكمّل الفهرسة من بعد المادة رقم ${reindexAfter}. نكمل؟`
+    : 'هيتم فهرسة كل المواد القانونية على دفعات (ممكن ياخد كام دقيقة). نكمل؟')) return;
+  let count = 0;
   try {
     for (;;) {
       const d = await saApiJson('/api/superadmin/ai/reindex-laws', {
         method: 'POST',
-        body: JSON.stringify({ after_id: after, limit: 25 }),
+        body: JSON.stringify({ after_id: reindexAfter, limit: 50 }),
       });
-      after = d.last_id;
-      total = d.total || total;
-      out.textContent = `⏳ تم فهرسة ${d.progress || 0} من ${total} مادة...`;
+      reindexAfter = d.last_id;
+      count += d.indexed || 0;
+      out.textContent = `⏳ اتفهرس ${count} مادة (وصلنا لرقم ${d.progress || reindexAfter} من ${d.total || '؟'})...`;
       if (d.done) break;
     }
-    out.textContent = `✅ خلصت الفهرسة (${total} مادة). ممكن الأرقام في Vectorize تاخد دقيقة عشان تتحدث.`;
+    reindexAfter = 0;
+    out.textContent = `✅ خلصت الفهرسة (${count} مادة). ممكن الأرقام في Vectorize تاخد دقيقة عشان تتحدث.`;
   } catch (e) {
     out.innerHTML = `<span style="color:var(--danger)">${esc(e.message)}</span> — اضغط الزرار تاني عشان تكمل.`;
   }

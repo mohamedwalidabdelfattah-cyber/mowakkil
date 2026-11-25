@@ -64,16 +64,18 @@ async function reindexLaws({ request, env }) {
   }));
   await env.VECTORIZE.upsert(vectors);
 
-  const total = await env.DB.prepare(`SELECT COUNT(*) AS c FROM law_articles`).first();
-  const doneCount = await env.DB.prepare(`SELECT COUNT(*) AS c FROM law_articles WHERE id <= ?`)
-    .bind(results[results.length - 1].id).first();
+  // التقدّم بالـ id مش بـ COUNT(*): العدّ كان بيقرا الجدول كله (~20 ألف صف) مع كل دفعة
+  // → فهرسة 13 ألف مادة قرت 10 مليون صف من D1 في يوم واحد (الحد المجاني 5 مليون).
+  // MAX(id) بيتقري من الفهرس في صف واحد.
+  const max = await env.DB.prepare(`SELECT MAX(id) AS m FROM law_articles`).first();
+  const lastId = results[results.length - 1].id;
 
   return ok(env, {
     done: results.length < limit,
     indexed: results.length,
-    last_id: results[results.length - 1].id,
-    progress: doneCount?.c || 0,
-    total: total?.c || 0,
+    last_id: lastId,
+    progress: lastId,
+    total: max?.m || lastId,
   });
 }
 
