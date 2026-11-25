@@ -8,7 +8,9 @@ import { waLinkFor } from '../phone.js';
 import { mountFollowup } from './sa-followup.js';
 import { mountSources } from './sa-sources.js';
 
-let currentFilter = { search: '', plan: '', status: '' };
+let currentFilter = { search: '', plan: '', status: '', country: '' };
+// دولة المكتب (بتظهر كشارة جنب اسمه، وفيه فلتر بيها)
+const COUNTRY_BADGE = { SA: '🇸🇦 السعودية', EG: '🇪🇬 مصر' };
 let currentOfficeId = null;
 let currentPRStatus = 'pending';
 
@@ -172,6 +174,11 @@ async function renderSABody() {
           <option value="lifetime_basic">تأسيس (مدى الحياة)</option>
           <option value="lifetime_pro">متكامل (مدى الحياة)</option>
         </select>
+        <select id="sa-filter-country" class="select" style="max-width:150px" aria-label="الدولة">
+          <option value="">كل الدول</option>
+          <option value="EG">🇪🇬 مصر</option>
+          <option value="SA">🇸🇦 السعودية</option>
+        </select>
         <select id="sa-filter-status" class="select" style="max-width:140px">
           <option value="">كل الحالات</option>
           <option value="trial">تجربة</option>
@@ -206,6 +213,10 @@ async function renderSABody() {
   });
   statusSelect.addEventListener('change', () => {
     currentFilter.status = statusSelect.value;
+    loadOffices();
+  });
+  host.querySelector('#sa-filter-country').addEventListener('change', (e) => {
+    currentFilter.country = e.target.value;
     loadOffices();
   });
 
@@ -496,6 +507,7 @@ async function loadOffices() {
     if (currentFilter.search) params.set('search', currentFilter.search);
     if (currentFilter.plan)   params.set('plan', currentFilter.plan);
     if (currentFilter.status) params.set('status', currentFilter.status);
+    if (currentFilter.country) params.set('country', currentFilter.country);
 
     const list = await saApiJson('/api/superadmin/offices?' + params.toString());
     if (!list.length) {
@@ -518,7 +530,7 @@ async function loadOffices() {
       return `
         <div class="item" data-office-id="${o.id}" style="cursor:pointer">
           <div class="top">
-            <span class="name">${esc(o.name_ar || o.name || 'مكتب #' + o.id)}</span>
+            <span class="name">${esc(o.name_ar || o.name || 'مكتب #' + o.id)} <span class="sa-country sa-country-${o.country || 'EG'}">${COUNTRY_BADGE[o.country] || COUNTRY_BADGE.EG}</span></span>
             <span class="badge ${o.sub_status === 'active' ? 'active' : o.sub_status === 'trial' ? 'trial' : 'suspended'}">
               ${statusLabels[o.sub_status] || o.sub_status || '—'}
             </span>

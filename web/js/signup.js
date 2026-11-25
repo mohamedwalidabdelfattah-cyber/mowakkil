@@ -3,6 +3,7 @@
 
 import { STORAGE_KEYS, API_BASE } from './config.js';
 import { startIconify } from './icons.js';
+import { detectVisitorCountry, isSaudiPhone } from './region.js';
 
 startIconify();
 
@@ -118,15 +119,15 @@ function pickCountry(c) {
   const hint = document.getElementById('country-hint');
   if (hint) hint.textContent = COUNTRY_UI[selectedCountry].hint;
 }
-document.querySelectorAll('.country-opt').forEach(b => b.addEventListener('click', () => pickCountry(b.dataset.country)));
-// اختيار تلقائي: لينك فيه ?country=SA، أو جهاز على توقيت السعودية
-try {
-  const q = new URLSearchParams(location.search).get('country');
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-  pickCountry(q ? q.toUpperCase() : (tz === 'Asia/Riyadh' ? 'SA' : 'EG'));
-} catch { pickCountry('EG'); }
+let countryChosenByUser = false;
+document.querySelectorAll('.country-opt').forEach(b => b.addEventListener('click', () => { countryChosenByUser = true; pickCountry(b.dataset.country); }));
+// اختيار تلقائي من أكتر من علامة (اللينك، لغة الجهاز، التوقيت، دولة الاتصال) — region.js
+pickCountry('EG');
+detectVisitorCountry().then(c => { if (!countryChosenByUser) pickCountry(c); }).catch(() => {});
 
 // تنسيق رقم الهاتف أثناء الكتابة
 document.getElementById('phone').addEventListener('input', (e) => {
   e.target.value = e.target.value.replace(/[^\d+]/g, '');
+  // رقم سعودي (05… / +966…) → المكتب سعودي، إلا لو هو اختار بنفسه
+  if (!countryChosenByUser && isSaudiPhone(e.target.value)) pickCountry('SA');
 });

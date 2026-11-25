@@ -107,7 +107,7 @@ export function pickTemplate(templates, office, seg, now = new Date()) {
 
 async function listFollowups({ env }) {
   const { results: offices } = await env.DB.prepare(
-    `SELECT o.id, COALESCE(o.name_ar, o.name) AS office_name, o.created_at, o.signup_source, o.signup_campaign,
+    `SELECT o.id, COALESCE(o.name_ar, o.name) AS office_name, o.created_at, o.signup_source, o.signup_campaign, COALESCE(oset.country, 'EG') AS country,
             COALESCE(s.trial_ends_at, o.trial_ends_at) AS trial_ends_at,
             s.status AS sub_status, s.plan AS sub_plan,
             (SELECT full_name FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id LIMIT 1) AS owner_name,
@@ -122,6 +122,7 @@ async function listFollowups({ env }) {
      FROM offices o
      LEFT JOIN subscriptions s ON s.office_id = o.id
      LEFT JOIN office_followup of ON of.office_id = o.id
+     LEFT JOIN office_settings oset ON oset.office_id = o.id
      WHERE COALESCE(s.status, o.status) IN ('trial', 'expired')
      ORDER BY o.created_at DESC`
   ).all();
@@ -142,6 +143,7 @@ async function listFollowups({ env }) {
       cases_count: o.cases_count, clients_count: o.clients_count,
       sent_count: o.sent_count, last_sent_at: o.last_sent_at, sent_keys: o.sent_keys ? String(o.sent_keys).split(',') : [],
       stopped: !!o.stopped, note: o.note || '',
+      country: o.country || 'EG',
       source: o.signup_source || null, source_label: o.signup_source ? (SOURCE_LABELS[o.signup_source] || o.signup_source) : null, campaign: o.signup_campaign || null,
       ...seg,
       due_key: pick.due?.key || null, status: pick.reason,

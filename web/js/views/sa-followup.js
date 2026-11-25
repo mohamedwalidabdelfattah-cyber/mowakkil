@@ -114,7 +114,7 @@ function renderList(host) {
     return `
       <div class="item fu-item" data-office="${i.office_id}">
         <div class="top">
-          <span class="name">${esc(i.office_name || 'مكتب #' + i.office_id)}</span>
+          <span class="name">${esc(i.office_name || 'مكتب #' + i.office_id)}${i.country === 'SA' ? ' <span class="sa-country sa-country-SA">🇸🇦 السعودية</span>' : ''}</span>
           <span class="fu-seg fu-${i.segment}" title="${esc(m.hint || '')}">${m.icon || ''} ${esc(m.label || i.segment)}</span>
         </div>
         <div class="meta">

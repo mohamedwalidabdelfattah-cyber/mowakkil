@@ -1,4 +1,5 @@
 // web/js/pricing.js
+import { detectVisitorCountry } from './region.js';
 const API_BASE = 'https://mowakkil-api.mohamed-walid-abdelfattah.workers.dev';
 const TOKEN_KEY = 'mowakkil_token';
 
@@ -73,11 +74,10 @@ const I18N = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   applyLang(currentLang);
-  await loadPlans();
+  [, currentCountry] = await Promise.all([loadPlans(), detectVisitorCountry()]);
   renderPlans();
   renderComparison();
   renderFaq();
-  setupCountryToggle();
   setupBillingToggle();
 });
 
@@ -102,36 +102,15 @@ function applyLang(lang) {
 }
 
 // ============ الدولة (مصر / السعودية): العملة والأسعار ============
-// اختيار تلقائي: ?country= في اللينك ← اللي اختاره قبل كده ← دولة مكتبه (لو داخل) ← جهاز على توقيت الرياض
+// الزائر بيشوف أسعار دولته بس (مفيش مقارنة بين المصري والسعودي) — الدولة بتتعرف من أكتر من علامة (region.js)
 const SUPPORT_WA = '201013917789';
-let currentCountry = (() => {
-  try {
-    const q = (new URLSearchParams(location.search).get('country') || '').toUpperCase();
-    if (q === 'SA' || q === 'EG') return q;
-    const saved = localStorage.getItem('mowakkil_pricing_country') || localStorage.getItem('mowakkil_country');
-    if (saved === 'SA' || saved === 'EG') return saved;
-    return Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Riyadh' ? 'SA' : 'EG';
-  } catch { return 'EG'; }
-})();
+let currentCountry = 'EG';
 const isSA = () => currentCountry === 'SA';
 function planPrice(p) {
   const v = isSA() ? (p.price_sar ?? MOCK_SAR[p.plan]) : p.price_egp;
   return v == null ? '—' : Number(v).toLocaleString('en-US');
 }
 const curLabel = () => (isSA() ? (currentLang === 'ar' ? 'ر.س' : 'SAR') : 'EGP');
-
-function setupCountryToggle() {
-  const toggle = document.getElementById('country-toggle');
-  if (!toggle) return;
-  const paint = () => toggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.country === currentCountry));
-  paint();
-  toggle.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
-    currentCountry = btn.dataset.country;
-    try { localStorage.setItem('mowakkil_pricing_country', currentCountry); } catch {}
-    paint();
-    renderPlans();
-  }));
-}
 
 function setupBillingToggle() {
   const toggle = document.getElementById('billing-toggle');

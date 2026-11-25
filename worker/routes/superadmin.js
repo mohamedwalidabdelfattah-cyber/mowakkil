@@ -191,8 +191,9 @@ async function listOffices({ env, url }) {
   const search = (url.searchParams.get('search') || '').trim();
   const plan = url.searchParams.get('plan');
   const status = url.searchParams.get('status');
+  const country = url.searchParams.get('country'); // EG | SA
 
-  let q = `SELECT o.*,
+  let q = `SELECT o.*, COALESCE(os.country, 'EG') AS country,
              (SELECT full_name FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_name,
              (SELECT phone FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_phone,
              (SELECT email FROM users u WHERE u.office_id = o.id AND u.role = 'admin' ORDER BY u.id ASC LIMIT 1) as owner_email,
@@ -203,6 +204,7 @@ async function listOffices({ env, url }) {
              s.trial_ends_at as sub_trial_ends_at, s.expires_at as sub_expires_at
            FROM offices o
            LEFT JOIN subscriptions s ON s.office_id = o.id
+           LEFT JOIN office_settings os ON os.office_id = o.id
            WHERE 1=1`;
   const binds = [];
 
@@ -212,6 +214,7 @@ async function listOffices({ env, url }) {
   }
   if (plan)   { q += ` AND s.plan = ?`;   binds.push(plan); }
   if (status) { q += ` AND s.status = ?`; binds.push(status); }
+  if (country === 'SA' || country === 'EG') { q += ` AND COALESCE(os.country, 'EG') = ?`; binds.push(country); }
 
   q += ` ORDER BY o.created_at DESC`;
 

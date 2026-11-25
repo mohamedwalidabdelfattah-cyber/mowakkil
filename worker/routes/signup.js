@@ -15,7 +15,13 @@ import { initializeChartOfAccounts } from '../services/chart-of-accounts.js';
 
 export const publicRoutes = [
   { method: 'POST', path: '/api/signup', handler: signup },
+  { method: 'GET', path: '/api/geo', handler: geo },
 ];
+
+// دولة الزائر من اتصاله (Cloudflare) — علامة من علامات اختيار أسعار الباقات (مصر/السعودية)
+async function geo({ env, request }) {
+  return ok(env, { country: request.cf?.country || null }, 200, request);
+}
 
 // ============================================================
 // Regex للأرقام المصرية
