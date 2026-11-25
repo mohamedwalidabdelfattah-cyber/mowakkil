@@ -13,8 +13,10 @@ import { providersHealth } from '../services/llm.js';
 // ============================================================
 // AI: فحص المزودين + إعادة فهرسة المواد القانونية في Vectorize
 // ============================================================
-async function aiHealth({ env }) {
-  const providers = await providersHealth(env);
+async function aiHealth({ env, request }) {
+  // ?refresh=0 → فحص النماذج الحالية من غير إعادة اكتشاف (أسرع، وأخف على حصص المزودين)
+  const refresh = new URL(request.url).searchParams.get('refresh') !== '0';
+  const providers = await providersHealth(env, { refresh });
   let vectorize = null;
   try {
     const d = await env.VECTORIZE.describe();

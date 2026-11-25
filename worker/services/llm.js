@@ -2,7 +2,8 @@
 // سلسلة موديلات مجانية بالكامل (مفيش أي مزود محتاج بطاقة دفع).
 // أسماء النماذج مش ثابتة: بتيجي من model-discovery.js اللي بيسأل كل مزود عن
 // النماذج المتاحة حالياً ويجربها (وبيتحدث كل يوم لوحده). الترتيب:
-//   Groq (أفضل نموذج) → Gemini (أفضل نموذج) → Groq (التاني) → Gemini (التاني) → OpenRouter (مجاني) → Workers AI
+//   Gemini → Mistral → Cerebras → Groq → (النماذج التانية لكل مزود) → OpenRouter → Workers AI
+//   أي مزود مفتاحه مش متحط بيتخطّى لوحده.
 // لو نموذج رجّع "مش موجود/اتقفل" بيتشال فوراً وبننتقل للي بعده — المستخدم مش بيحس بحاجة.
 
 import { getModels, markModelGone, refreshModels, ENDPOINTS } from './model-discovery.js';
@@ -18,15 +19,35 @@ async function buildAttempts(env) {
   const groq = list('groq', env.GROQ_MODEL);
   const gemini = list('gemini', env.GEMINI_MODEL);
   const openrouter = list('openrouter');
+  const mistral = list('mistral');
+  const cerebras = list('cerebras');
+  // الأقوى في العربي الأول، وأي مزود حصته خلصت (429) بننتقل للي بعده فوراً
   const order = [
-    ['groq', groq[0]], ['gemini', gemini[0]],
-    ['groq', groq[1]], ['gemini', gemini[1]],
+    ['gemini', gemini[0]], ['mistral', mistral[0]],
+    ['cerebras', cerebras[0]], ['groq', groq[0]],
+    ['gemini', gemini[1]], ['cerebras', cerebras[1]],
+    ['groq', groq[1]], ['mistral', mistral[1]],
     ['openrouter', openrouter[0]], ['openrouter', openrouter[1]],
   ];
   return order
     .filter(([p, m]) => m && secret(env, ENDPOINTS[p].key).length >= 20)
-    .map(([p, m]) => ({ name: p, key: ENDPOINTS[p].key, url: ENDPOINTS[p].url, model: m, tools: true }));
+    .map(([p, m]) => ({ name: p, key: ENDPOINTS[p].key, url: ENDPOINTS[p].url, model: m, tools: true, noClientData: !!ENDPOINTS[p].noClientData }));
 }
+
+// نماذج OpenAI اللي "بتفكر" (gpt-5، o3…) بترفض max_tokens و temperature غير 1
+export function tokenParams(model, maxTokens, temperature) {
+  return /(^|\/)(gpt-5|o\d)/i.test(String(model))
+    ? { max_completion_tokens: Math.max(maxTokens, 1000) }
+    : { max_tokens: maxTokens, temperature };
+}
+
+// نموذج حصته خلصت (429) → بنعدّيه لحد ما المدة تخلص، عشان الطلبات الجاية متستناش عليه
+const cooling = new Map(); // "provider/model" → وقت الرجوع
+function coolDown(provider, model, retryAfter) {
+  const sec = Math.min(3600, Math.max(30, Number(retryAfter) || 60));
+  cooling.set(`${provider}/${model}`, Date.now() + sec * 1000);
+}
+const isCooling = p => (cooling.get(`${p.name}/${p.model}`) || 0) > Date.now();
 
 // الأخطاء اللي معناها إن النموذج نفسه مبقاش متاح (مش مشكلة مؤقتة)
 const MODEL_GONE = /\b(404)\b|no longer available|not found|does not exist|decommissioned|deprecated|model_not_found|invalid model/i;
@@ -35,6 +56,7 @@ const WORKERS_AI_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 // المفتاح بعد شيل أي مسافات/سطر جديد اتلزق معاه وقت الحفظ
 export const secret = (env, name) => String(env?.[name] ?? '').trim();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DEFAULT_TIMEOUT_MS = 45000;
 
 // بننضف رسالة الـ assistant من أي حقول خاصة بمزود معين (زي reasoning في gpt-oss)
@@ -52,12 +74,7 @@ function cleanMessage(m) {
 }
 
 async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temperature, timeoutMs }) {
-  const body = {
-    model: p.model,
-    messages: messages.map(cleanMessage),
-    max_tokens: maxTokens,
-    temperature,
-  };
+  const body = { model: p.model, messages: messages.map(cleanMessage), ...tokenParams(p.model, maxTokens, temperature) };
   if (tools?.length && p.tools) body.tools = tools;
 
   const res = await fetch(p.url, {
@@ -72,6 +89,7 @@ async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temper
 
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
+    if (res.status === 429) coolDown(p.name, p.model, res.headers.get('retry-after'));
     const err = new Error(`${p.name}/${p.model} ${res.status}: ${txt.slice(0, 200)}`);
     err.modelGone = (res.status === 404 || res.status === 400) && MODEL_GONE.test(`${res.status} ${txt}`);
     throw err;
@@ -131,11 +149,11 @@ export async function chatCompletion(env, {
   if (route !== 'strict') {
     let attempts = [];
     try { attempts = await buildAttempts(env); } catch (e) { errors.push(`discovery: ${e.message}`); }
-    // OpenRouter المجاني ممكن يبعت لمزودين بيتدربوا على البيانات → مستبعد لأي بيانات موكلين
-    if (route === 'balanced') attempts = attempts.filter(p => p.name !== 'openrouter');
+    // المزودين اللي خطتهم المجانية بتدرّب على المدخلات (OpenRouter، Mistral) → مستبعدين لأي بيانات موكلين
+    if (route === 'balanced') attempts = attempts.filter(p => !p.noClientData);
 
     for (const p of attempts) {
-      if (skip.includes(p.name)) continue;
+      if (skip.includes(p.name) || isCooling(p)) continue;
       try {
         const message = await callOpenAICompatible(env, p, { messages: outMessages, tools, maxTokens, temperature, timeoutMs });
         return finish(message, p.name, p.model);
@@ -183,18 +201,22 @@ export async function completeText(env, { system, prompt, maxTokens = 1500, temp
 export async function providersHealth(env, { refresh = true } = {}) {
   const ping = [{ role: 'user', content: 'رد بكلمة واحدة: تمام' }];
   const out = [];
-  if (refresh) { try { await refreshModels(env); } catch {} }
+  if (refresh) { try { await refreshModels(env); } catch {} await sleep(1500); }
+  // بعض المزودين (Mistral المجاني) حدّهم طلب واحد في الثانية → ثانية بين أي طلبين لنفس المزود
+  const last = {};
+  const pace = async name => { const w = (last[name] || 0) + 1100 - Date.now(); if (w > 0) await sleep(w); last[name] = Date.now(); };
 
   // مزود مفتاحه ناقص → نوضح السبب
   for (const [name, ep] of Object.entries(ENDPOINTS)) {
     const key = secret(env, ep.key);
     if (key.length >= 20) continue;
-    if (name === 'openrouter' && !key) continue; // اختياري
+    if (ep.optional && !key) continue; // مزود اختياري ومفتاحه مش متحط
     out.push({ provider: name, model: '', ok: false,
       error: key ? `${ep.key} قيمته غلط (${key.length} حرف) — اعمله من جديد` : `${ep.key} مش متظبط` });
   }
 
   for (const p of await buildAttempts(env)) {
+    await pace(p.name);
     const t0 = Date.now();
     try {
       // 400 توكن عشان الموديلات اللي "بتفكر" الأول يلحقوا يردوا

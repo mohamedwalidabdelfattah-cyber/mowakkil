@@ -7,7 +7,7 @@
 // - بتتحدث لوحدها كل يوم من الـ cron، أو فوراً لو نموذج رجّع "مش موجود".
 // - لو الاكتشاف فشل لأي سبب → بنرجع لقايمة افتراضية آمنة.
 
-const KV_KEY = 'llm:models:v1';
+const KV_KEY = 'llm:models:v2'; // v2: Mistral/Cerebras اتضافوا (GitHub Models اتقفلت نهائياً 30/7/2026)
 // الـ cron بيحدّث كل يوم، والـ TTL أطول من يوم عشان المستخدم عمره ما يستنى اكتشاف جديد
 const TTL_SECONDS = 36 * 60 * 60;
 const secret = (env, name) => String(env?.[name] ?? '').trim();
@@ -17,6 +17,8 @@ export const DEFAULT_MODELS = {
   groq: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'],
   gemini: ['gemini-flash-latest', 'gemini-flash-lite-latest'],
   openrouter: [],
+  mistral: ['mistral-large-latest', 'mistral-medium-latest'],
+  cerebras: ['gpt-oss-120b'],
 };
 
 let memo = null; // { at, models }
@@ -95,13 +97,49 @@ async function discoverOpenRouter(env) {
   return free.sort((a, b) => score(b) - score(a)).slice(0, 3).map(m => m.id);
 }
 
+// ---------------- Mistral (اختياري) ----------------
+// Mistral Large قوي جداً في العربي. الخطة المجانية (Experiment) ممكن تستخدم البيانات في التدريب
+// → زي OpenRouter: مستبعد من أي طلب فيه بيانات موكلين (route 'balanced').
+const MISTRAL_PREFERRED = ['mistral-large-latest', 'mistral-medium-latest', 'magistral-medium-latest', 'mistral-saba-latest', 'mistral-small-latest'];
+async function discoverMistral(env) {
+  const key = secret(env, 'MISTRAL_API_KEY');
+  if (key.length < 20) return null;
+  const res = await fetch('https://api.mistral.ai/v1/models', {
+    headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`mistral models ${res.status}`);
+  const ids = ((await res.json()).data || []).map(m => String(m.id || ''));
+  return MISTRAL_PREFERRED.filter(id => ids.includes(id)).slice(0, 3);
+}
+
+// ---------------- Cerebras (اختياري) ----------------
+// أسرع استدلال (آلاف التوكنز في الثانية) — نماذج مفتوحة كبيرة.
+async function discoverCerebras(env) {
+  const key = secret(env, 'CEREBRAS_API_KEY');
+  if (key.length < 20) return null;
+  const res = await fetch('https://api.cerebras.ai/v1/models', {
+    headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`cerebras models ${res.status}`);
+  const ids = ((await res.json()).data || []).map(m => String(m.id || '')).filter(Boolean);
+  const size = id => { const m = id.match(/(\d+)b/i); return m ? +m[1] : 0; };
+  const score = id => (id === 'gpt-oss-120b' ? 1000 : 0) + (/qwen/i.test(id) ? 300 : 0) + size(id);
+  return ids.filter(id => !/8b$|guard|embed/i.test(id)).sort((a, b) => score(b) - score(a)).slice(0, 3);
+}
+
 // ---------------- تجربة فعلية لكل نموذج ----------------
 // القايمة لوحدها مش كفاية: Google مثلاً لسه بيعرض gemini-2.5-flash في القايمة
 // بس بيرفضه للحسابات الجديدة. فبنبعت سؤال صغير جداً ونحتفظ باللي بيرد بس.
+// noClientData: الخطة المجانية بتسمح للمزود يستخدم المدخلات في التدريب
+//   → مستبعد من أي طلب فيه بيانات موكلين (route 'balanced')، ومتاح للأسئلة القانونية العامة بس.
+//   ملحوظة: Gemini المجاني كمان شروطه بتسمح بتحسين المنتجات من المدخلات — لسه مسموح في 'balanced' زي ما كان (قرار مفتوح).
+// optional: لو مفتاحه مش موجود مبنعتبرهاش مشكلة في فحص السوبر أدمن.
 export const ENDPOINTS = {
-  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', key: 'GROQ_API_KEY' },
   gemini: { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', key: 'GEMINI_API_KEY' },
-  openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', key: 'OPENROUTER_API_KEY' },
+  mistral: { url: 'https://api.mistral.ai/v1/chat/completions', key: 'MISTRAL_API_KEY', optional: true, noClientData: true },
+  cerebras: { url: 'https://api.cerebras.ai/v1/chat/completions', key: 'CEREBRAS_API_KEY', optional: true },
+  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', key: 'GROQ_API_KEY' },
+  openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', key: 'OPENROUTER_API_KEY', optional: true, noClientData: true },
 };
 
 async function probe(env, provider, model) {
@@ -109,7 +147,7 @@ async function probe(env, provider, model) {
   const res = await fetch(ep.url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret(env, ep.key)}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ok' }], max_tokens: 16 }),
+    body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ok' }], ...(/(^|\/)(gpt-5|o\d)/i.test(model) ? { max_completion_tokens: 64 } : { max_tokens: 16 }) }),
     signal: AbortSignal.timeout(20000),
   });
   // 429 = النموذج موجود بس الحصة خلصت مؤقتاً → نعتبره شغال
@@ -128,7 +166,7 @@ async function keepWorking(env, provider, list) {
 /** يسأل كل المزودين، يجرب نماذجهم، ويحفظ الشغال. أي مزود يفشل → قايمته الافتراضية. */
 export async function refreshModels(env) {
   const models = {}; const errors = {};
-  const jobs = { gemini: discoverGemini, groq: discoverGroq, openrouter: discoverOpenRouter };
+  const jobs = { gemini: discoverGemini, groq: discoverGroq, openrouter: discoverOpenRouter, mistral: discoverMistral, cerebras: discoverCerebras };
   await Promise.all(Object.entries(jobs).map(async ([name, fn]) => {
     try {
       const list = await fn(env);
