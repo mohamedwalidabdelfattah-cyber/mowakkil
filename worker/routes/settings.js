@@ -91,6 +91,11 @@ async function update({ request, env, authUser, officeId }) {
     'expense_approval_limit', // المصروفات اللي فوقه محتاجة موافقة المدير (المتقدمة)
     'country', // دولة المكتب: EG | SA
   ];
+  // طريقة عرض التاريخ: hijri | gregorian | both (فاضي = الافتراضي حسب الدولة)
+  if (b.date_format !== undefined) {
+    if (b.date_format === null || b.date_format === '') b.date_format = null;
+    else if (!['hijri', 'gregorian', 'both'].includes(b.date_format)) return fail(env, 'طريقة عرض التاريخ مش مدعومة', 400);
+  }
   if (b.country !== undefined) {
     const c = String(b.country || '').toUpperCase();
     if (!COUNTRIES[c]) return fail(env, 'الدولة مش مدعومة', 400);

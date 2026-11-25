@@ -6,7 +6,7 @@ import { apiJson, api, hasFeature } from '../api.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
 import { esc, toast, skeleton } from '../ui.js';
 import { can } from '../access.js';
-import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi, dateMode, showsHijri } from '../country.js';
 
 // ============================================================
 // الأنواع
@@ -157,21 +157,32 @@ function refresh() {
 function updateRangeLabel() {
   const el = hostEl?.querySelector('#ag-range');
   if (!el) return;
-  const fmt = (d, o) => d.toLocaleDateString(dateLocale(), o);
+  const mode = dateMode();
+  const greg = (d, o) => d.toLocaleDateString(dateLocale(), o);
+  const hij = (d, o) => hijriDate(d, o);
+  // مدى بين تاريخين حسب طريقة العرض (هجري / ميلادي / الاتنين)
+  const range = (s, e) => {
+    const g = `${greg(s, { day: 'numeric', month: 'long' })} – ${greg(e, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    const h = `${hij(s, { day: 'numeric', month: 'long' })} – ${hij(e, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    return mode === 'hijri' ? h : mode === 'both' ? `${h} · ${g}` : g;
+  };
   if (currentView === 'list') {
     const s = new Date(); s.setDate(s.getDate() + listOffset);
     const e = new Date(s); e.setDate(e.getDate() + 30);
-    el.textContent = `${fmt(s, { day: 'numeric', month: 'long' })} – ${fmt(e, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    el.textContent = range(s, e);
     return;
   }
   if (!calendar) return;
   const cur = calendar.getDate().toDate();
-  if (currentView === 'month') el.textContent = fmt(cur, { month: 'long', year: 'numeric' });
-  else if (currentView === 'day') el.textContent = fmt(cur, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  else {
-    const s = calendar.getDateRangeStart().toDate(), e = calendar.getDateRangeEnd().toDate();
-    el.textContent = `${fmt(s, { day: 'numeric', month: 'long' })} – ${fmt(e, { day: 'numeric', month: 'long', year: 'numeric' })}`;
-  }
+  if (currentView === 'month') {
+    // الشهر الميلادي بيغطي شهرين هجري: "جمادى الأولى – جمادى الآخرة 1448 هـ"
+    const first = new Date(cur.getFullYear(), cur.getMonth(), 1), last = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+    const h1 = hij(first, { month: 'long' }), h2 = hij(last, { month: 'long', year: 'numeric' });
+    const h = h1 && h2.startsWith(h1) ? h2 : `${h1} – ${h2}`;
+    const g = greg(cur, { month: 'long', year: 'numeric' });
+    el.textContent = mode === 'hijri' ? h : mode === 'both' ? `${h} · ${g}` : g;
+  } else if (currentView === 'day') el.textContent = fmtDay(cur, 'long');
+  else el.textContent = range(calendar.getDateRangeStart().toDate(), calendar.getDateRangeEnd().toDate());
 }
 
 // ============================================================
@@ -235,18 +246,29 @@ function initCalendar(host, kinds) {
       weekGridFooterExceed(n) { return `+${n} كمان`; },
       alldayTitle() { return '<span class="ag-allday-title">طول اليوم</span>'; },
       // خانة اليوم في عرض الشهر: رقم اليوم، وفي السعودية اليوم الهجري جنبه (وأول الشهر الهجري باسمه)
+      // خانة اليوم في عرض الشهر حسب طريقة عرض التاريخ:
+      // هجري: رقم اليوم الهجري (وأول الشهر الهجري باسمه) — الاتنين: الميلادي + الهجري جنبه — ميلادي: الميلادي بس
       monthGridHeader(model) {
+        const mode = dateMode();
         const n = parseInt(String(model.date).split('-')[2], 10);
-        const day = `<span class="toastui-calendar-weekday-grid-date${model.isToday ? ' toastui-calendar-weekday-grid-date-decorator' : ''}">${n}</span>`;
-        if (!isSaudi()) return day;
+        const cls = `toastui-calendar-weekday-grid-date${model.isToday ? ' toastui-calendar-weekday-grid-date-decorator' : ''}`;
+        if (mode === 'gregorian') return `<span class="${cls}">${n}</span>`;
         const hd = hijriDate(model.date, { day: 'numeric' });
-        const label = hd === '1' ? hijriDate(model.date, { day: 'numeric', month: 'short' }) : hd;
-        return `<span class="ag-mcell">${day}<small class="ag-hday${hd === '1' ? ' first' : ''}" title="هجري">${esc(label)}</small></span>`;
+        const monthName = hd === '1' ? hijriDate(model.date, { month: 'long' }) : '';
+        if (mode === 'hijri') {
+          return `<span class="ag-mcell"><span class="${cls}">${esc(hd)}</span>${monthName ? `<small class="ag-hday first">${esc(monthName)}</small>` : ''}</span>`;
+        }
+        const label = monthName ? `${hd} ${monthName}` : hd;
+        return `<span class="ag-mcell"><span class="${cls}">${n}</span><small class="ag-hday${monthName ? ' first' : ''}" title="هجري">${esc(label)}</small></span>`;
       },
       // رأس الأسبوع/اليوم: الرقم فوق واسم اليوم تحته في النص (على الشاشات الضيقة بيظهر الاسم المختصر)
       weekDayName(m) {
+        const mode = dateMode();
         const d = m.dateInstance?.toDate?.(); const isToday = d ? d.toDateString() === new Date().toDateString() : false;
-        return `<span class="ag-wdn${isToday ? ' today' : ''}"><b>${esc(String(m.date))}</b>`
+        const hd = d && mode !== 'gregorian' ? hijriDate(d, { day: 'numeric' }) : '';
+        const num = mode === 'hijri' && hd ? hd : String(m.date);
+        const extra = mode === 'both' && hd ? `<span class="ag-wdn-h">${esc(hd)}</span>` : '';
+        return `<span class="ag-wdn${isToday ? ' today' : ''}"><b>${esc(num)}${extra}</b>`
           + `<small><span class="ag-wdn-long">${esc(m.dayName)}</span><span class="ag-wdn-short">${esc(SHORT_DAY_NAMES[m.day] || m.dayName)}</span></small></span>`;
       },
       timegridDisplayPrimaryTime({ time }) {
@@ -389,8 +411,10 @@ function renderList() {
     return `
       <section class="ag-day ${d === today ? 'today' : ''} ${d < today ? 'past' : ''}">
         <div class="ag-day-head">
-          <span class="ag-day-num">${dt.getDate()}</span>
-          <span class="ag-day-name">${esc(dt.toLocaleDateString(dateLocale(), { weekday: 'long', month: 'long', year: 'numeric' }))}${isSaudi() ? ` <small class="ag-hijri">${esc(hijriDate(dt))}</small>` : ''}</span>
+          <span class="ag-day-num">${dateMode() === 'hijri' ? esc(hijriDate(dt, { day: 'numeric' })) : dt.getDate()}</span>
+          <span class="ag-day-name">${dateMode() === 'hijri'
+            ? esc(hijriDate(dt, { weekday: 'long', month: 'long', year: 'numeric' }))
+            : esc(dt.toLocaleDateString(dateLocale(), { weekday: 'long', month: 'long', year: 'numeric' })) + (dateMode() === 'both' ? ` <small class="ag-hijri">${esc(hijriDate(dt))}</small>` : '')}</span>
           ${d === today ? '<span class="badge active">النهارده</span>' : ''}
         </div>
         ${evs.map(ev => {

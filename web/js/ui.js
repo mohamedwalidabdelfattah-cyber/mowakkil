@@ -2,7 +2,7 @@
 import { clearSession } from './api.js';
 import { clearState } from './state.js';
 import { normalizePhone } from './phone.js';
-import { setCountry, countryInfo, fmtDay } from './country.js';
+import { setCountry, countryInfo, fmtDay, setDateMode } from './country.js';
 
 // ============ Toast ============
 export function toast(msg, type = '') {
@@ -155,6 +155,7 @@ export function setOfficeMoneyPrefs(s = {}) {
     if (s.vat_rate !== undefined && s.vat_rate !== null) localStorage.setItem('mowakkil_vat', String(s.vat_rate));
   } catch {}
   if (s.country) setCountry(s.country); // دولة المكتب (مصر/السعودية)
+  if ('date_format' in s) setDateMode(s.date_format); // هجري / ميلادي / الاتنين (فاضي = الافتراضي حسب الدولة)
 }
 export function defaultVat() {
   const fallback = countryInfo().vat;

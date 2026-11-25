@@ -44,7 +44,7 @@ const trimArticle = t => {
 };
 
 // بحث نصي احتياطي (لما Vectorize فاضي أو مفيش نتايج) — اختياري مقصور على قوانين معينة
-export async function keywordArticles(env, query, lawHints = [], limit = 8) {
+export async function keywordArticles(env, query, lawHints = [], limit = 8, country = 'EG') {
   const words = String(query || '')
     .replace(/[؟?.,،:؛!()"'«»\-]/g, ' ')
     .split(/\s+/)
@@ -55,7 +55,8 @@ export async function keywordArticles(env, query, lawHints = [], limit = 8) {
   const wordCond = words.map(() => 'article_text LIKE ?').join(' OR ');
   const binds = words.map(w => `%${w}%`);
   let sql = `SELECT id, law_name, law_number, article_number, article_text, source_url
-             FROM law_articles WHERE (${wordCond})`;
+             FROM law_articles WHERE country = ? AND (${wordCond})`;
+  binds.unshift(country === 'SA' ? 'SA' : 'EG');
   if (lawHints.length) {
     sql += ` AND (${lawHints.map(() => 'law_name LIKE ?').join(' OR ')})`;
     binds.push(...lawHints.map(h => `%${h}%`));
@@ -75,26 +76,29 @@ export async function keywordArticles(env, query, lawHints = [], limit = 8) {
 }
 
 // بحث دلالي (Vectorize) مع fallback نصي — بيرجع مواد قانونية مقصوصة الطول
-export async function findRelevantArticles(env, query, { lawHints = [], topK = 8 } = {}) {
+// country: مواد دولة المكتب بس (مصر / السعودية)
+export async function findRelevantArticles(env, query, { lawHints = [], topK = 8, country = 'EG' } = {}) {
   const safeQuery = String(query || '').slice(0, 1500);
+  const c = country === 'SA' ? 'SA' : 'EG';
   try {
     const emb = await env.AI.run('@cf/baai/bge-m3', { text: [safeQuery] });
-    const vr = await env.VECTORIZE.query(emb.data[0], { topK, returnMetadata: 'none' });
+    // بنجيب عدد أكبر وبنفلتر بالدولة من الداتابيز (الفهرس فيه المصري والسعودي مع بعض)
+    const vr = await env.VECTORIZE.query(emb.data[0], { topK: Math.min(50, topK * 5), returnMetadata: 'none' });
     const ids = (vr.matches || []).filter(m => (m.score ?? 0) >= 0.45).map(m => m.id);
     if (ids.length) {
       const r = await env.DB.prepare(
         `SELECT id, law_name, law_number, article_number, article_text, source_url
-         FROM law_articles WHERE id IN (${ids.map(() => '?').join(',')})`
-      ).bind(...ids).all();
+         FROM law_articles WHERE country = ? AND id IN (${ids.map(() => '?').join(',')})`
+      ).bind(c, ...ids).all();
       const byId = new Map((r.results || []).map(x => [String(x.id), x]));
-      const rows = ids.map(id => byId.get(String(id))).filter(Boolean);
+      const rows = ids.map(id => byId.get(String(id))).filter(Boolean).slice(0, topK);
       if (rows.length) return { method: 'vector', articles: rows.map(a => ({ ...a, article_text: trimArticle(a.article_text) })) };
     }
   } catch (e) {
     console.warn('vector search failed:', e.message);
   }
-  let rows = await keywordArticles(env, safeQuery, lawHints, topK);
-  if (!rows.length && lawHints.length) rows = await keywordArticles(env, safeQuery, [], topK);
+  let rows = await keywordArticles(env, safeQuery, lawHints, topK, c);
+  if (!rows.length && lawHints.length) rows = await keywordArticles(env, safeQuery, [], topK, c);
   return { method: 'keyword', articles: rows.map(a => ({ ...a, article_text: trimArticle(a.article_text) })) };
 }
 
@@ -107,17 +111,37 @@ const UNSUPPORTED_TOPICS = [
 export async function legalSearch(env, query, { country = 'EG' } = {}) {
   const safeQuery = String(query).slice(0, 500);
 
-  // المكتب السعودي: قاعدة النصوص الحالية مصرية — نجاوب من الأنظمة السعودية مباشرة وننبّه
+  // المكتب السعودي: نصوص الأنظمة السعودية من القاعدة (الإثبات، المعاملات المدنية، الأحوال الشخصية، الشركات…)
   if (country === 'SA') {
     try {
+      const { articles } = await findRelevantArticles(env, safeQuery, { topK: 8, country: 'SA' });
+      if (articles.length) {
+        const context = articles
+          .map((r, i) => `[${i + 1}] ${r.law_name} (${r.law_number || ''}) — ${r.article_number}:\n${r.article_text}`)
+          .join('\n\n');
+        const prompt = localizeLegalPrompt(`قدّم استشارة قانونية لزميل.
+
+**السؤال:** ${safeQuery}
+
+**نصوص الأنظمة السعودية المتاحة من القاعدة (منقولة من الجريدة الرسمية):**
+${context}
+
+**قواعد صارمة:**
+1. استشهد بهذه النصوص بأرقام موادها وأسماء أنظمتها كما هي، ولا تخترع مواد.
+2. لو النصوص غير متعلقة بالسؤال أو غير كافية، قل ذلك صراحة في أول سطر، ثم أجب من معرفتك بالأنظمة السعودية مع التنبيه على ضرورة مراجعة النص الرسمي.
+3. الترتيب: الإجابة المباشرة، ثم التحليل النظامي، ثم النقاط العملية، ثم المصادر.`, 'SA');
+        const answer = await callAI(env, prompt, 1400, localizeLegalPrompt(DEFAULT_SYSTEM, 'SA'));
+        return { answer: answer ? await withCitationCheck(env, answer) : buildFallbackAnswer(articles), sources: articles };
+      }
+      // مفيش نصوص قريبة: نجاوب من المعرفة العامة بالأنظمة وننبّه
       const answer = await callAI(env,
         localizeLegalPrompt(`السؤال: ${safeQuery}\n\nجاوب كاستشارة قانونية لزميل: الملخص، ثم التحليل وفق الأنظمة السعودية، ثم التوصيات العملية، ثم الأنظمة والمواد ذات الصلة (لو متأكد منها).`, 'SA'),
         1400, localizeLegalPrompt(DEFAULT_SYSTEM, 'SA'));
       return {
         answer: (answer || 'تعذر الحصول على إجابة الآن، حاول مرة أخرى.') +
-          '\n\n---\nℹ️ قاعدة نصوص الأنظمة السعودية قيد الإضافة؛ الإجابة مبنية على المعرفة العامة بالأنظمة، فراجع النص الرسمي قبل الاعتماد عليها.',
+          '\n\n---\nℹ️ لم تُوجد نصوص قريبة من السؤال في قاعدة الأنظمة السعودية (المتاح حالياً: الإثبات، المعاملات المدنية، الأحوال الشخصية، الشركات)؛ الإجابة مبنية على المعرفة العامة بالأنظمة، فراجع النص الرسمي قبل الاعتماد عليها.',
         sources: [],
-        notice: 'sa_db_pending',
+        notice: 'sa_no_match',
       };
     } catch (e) {
       console.error('SA legal search failed:', e.message);
@@ -176,7 +200,7 @@ export async function legalSearch(env, query, { country = 'EG' } = {}) {
   const placeholders = ids.map(() => '?').join(',');
   const dbResult = await env.DB.prepare(
     `SELECT id, law_name, law_number, article_number, article_text, source_url
-     FROM law_articles WHERE id IN (${placeholders})`
+     FROM law_articles WHERE country = 'EG' AND id IN (${placeholders})`
   ).bind(...ids).all();
 
   const byId = new Map(dbResult.results.map(r => [String(r.id), r]));
@@ -225,7 +249,7 @@ async function fallbackSearch(env, query) {
   const binds = words.map(w => `%${w}%`);
   const r = await env.DB.prepare(
     `SELECT law_name, law_number, article_number, article_text, source_url
-     FROM law_articles WHERE ${conditions} LIMIT 10`
+     FROM law_articles WHERE country = 'EG' AND (${conditions}) LIMIT 10`
   ).bind(...binds).all();
   const results = r.results || [];
   if (!results.length) return { answer: 'مفيش نصوص قانونية تطابق السؤال.', sources: [] };
@@ -254,12 +278,12 @@ function buildFallbackAnswer(results) {
 // ============================================================
 // دالة البحث في الداتابيز (للاستخدام كأداة في الـ Agent)
 // ============================================================
-export async function searchLegalDb(env, query) {
+export async function searchLegalDb(env, query, { country = 'EG' } = {}) {
   const safeQuery = String(query).slice(0, 500);
 
-  // كشف المواضيع غير المغطاة
+  // كشف المواضيع غير المغطاة (المصري بس — النظام السعودي للأحوال الشخصية موجود في القاعدة)
   const lowerQuery = safeQuery.toLowerCase();
-  const unsupportedTopic = UNSUPPORTED_TOPICS.find(t => lowerQuery.includes(t));
+  const unsupportedTopic = country === 'SA' ? null : UNSUPPORTED_TOPICS.find(t => lowerQuery.includes(t));
 
   if (unsupportedTopic) {
     return {
@@ -270,9 +294,9 @@ export async function searchLegalDb(env, query) {
     };
   }
 
-  const { articles, method } = await findRelevantArticles(env, safeQuery, { topK: 8 });
+  const { articles, method } = await findRelevantArticles(env, safeQuery, { topK: 8, country });
   if (!articles.length) {
-    return { source: 'db', results: [], message: 'مفيش نتايج في الداتابيز' };
+    return { source: 'db', results: [], message: country === 'SA' ? 'لا توجد مواد مطابقة في قاعدة الأنظمة السعودية (المتاح: الإثبات، المعاملات المدنية، الأحوال الشخصية، الشركات)' : 'مفيش نتايج في الداتابيز' };
   }
   const results = articles.map(r => ({
     law_name: r.law_name,

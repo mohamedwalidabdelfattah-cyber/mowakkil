@@ -1208,9 +1208,16 @@ body .search-result-item.selected, body .search-result-item:hover { background: 
 .calendar-host .toastui-calendar-grid-cell-date:has(.ag-mcell) { width: auto !important; min-width: 0 !important; direction: ltr !important; display: inline-block; }
 .calendar-host .ag-hday { direction: rtl; unicode-bidi: isolate; font-size: 10.5px; line-height: 1.5; color: #027A48; background: #ECFDF3; border-radius: 6px; padding: 0 5px; font-weight: 700; }
 .calendar-host .ag-hday.first { color: #fff; background: #12B76A; }
+.ag-wdn-h { font-size: 10.5px; font-weight: 700; color: #027A48; background: #ECFDF3; border-radius: 6px; padding: 0 4px; margin-inline-start: 4px; vertical-align: middle; }
+.ag-wdn.today .ag-wdn-h { background: rgba(255,255,255,.2); color: #fff; }
 
 /* ===== اختيار دولة المكتب (التسجيل والإعدادات) ===== */
 .country-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.date-mode-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.date-mode-pick .country-opt { font-size: 14px; padding: 10px 6px; }
+@media (max-width: 480px) { .date-mode-pick { grid-template-columns: 1fr; } }
+/* التاريخ الهجري المقابل تحت خانات إدخال التاريخ */
+.hijri-hint { display: block; font-size: 12px; font-weight: 600; color: #027A48; margin-top: 4px; }
 .country-opt { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1.5px solid var(--border); border-radius: 12px; background: var(--surface, #fff); color: var(--text); font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 .country-opt .cf { font-size: 20px; line-height: 1; }
 /* ويندوز مبيرسمش أعلام الدول (بيكتب EG / SA) — نخفيها هناك */

@@ -19,7 +19,7 @@ export function clearSession() {
   localStorage.removeItem(STORAGE_KEYS.OFFICE);
   localStorage.removeItem('mowakkil_access'); // صلاحيات المستخدم اللي خرج (web/js/access.js)
   // دولة وعملة وضريبة المكتب اللي خرج (اللي هيدخل بعده ممكن يكون مكتب في دولة تانية)
-  ['mowakkil_country', 'mowakkil_currency', 'mowakkil_vat'].forEach(k => localStorage.removeItem(k));
+  ['mowakkil_country', 'mowakkil_currency', 'mowakkil_vat', 'mowakkil_date_mode'].forEach(k => localStorage.removeItem(k));
   clearOffline(); // بيانات الشغل من غير نت على الجهاز
 }
 export function setSAToken(t)  { localStorage.setItem(STORAGE_KEYS.SA_TOKEN, t); }

@@ -34,7 +34,7 @@ function chatWelcome(withFiles) {
   const p = (inner) => `<h3 style="margin:0 0 8px;font-size:20px">${isSaudi() ? 'أهلاً بك!' : 'أهلاً بيك!'}</h3>
     <p style="color:var(--text-soft);margin:0 0 20px;font-size:14px;line-height:1.7">${inner}</p>`;
   if (isSaudi()) {
-    return p(`أنا مساعدك القانوني، أجيب وفق <strong>الأنظمة السعودية</strong>، ويمكنني البحث في <strong>الإنترنت</strong> عند الحاجة.`
+    return p(`أنا مساعدك القانوني، أجيب وفق <strong>الأنظمة السعودية</strong> مستندًا إلى نصوصها الرسمية (الإثبات، المعاملات المدنية، الأحوال الشخصية، الشركات — <strong>1,559 مادة</strong>)، ويمكنني البحث في <strong>الإنترنت</strong> عند الحاجة.`
       + (withFiles ? '<br>يمكنك أيضًا رفع ملف (PDF/Word/صورة) لأحلّله.' : ''));
   }
   return p(`أنا مساعدك القانوني. بستخدم قاعدة بيانات فيها <strong>5,828 مادة قانونية</strong>

@@ -277,6 +277,16 @@ function renderOfficeTab(s, isAdmin) {
         <button type="button" class="country-opt ${c === 'SA' ? 'active' : ''}" role="radio" aria-checked="${c === 'SA'}" data-set-country="SA" ${!isAdmin ? 'disabled' : ''}><span class="cf">🇸🇦</span> السعودية</button>
       </div>
       ${!isAdmin ? '<div class="meta" style="margin-top:8px">مالك المكتب بس اللي يقدر يغيّر الدولة.</div>' : ''}
+      <div style="margin-top:16px">
+        <strong>📅 عرض التاريخ في النظام</strong>
+        <div class="meta" style="margin:4px 0 8px">في كل الشاشات: الأجندة والجلسات والقوايم وخانات إدخال التاريخ ورسايل واتساب. (التواريخ بتتحفظ زي ما هي — ده بيغيّر طريقة العرض بس)</div>
+        <div class="date-mode-pick" role="radiogroup" aria-label="عرض التاريخ">
+          ${[['hijri', '🌙 هجري'], ['gregorian', '📆 ميلادي'], ['both', '🌙📆 هجري وميلادي']].map(([k, l]) => {
+            const cur = s.date_format || (c === 'SA' ? 'hijri' : 'gregorian');
+            return `<button type="button" class="country-opt ${cur === k ? 'active' : ''}" role="radio" aria-checked="${cur === k}" data-set-date="${k}" ${!isAdmin ? 'disabled' : ''}>${l}</button>`;
+          }).join('')}
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -776,6 +786,17 @@ function bindTabEvents(host, tab, settings) {
 
   // 1. المكتب
   if (tab === 'office') {
+    // طريقة عرض التاريخ (هجري / ميلادي / الاتنين)
+    host.querySelectorAll('[data-set-date]').forEach(b => b.addEventListener('click', async () => {
+      if (b.classList.contains('active')) return;
+      const date_format = b.dataset.setDate;
+      try {
+        await apiJson('/api/settings', { method: 'PATCH', body: JSON.stringify({ date_format }) });
+        setOfficeMoneyPrefs({ date_format });
+        host.querySelectorAll('[data-set-date]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-checked', String(on)); });
+        toast('✅ اتغيّرت طريقة عرض التاريخ', 'ok');
+      } catch (e) { toast('⚠️ ' + e.message, 'bad'); }
+    }));
     // دولة المكتب: بتغيّر العملة والضريبة والتوقيت وتعيد تحميل البرنامج بالإعدادات الجديدة
     host.querySelectorAll('[data-set-country]').forEach(b => b.addEventListener('click', async () => {
       const to = b.dataset.setCountry;
@@ -784,7 +805,8 @@ function bindTabEvents(host, tab, settings) {
         ? 'تحويل المكتب للسعودية؟\n\n• العملة: ريال سعودي، والضريبة 15%\n• التوقيت: الرياض، والتواريخ هجري وميلادي\n• المحاكم وأنواع القضايا والأنظمة السعودية\n\nالمبالغ المسجلة قبل كده مش بتتحوّل (بتفضل بأرقامها).'
         : 'تحويل المكتب لمصر؟\n\n• العملة: جنيه مصري، والضريبة 14%\n• التوقيت: القاهرة، والتواريخ ميلادي\n• المحاكم وأنواع القضايا والقوانين المصرية\n\nالمبالغ المسجلة قبل كده مش بتتحوّل (بتفضل بأرقامها).';
       if (!confirm(msg)) return;
-      const d = to === 'SA' ? { country: 'SA', currency: 'SAR', vat_rate: 15 } : { country: 'EG', currency: 'EGP', vat_rate: 14 };
+      // date_format: null → التاريخ يرجع لافتراضي الدولة (السعودية هجري، مصر ميلادي)
+      const d = to === 'SA' ? { country: 'SA', currency: 'SAR', vat_rate: 15, date_format: null } : { country: 'EG', currency: 'EGP', vat_rate: 14, date_format: null };
       try {
         await apiJson('/api/settings', { method: 'PATCH', body: JSON.stringify(d) });
         setOfficeMoneyPrefs(d);

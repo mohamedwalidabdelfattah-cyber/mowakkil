@@ -80,10 +80,10 @@ const TOOLS = [
 // ============================================================
 // تنفيذ الأدوات
 // ============================================================
-async function executeTool(env, toolName, args) {
+async function executeTool(env, toolName, args, { country = 'EG' } = {}) {
   if (toolName === 'search_legal_db') {
     const { searchLegalDb } = await import('./legal-search.js');
-    return await searchLegalDb(env, args.query);
+    return await searchLegalDb(env, args.query, { country });
   }
   if (toolName === 'search_web') {
     return await searchWeb(env, args.query);
@@ -162,7 +162,13 @@ export async function chatWithAgent(env, messages, officeId, attachmentText = nu
 
   // المكتب السعودي: تعليمات الأنظمة السعودية، ومن غير البحث في قاعدة النصوص المصرية
   const country = await officeCountry(env, officeId);
-  const tools = country === 'SA' ? TOOLS.filter(t => t.function.name !== 'search_legal_db') : TOOLS;
+  // المكتب السعودي: أداة القاعدة بتدوّر في الأنظمة السعودية (وصفها بيتغير عشان الموديل يستخدمها صح)
+  const tools = country === 'SA'
+    ? TOOLS.map(t => (t.function.name !== 'search_legal_db' ? t : {
+        ...t,
+        function: { ...t.function, description: 'ابحث في قاعدة الأنظمة السعودية الرسمية (نظام الإثبات، نظام المعاملات المدنية، نظام الأحوال الشخصية ولائحته، نظام الشركات، الأدلة الإجرائية لنظام الإثبات) عن مواد ذات صلة. استخدمها لأي سؤال في هذه المجالات.' },
+      }))
+    : TOOLS;
   const currentMessages = [
     { role: 'system', content: localizeLegalPrompt(SYSTEM_PROMPT, country) },
     ...processedMessages,
@@ -193,7 +199,7 @@ export async function chatWithAgent(env, messages, officeId, attachmentText = nu
         } catch (e) {
           console.warn('tool args parse failed:', e.message);
         }
-        const toolResult = await executeTool(env, toolCall.function.name, args);
+        const toolResult = await executeTool(env, toolCall.function.name, args, { country });
         currentMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,

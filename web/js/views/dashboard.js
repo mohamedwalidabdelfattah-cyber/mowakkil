@@ -6,7 +6,7 @@ import { esc, empty, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, 
 import { icon } from '../icons.js';
 import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
 import { PALETTE, SERIES, areaGradient } from '../chart-theme.js';
-import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
+import { dateLocale, fmtDay, hijriDate, isSaudi, dateMode } from '../country.js';
 
 let charts = {};
 
@@ -267,6 +267,8 @@ function fmtShortDate(s) {
   if (!s) return '—';
   const d = new Date(s);
   if (isNaN(d)) return s;
+  // هجري: "الثلاثاء 14 جمادى الآخرة" — حسب إعداد عرض التاريخ
+  if (dateMode() === 'hijri') return hijriDate(d, { weekday: 'long', day: 'numeric', month: 'long' });
   return d.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
 }
 

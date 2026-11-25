@@ -11,6 +11,7 @@ import { loadAccess, canView, guardActions, clearAccess } from './access.js';
 import { startOffline } from './offline.js';
 import { apiJson } from './api.js';
 import { startMSA } from './msa.js';
+import { startDateDom } from './date-dom.js';
 import { getCurrentView } from './router.js';
 
 applyChartTheme();
@@ -265,11 +266,20 @@ if (getToken()) {
   initSubscription();
   // الفصحى المبسطة للمكاتب السعودية (طبقة عرض — المصري زي ما هو)
   startMSA();
+  // التواريخ بالهجري في كل الشاشات (حسب إعداد المكتب — السعودية هجري افتراضياً)
+  startDateDom();
   apiJson('/api/settings').then(setOfficeMoneyPrefs).catch(() => {}); // عملة المكتب ونسبة الضريبة ودولته
   // لو دولة المكتب طلعت غير اللي كانت محفوظة على الجهاز: القايمة والشاشة الحالية تتبني تاني بالمسميات الصح
   document.addEventListener('mowakkil:country-changed', () => {
     startMSA(); // بتقفل نفسها لو المكتب مصري
+    startDateDom();
     document.dispatchEvent(new CustomEvent('mowakkil:access-changed'));
+    const v = getCurrentView();
+    if (v) showView(v);
+  });
+  // تغيير طريقة عرض التاريخ من الإعدادات: الشاشة الحالية تتبني تاني بالتاريخ الجديد
+  document.addEventListener('mowakkil:date-mode-changed', () => {
+    startDateDom();
     const v = getCurrentView();
     if (v) showView(v);
   });

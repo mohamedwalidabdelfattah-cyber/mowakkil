@@ -55,9 +55,27 @@ export function hijriDate(d, opts = { day: 'numeric', month: 'long', year: 'nume
   try { return new Intl.DateTimeFormat(HIJRI_LOCALE, opts).format(x); } catch { return ''; }
 }
 
+// ============ طريقة عرض التاريخ (من إعدادات المكتب) ============
+// hijri: هجري بس — gregorian: ميلادي بس — both: الاتنين
+// الافتراضي: السعودية هجري، مصر ميلادي. التخزين في الداتابيز دايماً ميلادي (YYYY-MM-DD) — ده عرض بس.
+const DATE_KEY = 'mowakkil_date_mode';
+export const DATE_MODES = { hijri: 'هجري', gregorian: 'ميلادي', both: 'هجري وميلادي' };
+export function dateMode() {
+  try { const m = localStorage.getItem(DATE_KEY); if (DATE_MODES[m]) return m; } catch {}
+  return country() === 'SA' ? 'hijri' : 'gregorian';
+}
+export function setDateMode(m) {
+  const v = DATE_MODES[m] ? m : null;
+  const before = dateMode();
+  try { if (v) localStorage.setItem(DATE_KEY, v); else localStorage.removeItem(DATE_KEY); } catch {}
+  if (dateMode() !== before) document.dispatchEvent(new CustomEvent('mowakkil:date-mode-changed', { detail: { mode: dateMode() } }));
+}
+export const showsHijri = () => dateMode() !== 'gregorian';
+export const hijriFirst = () => dateMode() === 'hijri';
+
 /**
- * تاريخ للعرض: ميلادي، وفي السعودية بيتضاف الهجري جنبه
- * style: 'long' (السبت 21 نوفمبر 2026 · 30 جمادى الأولى 1448 هـ) | 'short' | 'month'
+ * تاريخ للعرض حسب إعداد المكتب (هجري / ميلادي / الاتنين)
+ * style: 'long' (الأربعاء، 15 جمادى الآخرة 1448 هـ) | 'short' | 'month' | 'weekday'
  */
 export function fmtDay(d, style = 'long') {
   const x = asDate(d);
@@ -66,12 +84,24 @@ export function fmtDay(d, style = 'long') {
     : style === 'month' ? { month: 'long', year: 'numeric' }
     : style === 'weekday' ? { weekday: 'long', day: 'numeric', month: 'long' }
     : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+  const mode = dateMode();
   let g;
   try { g = x.toLocaleDateString(dateLocale(), opts); } catch { g = x.toDateString(); }
-  if (!countryInfo().hijri) return g;
+  if (mode === 'gregorian') return g;
+  // الهجري: الشهر بالاسم دايماً (الشهور الهجرية المختصرة مش مفهومة)
   const hOpts = style === 'month' ? { month: 'long', year: 'numeric' }
-    : style === 'short' ? { day: 'numeric', month: 'short', year: 'numeric' }
-    : { day: 'numeric', month: 'long', year: 'numeric' };
-  const h = hijriDate(x, hOpts);
-  return h ? `${g} · ${h}` : g;
+    : style === 'short' ? { day: 'numeric', month: 'long', year: 'numeric' }
+    : style === 'weekday' ? { weekday: 'long', day: 'numeric', month: 'long' }
+    : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+  const h = hijriDate(x, mode === 'hijri' ? hOpts : (style === 'month' ? { month: 'long', year: 'numeric' } : { day: 'numeric', month: 'long', year: 'numeric' }));
+  if (!h) return g;
+  return mode === 'hijri' ? h : `${g} · ${h}`;
+}
+
+/** تاريخ قصير جداً (للخانات الضيقة): هجري "15 جمادى الآخرة" أو ميلادي "25 نوفمبر" */
+export function fmtDayShort(d) {
+  const x = asDate(d);
+  if (isNaN(x)) return String(d || '');
+  if (dateMode() === 'gregorian') return x.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
+  return hijriDate(x, { day: 'numeric', month: 'long' });
 }

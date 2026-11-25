@@ -315,11 +315,10 @@ async function analyzeSavedCase({ request, env, officeId, userId, params }) {
   const skill = getSkill(caseType);
   const searchQuery = [caseType, facts, requests, docText.slice(0, 1500), readable[0]?.text.slice(0, 1500)]
     .filter(Boolean).join(' ').slice(0, 2500);
-  // قاعدة النصوص مصرية — المكتب السعودي بيتحلل وفق الأنظمة السعودية من غيرها
+  // مواد دولة المكتب بس (المكتب السعودي: الأنظمة السعودية، ومن غير تلميحات القوانين المصرية)
   const country = await officeCountry(env, officeId);
-  const { articles, method } = country === 'SA'
-    ? { articles: [], method: 'sa_no_db' }
-    : await findRelevantArticles(env, searchQuery, { lawHints: skill.lawHints, topK: 8 });
+  const { articles, method } = await findRelevantArticles(env, searchQuery,
+    country === 'SA' ? { topK: 8, country: 'SA' } : { lawHints: skill.lawHints, topK: 8, country: 'EG' });
 
   const caseBlock = `بيانات القضية:
 - رقم القضية: ${c.case_number || '—'}

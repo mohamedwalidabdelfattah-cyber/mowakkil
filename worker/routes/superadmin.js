@@ -37,11 +37,13 @@ async function reindexLaws({ request, env }) {
   const b = (await safeJson(request)) || {};
   const after = Math.max(0, toInt(b.after_id) || 0);
   const limit = Math.min(50, Math.max(5, toInt(b.limit) || 25));
+  // country (اختياري): فهرسة مواد دولة واحدة بس (مثلاً الأنظمة السعودية الجديدة من غير ما نعيد المصري)
+  const country = ['EG', 'SA'].includes(b.country) ? b.country : null;
 
   const { results } = await env.DB.prepare(
-    `SELECT id, law_name, article_number, article_text FROM law_articles
-     WHERE id > ? ORDER BY id ASC LIMIT ?`
-  ).bind(after, limit).all();
+    `SELECT id, law_name, article_number, article_text, country FROM law_articles
+     WHERE id > ? ${country ? 'AND country = ?' : ''} ORDER BY id ASC LIMIT ?`
+  ).bind(...(country ? [after, country, limit] : [after, limit])).all();
 
   if (!results?.length) return ok(env, { done: true, indexed: 0, last_id: after });
 
@@ -56,7 +58,7 @@ async function reindexLaws({ request, env }) {
   const vectors = results.map((a, i) => ({
     id: String(a.id),
     values: emb.data[i],
-    metadata: { law_name: String(a.law_name || '').slice(0, 200), article_number: String(a.article_number || '').slice(0, 100) },
+    metadata: { law_name: String(a.law_name || '').slice(0, 200), article_number: String(a.article_number || '').slice(0, 100), country: a.country || 'EG' },
   }));
   await env.VECTORIZE.upsert(vectors);
 
