@@ -17,31 +17,7 @@ const LAWS = [
   { p: 27013, name: 'لائحة نظام الأحوال الشخصية', number: 'نُشرت بتاريخ 22/8/1446هـ', expected: 41 },
 ];
 
-// ============ الأرقام الترتيبية → رقم ============
-const UNITS = { 'الأولى': 1, 'الحادية': 1, 'الثانية': 2, 'الثالثة': 3, 'الرابعة': 4, 'الخامسة': 5, 'السادسة': 6, 'السابعة': 7, 'الثامنة': 8, 'التاسعة': 9, 'العاشرة': 10 };
-const TENS = { 'العشرون': 20, 'الثلاثون': 30, 'الأربعون': 40, 'الخمسون': 50, 'الستون': 60, 'السبعون': 70, 'الثمانون': 80, 'التسعون': 90 };
-// 'المالتين': خطأ مطبعي في صفحة نظام الشركات بالجريدة (عنوان المادة 218) — النص نفسه سليم
-const HUNDREDS = { 'المائة': 100, 'المئة': 100, 'المائتين': 200, 'المائتان': 200, 'المالتين': 200, 'الثلاثمائة': 300, 'الأربعمائة': 400, 'الخمسمائة': 500, 'الستمائة': 600, 'السبعمائة': 700, 'الثمانمائة': 800, 'التسعمائة': 900 };
-
-export function ordinalToNumber(raw) {
-  const s = String(raw).replace(/ـ/g, '').replace(/\s+/g, ' ').trim();
-  let rest = s, hundreds = 0;
-  if (HUNDREDS[s]) return HUNDREDS[s];
-  // "... بعد المائتين" — وبنقبل كمان لو "بعد" ناقصة (خطأ مطبعي في الجريدة: "الثامنة والعشرون المائتين")
-  const toks = s.split(' ');
-  const last = toks[toks.length - 1];
-  if (toks.length > 1 && HUNDREDS[last]) {
-    hundreds = HUNDREDS[last];
-    rest = toks.slice(0, -1).join(' ').replace(/\s*بعد$/, '').trim();
-  }
-  if (!rest) return hundreds || null;
-  let n = null;
-  const parts = rest.split(' ');
-  if (parts.length === 1) n = UNITS[parts[0]] ?? TENS[parts[0]] ?? null;
-  else if (parts.length === 2 && parts[1] === 'عشرة' && UNITS[parts[0]] && UNITS[parts[0]] < 10) n = UNITS[parts[0]] + 10;
-  else if (parts.length === 2 && parts[1].startsWith('و') && TENS[parts[1].slice(1)] && UNITS[parts[0]] && UNITS[parts[0]] < 10) n = UNITS[parts[0]] + TENS[parts[1].slice(1)];
-  return n == null ? null : n + hundreds;
-}
+import { ordinalToNumber } from './ordinal.mjs';
 
 // ============ صفحة → نص ============
 function decode(s) {

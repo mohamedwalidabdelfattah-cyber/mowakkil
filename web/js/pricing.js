@@ -168,7 +168,7 @@ function renderPlans() {
     if (isSA() && !isFree) {
       const name = currentLang === 'ar' ? p.display_name : (p.display_name_en || p.display_name);
       ctaUrl = isLoggedIn
-        ? `https://wa.me/${SUPPORT_WA}?text=${encodeURIComponent(`مرحباً، حابب أشترك في باقة ${name} (${planPrice(p)} ر.س) لمكتبي في السعودية.`)}`
+        ? `https://wa.me/${SUPPORT_WA}?text=${encodeURIComponent(`مرحباً، حابب أشترك في باقة ${name} (${planPrice(p)} ر.س شامل الضريبة) لمكتبي في السعودية.`)}`
         : `/signup?plan=${p.plan}&country=SA`;
     }
     const ctaText = isFree ? t.subscribeFree : t.subscribe;
@@ -190,6 +190,7 @@ function renderPlans() {
           <span class="plan-price-num-lg">${planPrice(p)}</span>
           <span class="plan-price-cur-lg">${curLabel()}<br>${isFree ? t.forever : (isLifetime ? t.once : t.perMonth)}</span>
         </div>
+        ${isSA() && !isFree ? `<div class="plan-vat-note">${currentLang === 'ar' ? 'شامل ضريبة القيمة المضافة 15%' : 'Incl. 15% VAT'}</div>` : ''}
         <ul class="plan-features-lg">
           ${features.slice(0, 6).map(f => `<li>${f}</li>`).join('')}
           <li style="opacity:0.6;font-size:12px">${limitText}</li>

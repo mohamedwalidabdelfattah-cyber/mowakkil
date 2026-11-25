@@ -111,7 +111,7 @@ const UNSUPPORTED_TOPICS = [
 export async function legalSearch(env, query, { country = 'EG' } = {}) {
   const safeQuery = String(query).slice(0, 500);
 
-  // المكتب السعودي: نصوص الأنظمة السعودية من القاعدة (الإثبات، المعاملات المدنية، الأحوال الشخصية، الشركات…)
+  // المكتب السعودي: نصوص الأنظمة السعودية من القاعدة (أكثر من 340 نظاماً ولائحة سارية من هيئة الخبراء ووزارة العدل وأم القرى)
   if (country === 'SA') {
     try {
       const { articles } = await findRelevantArticles(env, safeQuery, { topK: 8, country: 'SA' });
@@ -139,7 +139,7 @@ ${context}
         1400, localizeLegalPrompt(DEFAULT_SYSTEM, 'SA'));
       return {
         answer: (answer || 'تعذر الحصول على إجابة الآن، حاول مرة أخرى.') +
-          '\n\n---\nℹ️ لم تُوجد نصوص قريبة من السؤال في قاعدة الأنظمة السعودية (المتاح حالياً: الإثبات، المعاملات المدنية، الأحوال الشخصية، الشركات)؛ الإجابة مبنية على المعرفة العامة بالأنظمة، فراجع النص الرسمي قبل الاعتماد عليها.',
+          '\n\n---\nℹ️ لم تُوجد نصوص قريبة من السؤال في قاعدة الأنظمة السعودية؛ الإجابة مبنية على المعرفة العامة بالأنظمة، فراجع النص الرسمي قبل الاعتماد عليها.',
         sources: [],
         notice: 'sa_no_match',
       };
@@ -296,7 +296,7 @@ export async function searchLegalDb(env, query, { country = 'EG' } = {}) {
 
   const { articles, method } = await findRelevantArticles(env, safeQuery, { topK: 8, country });
   if (!articles.length) {
-    return { source: 'db', results: [], message: country === 'SA' ? 'لا توجد مواد مطابقة في قاعدة الأنظمة السعودية (المتاح: الإثبات، المعاملات المدنية، الأحوال الشخصية، الشركات)' : 'مفيش نتايج في الداتابيز' };
+    return { source: 'db', results: [], message: country === 'SA' ? 'لا توجد مواد مطابقة في قاعدة الأنظمة السعودية — جرّب صياغة أخرى أو اسم النظام' : 'مفيش نتايج في الداتابيز' };
   }
   const results = articles.map(r => ({
     law_name: r.law_name,
