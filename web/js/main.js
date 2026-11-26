@@ -246,8 +246,9 @@ if (getToken()) {
   showApp();
   accountView.loadOffice();
   guardActions(document.getElementById('view-host'));
-  loadAccess(); // الصلاحيات (بتعيد بناء القايمة لما توصل)
-  startOffline(apiJson); // الأجندة من غير نت + إرسال اللي اتسجل من غير نت
+  // الصلاحيات (بتعيد بناء القايمة لما توصل) — والتحميل للاستخدام من غير نت بيستناها،
+  // عشان ميطلبش قوايم الدور ممنوع منها (أول دخول مفيش صلاحيات محفوظة)
+  loadAccess().finally(() => startOffline(apiJson)); // الأجندة من غير نت + إرسال اللي اتسجل من غير نت
   document.addEventListener('mowakkil:synced', (e) => {
     const { sent, failed } = e.detail || {};
     if (sent) toast(`✅ اتبعت ${sent} عملية كانت مستنية النت`, 'ok');

@@ -150,6 +150,22 @@ const LISTS = [
 ];
 const PROFILE_TTL = 24 * 60 * 60 * 1000;
 
+// صلاحيات المستخدم (من access.js — بنقراها من التخزين مباشرة عشان منعملش import دايري مع api.js)
+// عشان منطلبش قوايم الدور ده ممنوع منها (السيرفر كان بيرفضها بـ 403 على الفاضي)
+const NEEDS = [
+  ['/api/tasks', 'tasks.view'], ['/api/agenda', 'agenda.view'], ['/api/calendar', 'agenda.view'],
+  ['/api/documents', 'documents.view'], ['/api/team', 'team.manage'],
+];
+const ALWAYS = ['/api/team/me', '/api/team/directory'];
+function allowed(path) {
+  if (ALWAYS.some(p => path.startsWith(p))) return true;
+  let perms = null;
+  try { perms = JSON.parse(localStorage.getItem('mowakkil_access') || 'null')?.permissions; } catch {}
+  if (!Array.isArray(perms)) return true; // لسه متحمّلتش → السيرفر هو اللي يقرر
+  const need = NEEDS.find(([p]) => path === p || path.startsWith(p + '?') || path.startsWith(p + '/'));
+  return !need || perms.includes(need[1]);
+}
+
 async function pool(items, size, fn) {
   const queue = [...items];
   await Promise.all(Array.from({ length: size }, async () => {
@@ -166,7 +182,7 @@ export async function prefetchAll(fetchJson, { force = false } = {}) {
     const now = Date.now();
     const from = iso(new Date(now - 60 * 86400000));
     const to = iso(new Date(now + 120 * 86400000));
-    try {
+    if (allowed('/api/calendar/events')) try {
       const events = await fetchJson(`/api/calendar/events?from=${from}&to=${to}`, { skipCache: true, silent: true });
       await putKey('responses', WIDE_KEY, { data: Array.isArray(events) ? events : [], at: Date.now() });
     } catch {}
@@ -174,7 +190,7 @@ export async function prefetchAll(fetchJson, { force = false } = {}) {
     const ym = d => d.toISOString().slice(0, 7);
     const thisMonth = new Date(); const lastMonth = new Date(); lastMonth.setMonth(lastMonth.getMonth() - 1);
     const reports = [ym(thisMonth), ym(lastMonth)].map(m => `/api/reports/monthly?month=${m}`);
-    await pool([...LISTS, ...reports], 4, p => fetchJson(p, { skipCache: true, silent: true }));
+    await pool([...LISTS, ...reports].filter(allowed), 4, p => fetchJson(p, { skipCache: true, silent: true }));
 
     // ملفات القضايا والموكلين والمهام — مرة في اليوم عشان منتقلش على السيرفر
     const last = await meta.get('profiles_at');
@@ -182,7 +198,7 @@ export async function prefetchAll(fetchJson, { force = false } = {}) {
       const cases = (await listOf('/api/cases')).slice(0, 200).map(c => `/api/cases/${c.id}/profile`);
       const clients = (await listOf('/api/clients')).slice(0, 300).map(c => `/api/clients/${c.id}/profile`);
       const tasks = (await listOf('/api/tasks')).filter(t => t.status !== 'منجزة').slice(0, 150).map(t => `/api/tasks/${t.id}/profile`);
-      await pool([...cases, ...clients, ...tasks], 3, p => fetchJson(p, { skipCache: true, silent: true }));
+      await pool([...cases, ...clients, ...tasks].filter(allowed), 3, p => fetchJson(p, { skipCache: true, silent: true }));
       await meta.set('profiles_at', Date.now());
     }
     await meta.set('last_sync', Date.now());

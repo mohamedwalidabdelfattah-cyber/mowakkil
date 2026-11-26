@@ -7,6 +7,7 @@ import { icon } from '../icons.js';
 import { openWhatsAppComposer, openTomorrowReminders } from '../whatsapp.js';
 import { PALETTE, SERIES, areaGradient } from '../chart-theme.js';
 import { dateLocale, fmtDay, hijriDate, isSaudi, dateMode } from '../country.js';
+import { can } from '../access.js';
 
 let charts = {};
 
@@ -36,7 +37,7 @@ async function fetchAll(period) {
 
   const [dashboard, sessions, trendData, summary, pl, cash] = await Promise.all([
     apiJson(`/api/dashboard?period=${period}`).catch(() => ({})),
-    apiJson('/api/agenda?days=7').catch(() => []),
+    can('agenda.view') ? apiJson('/api/agenda?days=7').catch(() => []) : [],
     hasFinance ? apiJson(`/api/reports/monthly-trend?months=${months}`).catch(() => []) : [],
     withAccounting ? fin(`/api/reports/accounting-summary?from=${range.from}&to=${range.to}`, { silent: true }) : null,
     withAccounting ? fin(`/api/reports/profit-loss?from=${range.from}&to=${range.to}`, { silent: true }) : null,

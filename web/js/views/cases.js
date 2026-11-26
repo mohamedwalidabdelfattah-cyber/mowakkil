@@ -330,8 +330,8 @@ async function showCaseDetail(id, initialTab = 'overview') {
         <button class="case-tab" data-tab="sessions">📅 الجلسات (${sessions.length})</button>
         ${hideFees ? '' : `<button class="case-tab" data-tab="fees">💰 الأتعاب (${fees.length})</button>`}
         ${hideExp ? '' : `<button class="case-tab" data-tab="expenses">💸 المصاريف (${expenses.length})</button>`}
-        <button class="case-tab" data-tab="docs">📎 المستندات (${documents.length})</button>
-        <button class="case-tab" data-tab="tasks">✅ المهام (${tasks.length})</button>
+        ${can('documents.view') ? `<button class="case-tab" data-tab="docs">📎 المستندات (${documents.length})</button>` : ''}
+        ${can('tasks.view') ? `<button class="case-tab" data-tab="tasks">✅ المهام (${tasks.length})</button>` : ''}
       </div>
     `;
 
