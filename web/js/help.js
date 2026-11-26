@@ -1,5 +1,5 @@
 // web/js/help.js
-// أيقونة ❓ فوق في كل صفحة ليها شرح: جولة تفاعلية + فيديو اليوتيوب بتاع الصفحة + واتساب الدعم.
+// زرار «شرح» عائم (فوق زرار واتساب الدعم) في كل صفحات النظام: جولة تفاعلية + فيديو اليوتيوب بتاع الصفحة.
 // أول مرة المستخدم يفتح الصفحة بيظهرله تلميح صغير (مرة واحدة بس لكل صفحة).
 
 import { startTour, tourFor, isTourRunning } from './tour.js';
@@ -77,10 +77,10 @@ function openMenu(btn) {
     ${tour ? `<button data-h="tour"><span>▶️</span><div><b>${t.tour}</b><small>${t.tourSub}</small></div></button>` : ''}
     ${hasVideo ? `<button data-h="video"><span>🎬</span><div><b>${t.video}</b><small>${t.videoSub}</small></div></button>`
       : CHANNEL ? `<a data-h="channel" target="_blank" rel="noopener" href="${CHANNEL}"><span>🎬</span><div><b>${t.channel}</b><small>${t.channelSub}</small></div></a>` : ''}
-    <a data-h="wa" target="_blank" rel="noopener" href="https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent(t.waMsg)}">
-      <span>💬</span><div><b>${t.wa}</b><small>${t.waSub}</small></div></a>`;
-  m.style.top = (r.bottom + 8) + 'px';
-  m.style.left = Math.max(8, Math.min(r.left + r.width / 2 - 140, window.innerWidth - 288)) + 'px';
+    `;
+  // القايمة بتفتح فوق الزرار
+  m.style.bottom = (window.innerHeight - r.top + 10) + 'px';
+  m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 288)) + 'px';
   m.addEventListener('click', e => {
     const b = e.target.closest('[data-h]');
     if (!b) return;
@@ -105,13 +105,13 @@ function maybeHint(view) {
     const r = btn.getBoundingClientRect();
     if (!r.width) return;
     const h = document.createElement('div');
-    h.className = 'help-hint';
+    h.className = 'help-hint help-hint-up';
     h.setAttribute('data-no-msa', '');
     const t = T();
     h.innerHTML = `<div><b>${t.hiTitle}</b><br>${t.hiBody}</div>
       <div class="help-hint-btns"><button class="btn btn-primary" data-h="go">${t.go}</button><button class="btn btn-ghost" data-h="no">${t.later}</button></div>`;
-    h.style.top = (r.bottom + 12) + 'px';
-    h.style.left = Math.max(8, Math.min(r.left + r.width / 2 - 130, window.innerWidth - 272)) + 'px';
+    h.style.bottom = (window.innerHeight - r.top + 14) + 'px';
+    h.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + 'px';
     h.addEventListener('click', e => {
       const b = e.target.closest('[data-h]');
       if (!b) return;
@@ -122,15 +122,48 @@ function maybeHint(view) {
   }, 1400);
 }
 
+// الزرار العائم: نفس ركن زرار واتساب، وفوقه على طول
+function mountFab() {
+  let btn = document.getElementById('help-btn');
+  if (btn) return btn;
+  btn = document.createElement('button');
+  btn.id = 'help-btn';
+  btn.className = 'help-fab';
+  btn.type = 'button';
+  btn.hidden = true;
+  btn.setAttribute('data-no-msa', '');
+  btn.setAttribute('aria-label', 'شرح الصفحة');
+  btn.title = 'شرح الصفحة';
+  btn.innerHTML = `<span class="help-fab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 8.5v7l6-3.5z" fill="currentColor"/></svg></span><span class="help-fab-label">شرح</span>`;
+  document.body.appendChild(btn);
+  try {
+    if (!sessionStorage.getItem('help_fab_intro')) { btn.classList.add('help-fab-intro'); sessionStorage.setItem('help_fab_intro', '1'); }
+  } catch {}
+  // المكان والظهور: جوه النظام بس، فوق زرار واتساب، ويختفي وقت الجولة أو أي نافذة فيديو/بحث
+  const place = () => {
+    const inApp = !document.getElementById('app-body')?.hidden;
+    const cover = isTourRunning() || recording() || document.querySelector('.help-video-backdrop, .search-modal, .install-sheet.show');
+    btn.hidden = !inApp || !!cover;
+    if (btn.hidden) { closeMenu(); return; }
+    const wa = document.querySelector('.support-fab');
+    const wr = wa && wa.style.display !== 'none' ? wa.getBoundingClientRect() : null;
+    btn.style.bottom = (wr && wr.height ? (window.innerHeight - wr.top + 12) : 20) + 'px';
+  };
+  place();
+  window.addEventListener('resize', place);
+  document.addEventListener('mowakkil:tour-ended', place);
+  setInterval(place, 600);
+  return btn;
+}
+
 export function initHelp() {
-  const btn = document.getElementById('help-btn');
-  if (!btn || btn.dataset.ready) return;
+  const btn = mountFab();
+  if (btn.dataset.ready) return;
   btn.dataset.ready = '1';
   btn.addEventListener('click', () => openMenu(btn));
   document.addEventListener('mowakkil:view-changed', e => {
     current = e.detail?.subView || e.detail?.name;
     closeMenu(); closeHint();
-    // الأيقونة ظاهرة دايماً (فيها واتساب الدعم) — والجولة للصفحات اللي ليها شرح
     btn.classList.toggle('has-tour', !!tourFor(current));
     maybeHint(current);
   });

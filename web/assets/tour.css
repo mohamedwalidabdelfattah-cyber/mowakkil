@@ -1,11 +1,33 @@
 /* web/assets/tour.css — جولة الشرح + أيقونة ❓ + فيديو الشرح */
 
-/* ---------- أيقونة ❓ ---------- */
-#help-btn { font-weight: 800; font-size: 17px; line-height: 1; position: relative; }
-#help-btn.has-tour::after {
-  content: ''; position: absolute; top: 5px; inset-inline-end: 5px; width: 8px; height: 8px;
-  border-radius: 50%; background: var(--brand-gold, #D4AF37); box-shadow: 0 0 0 2px var(--surface, #fff);
+/* ---------- زرار «شرح» العائم (فوق زرار واتساب الدعم) ---------- */
+.help-fab {
+  position: fixed; inset-inline-end: 20px; bottom: 88px; z-index: 140;
+  display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px 0 14px;
+  border-radius: 999px; border: 1px solid rgba(212, 175, 55, .55); cursor: pointer;
+  background: linear-gradient(135deg, #0B1222 0%, #18233D 100%); color: #fff;
+  font: 700 15px var(--font, 'IBM Plex Sans Arabic', system-ui, sans-serif);
+  box-shadow: 0 10px 24px -8px rgba(7, 12, 24, .6), 0 2px 6px rgba(0, 0, 0, .18);
+  transition: bottom .25s ease, transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
+.help-fab[hidden] { display: none; }
+.help-fab:hover { transform: translateY(-2px); border-color: var(--brand-gold, #D4AF37); box-shadow: 0 14px 28px -8px rgba(7, 12, 24, .7), 0 0 0 3px rgba(212, 175, 55, .18); }
+.help-fab:focus-visible { outline: 3px solid var(--brand-gold, #D4AF37); outline-offset: 3px; }
+.help-fab-ico { display: inline-flex; width: 24px; height: 24px; color: var(--brand-gold, #D4AF37); }
+.help-fab-ico svg { width: 100%; height: 100%; }
+.help-fab-label { letter-spacing: .2px; }
+/* أول ظهور في الجلسة: نبضة ذهبي خفيفة تلفت النظر */
+.help-fab-intro::after {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+  animation: helpFabPulse 2.2s ease-out 3;
+}
+@keyframes helpFabPulse { 0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, .55); } 100% { box-shadow: 0 0 0 14px rgba(212, 175, 55, 0); } }
+@media (max-width: 768px) { .help-fab { inset-inline-end: 14px; height: 42px; padding: 0 15px 0 12px; font-size: 14px; } }
+@media print { .help-fab { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { .help-fab, .help-fab-intro::after { transition: none; animation: none; } }
+/* تلميح أول زيارة: السهم الصغير بيشاور لتحت على الزرار */
+.help-hint.help-hint-up::before { top: auto; bottom: -7px; left: 32px; margin-left: 0; }
 
 /* ---------- القايمة ---------- */
 .help-menu {
