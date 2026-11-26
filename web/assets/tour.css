@@ -1,0 +1,108 @@
+/* web/assets/tour.css — جولة الشرح + أيقونة ❓ + فيديو الشرح */
+
+/* ---------- أيقونة ❓ ---------- */
+#help-btn { font-weight: 800; font-size: 17px; line-height: 1; position: relative; }
+#help-btn.has-tour::after {
+  content: ''; position: absolute; top: 5px; inset-inline-end: 5px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--brand-gold, #D4AF37); box-shadow: 0 0 0 2px var(--surface, #fff);
+}
+
+/* ---------- القايمة ---------- */
+.help-menu {
+  position: fixed; z-index: 10050; width: 280px; background: var(--surface, #fff); color: var(--text, #101828);
+  border: 1px solid var(--border, #E4E7EC); border-radius: 14px; box-shadow: var(--sh-lg); padding: 8px;
+  animation: tourPop .18s var(--ease, ease);
+}
+.help-menu-title { font-weight: 800; font-size: 13px; color: var(--text-muted, #667085); padding: 6px 8px 8px; }
+.help-menu button, .help-menu a {
+  display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: start; background: none; border: 0;
+  padding: 10px; border-radius: 10px; cursor: pointer; color: inherit; text-decoration: none; font: inherit;
+}
+.help-menu button:hover, .help-menu a:hover { background: var(--gold-100, #FBF5E1); }
+.help-menu span { font-size: 18px; line-height: 1.3; }
+.help-menu b { display: block; font-size: 14px; }
+.help-menu small { display: block; font-size: 12px; color: var(--text-muted, #667085); margin-top: 2px; }
+
+/* ---------- تلميح أول زيارة ---------- */
+.help-hint {
+  position: fixed; z-index: 10040; width: 260px; background: var(--navy-900, #0B1222); color: #fff;
+  border-radius: 14px; padding: 14px; box-shadow: var(--sh-lg); font-size: 14px; line-height: 1.6;
+  animation: tourPop .25s var(--ease, ease);
+}
+.help-hint::before {
+  content: ''; position: absolute; top: -7px; left: 50%; margin-left: -7px; width: 14px; height: 14px;
+  background: inherit; transform: rotate(45deg);
+}
+.help-hint-btns { display: flex; gap: 8px; margin-top: 10px; }
+.help-hint-btns .btn { padding: 6px 12px; font-size: 13px; }
+.help-hint .btn-ghost { color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
+
+/* ---------- الجولة ---------- */
+.tour-root { position: fixed; inset: 0; z-index: 10060; pointer-events: none; }
+.tour-block { position: fixed; inset: 0; pointer-events: auto; }
+.tour-spot {
+  position: fixed; border-radius: 12px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(7, 12, 24, .66), 0 0 0 3px var(--brand-gold, #D4AF37), 0 0 24px 6px rgba(212, 175, 55, .55);
+  transition: top .35s var(--ease, ease), left .35s var(--ease, ease), width .35s var(--ease, ease), height .35s var(--ease, ease);
+  animation: tourPulse 1.6s ease-in-out infinite;
+}
+.tour-center .tour-spot { animation: none; box-shadow: 0 0 0 9999px rgba(7, 12, 24, .72); }
+.tour-arrow {
+  position: fixed; width: 44px; height: 44px; color: var(--brand-gold, #D4AF37);
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.45)); pointer-events: none; transition: top .35s, left .35s;
+}
+.tour-arrow path { animation: tourBounce 1s ease-in-out infinite; transform-origin: center; }
+.tour-bubble {
+  position: fixed; pointer-events: auto; background: var(--surface, #fff); color: var(--text, #101828);
+  border-radius: 16px; padding: 16px 18px 14px; box-shadow: 0 24px 60px rgba(0,0,0,.35);
+  border-top: 4px solid var(--brand-gold, #D4AF37); transition: top .35s var(--ease, ease), left .35s var(--ease, ease);
+  animation: tourPop .25s var(--ease, ease);
+}
+.tour-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.tour-count { font-size: 12px; font-weight: 700; color: var(--text-muted, #667085); font-family: var(--font-num); }
+.tour-x { background: none; border: 0; font-size: 16px; cursor: pointer; color: var(--text-muted, #667085); padding: 2px 6px; }
+.tour-title { margin: 0 0 6px; font-size: 17px; font-weight: 800; }
+.tour-body { font-size: 15px; line-height: 1.75; }
+.tour-nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
+.tour-nav .btn { padding: 8px 14px; font-size: 14px; }
+.tour-progress { height: 3px; background: var(--border, #E4E7EC); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+.tour-progress i { display: block; height: 100%; background: var(--brand-gold, #D4AF37); transition: width .35s; }
+
+/* وضع الفيديو: من غير أزرار، والفقاعة أكبر شوية عشان تتقري في الفيديو */
+.tour-autoplay .tour-nav, .tour-autoplay .tour-x { display: none; }
+.tour-autoplay .tour-bubble { padding: 18px 22px; }
+.tour-autoplay .tour-title { font-size: 20px; }
+.tour-autoplay .tour-body { font-size: 17px; }
+.tour-cursor {
+  position: fixed; width: 30px; height: 30px; pointer-events: none; z-index: 2;
+  transition: top .7s var(--ease, ease), left .7s var(--ease, ease); filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));
+}
+.tour-cursor svg { width: 100%; height: 100%; }
+.tour-cursor.tour-click::after {
+  content: ''; position: absolute; top: -10px; left: -10px; width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid var(--brand-gold, #D4AF37); animation: tourRipple .5s ease-out forwards;
+}
+
+/* ---------- فيديو الشرح ---------- */
+.help-video-backdrop {
+  position: fixed; inset: 0; z-index: 10070; background: rgba(7, 12, 24, .8);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.help-video { position: relative; width: min(960px, 100%); }
+.help-video-frame { position: relative; padding-top: 56.25%; border-radius: 14px; overflow: hidden; background: #000; }
+.help-video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.help-video-x {
+  position: absolute; top: -44px; inset-inline-end: 0; background: rgba(255,255,255,.15); color: #fff;
+  border: 0; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; cursor: pointer;
+}
+
+@keyframes tourPop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes tourPulse {
+  0%, 100% { box-shadow: 0 0 0 9999px rgba(7,12,24,.66), 0 0 0 3px var(--brand-gold, #D4AF37), 0 0 18px 4px rgba(212,175,55,.45); }
+  50%      { box-shadow: 0 0 0 9999px rgba(7,12,24,.66), 0 0 0 5px var(--brand-gold, #D4AF37), 0 0 30px 10px rgba(212,175,55,.6); }
+}
+@keyframes tourBounce { 0%, 100% { transform: translateY(-4px); } 50% { transform: translateY(5px); } }
+@keyframes tourRipple { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot, .tour-arrow path { animation: none; }
+}

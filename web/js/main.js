@@ -13,6 +13,7 @@ import { apiJson } from './api.js';
 import { startMSA } from './msa.js';
 import { startDateDom } from './date-dom.js';
 import { getCurrentView } from './router.js';
+import { initHelp } from './help.js';
 
 applyChartTheme();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startIconify);
@@ -227,6 +228,7 @@ document.getElementById('search-btn')?.addEventListener('click', () => {
 // ============================================================
 initDrawer();
 initSearch();
+initHelp();
 loginView.bindForm();
 
 async function initSubscription() {

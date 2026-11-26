@@ -55,3 +55,7 @@ reports/
 
 wrangler.e2e.toml
 laws-sa/
+
+# فيديوهات الشرح (كبيرة — بتترفع على يوتيوب مش Git)
+videos/*.webm
+videos/*.mp4
