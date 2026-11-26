@@ -3,6 +3,7 @@ import { apiJson } from '../api.js';
 import { esc, empty, toast, fmtMoney, skeleton, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { openModal } from '../modal.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
+import { editFee, canEditFee } from '../fee-edit.js';
 import { getClients, getCases } from '../state.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 
@@ -416,6 +417,7 @@ function renderFeeItem(f) {
           ? `<button class="btn btn-ghost wa-ghost" data-wa-fee="${f.id}" title="تذكير الموكل على واتساب">💬 تذكير</button>`
           : ''}
         <button class="btn btn-ghost" data-view-payments="${f.id}">📋 الدفعات</button>
+        ${canEditFee() ? `<button class="btn btn-ghost" data-edit-fee="${f.id}">✏️ تعديل</button>` : ''}
         <button class="btn btn-ghost" data-del-fee="${f.id}" style="color:var(--danger)">🗑 حذف</button>
       </div>
     </div>
@@ -479,6 +481,10 @@ function openAddFeeModal(host, clients, cases, onDone) {
 // أحداث الأتعاب
 // ============================================================
 function attachFeeEvents(host, fees, onDone) {
+  host.querySelectorAll('[data-edit-fee]').forEach(b => b.addEventListener('click', () => {
+    const f = fees.find(x => x.id === Number(b.dataset.editFee));
+    if (f) editFee(f, () => (onDone ? onDone() : render(host)));
+  }));
   host.querySelectorAll('[data-wa-fee]').forEach(b => b.addEventListener('click', () => {
     const f = fees.find(x => x.id === Number(b.dataset.waFee));
     if (!f) return;

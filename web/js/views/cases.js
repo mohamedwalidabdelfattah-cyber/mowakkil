@@ -2,7 +2,7 @@
 import { apiJson, api, uploadDocument, downloadDocument } from '../api.js';
 import { esc, empty, toast, skeleton, fmtMoney, fmtDate, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { getClients, setCases } from '../state.js';
-import { caseTypeOptions, degreeOptions } from '../case-types.js';
+import { caseTypeOptions, degreeOptions, caseTypeGroups, degreeGroups } from '../case-types.js';
 import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
@@ -12,6 +12,8 @@ import { can } from '../access.js';
 import { openWhatsAppComposer, localDateStr } from '../whatsapp.js';
 import { mountAiMeter } from '../ai-usage.js';
 import { isSaudi } from '../country.js';
+import { sessionActionsHTML, bindSessionActions } from '../session-edit.js';
+import { editFee, canEditFee } from '../fee-edit.js';
 
 let currentFilters = {
   archived: false,
@@ -28,6 +30,7 @@ export async function render(host) {
   `;
 
   const loadAndRender = async () => {
+    reloadCases = loadAndRender; // ملف القضية (النافذة) بيستخدمها عشان القايمة تتحدّث بعد أي تعديل
     // بناء الـ query string
     const params = new URLSearchParams();
     params.append('archived', currentFilters.archived ? '1' : '0');
@@ -235,6 +238,10 @@ export async function render(host) {
 
       if (action === 'view')     return showCaseDetail(id);
       if (action === 'ai')       return showCaseDetail(id, 'ai');
+      if (action === 'edit') {
+        try { const d = await apiJson(`/api/cases/${id}/profile`, { skipCache: true }); return editCaseInfo(d.case, loadAndRender); }
+        catch (err) { return toast(err.message, 'bad'); }
+      }
       if (action === 'archive')  { await apiJson(`/api/cases/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'مؤرشفة' }) }); loadAndRender(); }
       if (action === 'restore')  { await apiJson(`/api/cases/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'مفتوحة' }) }); loadAndRender(); }
       if (action === 'delete')   { if (confirm('متأكد من الحذف؟')) { await apiJson(`/api/cases/${id}`, { method: 'DELETE' }); loadAndRender(); toast('اتحذفت', 'ok'); } }
@@ -255,6 +262,7 @@ function caseItem(c) {
       <div class="acts">
         <button class="ghost" data-case-action="view" data-id="${c.id}" style="color:var(--primary);font-weight:700">👁 تفاصيل</button>
         <button class="ghost" data-case-action="ai" data-id="${c.id}" style="font-weight:700">🤖 تحليل ذكي</button>
+        ${can('cases.edit') ? `<button class="ghost" data-case-action="edit" data-id="${c.id}">✏️ تعديل</button>` : ''}
         ${c.status === 'مؤرشفة'
           ? `<button class="ghost" data-case-action="restore" data-id="${c.id}">استرجاع</button>`
           : `<button class="ghost" data-case-action="archive" data-id="${c.id}">أرشفة</button>`}
@@ -268,6 +276,35 @@ function caseItem(c) {
 // ============================================================
 // فتح قضية من البحث أو الإشعارات
 document.addEventListener('mowakkil:open-case', (e) => { if (e.detail?.id) showCaseDetail(Number(e.detail.id)); });
+
+// إعادة تحميل قايمة القضايا (بتتظبط في render)
+let reloadCases = null;
+
+// تعديل بيانات القضية: الموكل والرقم والمحكمة والدرجة والنوع
+async function editCaseInfo(c, onDone) {
+  let clients = [];
+  try { const r = await apiJson('/api/clients'); clients = Array.isArray(r) ? r : (r.items || r.clients || []); } catch {}
+  const types = caseTypeGroups().flatMap(g => g.types);
+  const degrees = degreeGroups().flatMap(g => g.items);
+  const withCur = (list, v) => (v && !list.includes(v) ? [v, ...list] : list);
+  const opt = v => ({ value: esc(v), label: esc(v) });
+  const saved = await openModal({
+    title: '✏️ تعديل بيانات القضية',
+    submitText: 'حفظ التعديل',
+    fields: [
+      { name: 'client_id', label: 'الموكل', type: 'select', options: [{ value: '', label: '— بدون تحديد —' }, ...clients.map(x => ({ value: String(x.id), label: esc(x.name) }))] },
+      { name: 'case_number', label: isSaudi() ? 'رقم القضية (ناجز)' : 'رقم القضية' },
+      { name: 'court', label: isSaudi() ? 'المحكمة والدائرة' : 'المحكمة' },
+      { name: 'degree', label: isSaudi() ? 'نوع المحكمة / الدرجة' : 'الدرجة', type: 'select', options: withCur(degrees, c.degree).map(opt) },
+      { name: 'case_type', label: 'النوع', type: 'select', options: [{ value: '', label: '— اختر —' }, ...withCur(types, c.case_type).map(opt)] },
+    ],
+    initialData: { client_id: String(c.client_id || ''), case_number: c.case_number || '', court: c.court || '', degree: c.degree || '', case_type: c.case_type || '' },
+    onSubmit: async (d) => {
+      await apiJson(`/api/cases/${c.id}`, { method: 'PATCH', body: JSON.stringify({ ...d, client_id: d.client_id || null }) });
+    },
+  });
+  if (saved) { toast('✅ اتعدّلت بيانات القضية', 'ok'); await onDone?.(); }
+}
 
 async function showCaseDetail(id, initialTab = 'overview') {
   document.getElementById('case-detail-modal')?.remove();
@@ -381,7 +418,10 @@ async function showCaseDetail(id, initialTab = 'overview') {
             ${c.client_id ? `<button class="btn btn-sm wa-send" data-wa="client" style="margin-top:10px">💬 رسالة واتساب للموكل</button>` : ''}
           </div>
           <div class="card" style="background:var(--gray-50)">
-            <h4 style="margin:0 0 12px;font-size:14px">📁 بيانات القضية</h4>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 12px">
+              <h4 style="margin:0;font-size:14px">📁 بيانات القضية</h4>
+              ${can('cases.edit') ? `<button class="btn btn-ghost btn-sm" data-edit-case>✏️ تعديل البيانات</button>` : ''}
+            </div>
             <div style="display:flex;justify-content:space-between;font-size:13.5px">
               <span>المحكمة:</span><strong>${esc(c.court || '—')}</strong>
             </div>
@@ -406,6 +446,8 @@ async function showCaseDetail(id, initialTab = 'overview') {
         `;
         renderCaseTeam(document.getElementById('case-team-card'), c.id);
         fillCaseBranch(el, c);
+        el.querySelector('[data-edit-case]')?.addEventListener('click', () =>
+          editCaseInfo(c, () => { reloadCases?.(); showCaseDetail(id, 'overview'); }));
       }
 
       if (tab === 'sessions') {
@@ -419,11 +461,15 @@ async function showCaseDetail(id, initialTab = 'overview') {
                   </span>
                 </div>
                 ${s.notes ? `<div class="meta">📝 ${esc(s.notes)}</div>` : ''}
+                ${s.session_time ? `<div class="meta">🕘 ${esc(s.session_time)}</div>` : ''}
                 ${c.client_id && String(s.session_date).slice(0, 10) >= todayStr
                   ? `<button class="btn btn-ghost btn-sm wa-ghost" data-wa="session" data-wa-id="${s.id}" style="margin-top:6px">💬 تذكير الموكل</button>` : ''}
+                ${sessionActionsHTML(s)}
               </div>
             `).join('')
           : empty('مفيش جلسات', '📅');
+        // تعديل/حذف → نعيد فتح ملف القضية على تاب الجلسات بالبيانات الجديدة
+        bindSessionActions(el, sessions, () => showCaseDetail(id, 'sessions'));
       }
 
       if (tab === 'fees') {
@@ -438,9 +484,14 @@ async function showCaseDetail(id, initialTab = 'overview') {
                 ${f.notes ? `<div class="meta">📝 ${esc(f.notes)}</div>` : ''}
                 ${c.client_id && f.status !== 'مدفوع بالكامل' && (f.amount_due || 0) > (f.amount_paid || 0)
                   ? `<button class="btn btn-ghost btn-sm wa-ghost" data-wa="fee" data-wa-id="${f.id}" style="margin-top:6px">💬 تذكير بالأتعاب</button>` : ''}
+                ${canEditFee() ? `<button class="btn btn-ghost btn-sm" data-edit-fee="${f.id}" style="margin-top:6px">✏️ تعديل</button>` : ''}
               </div>
             `).join('')
           : empty('مفيش أتعاب', '💰');
+        el.querySelectorAll('[data-edit-fee]').forEach(b => b.addEventListener('click', () => {
+          const f = fees.find(x => String(x.id) === b.dataset.editFee);
+          if (f) editFee(f, () => showCaseDetail(id, 'fees'));
+        }));
       }
 
       if (tab === 'expenses') {
@@ -456,8 +507,17 @@ async function showCaseDetail(id, initialTab = 'overview') {
                   <span class="num mono" style="color:var(--danger)">${fmtMoney(x.amount)} ${cur()}</span>
                 </div>
                 <div class="meta">📅 ${esc(x.session_date || x.date || '')} · ${SRC[x.source] || ''} · <span class="exp-who ${x.billable ? 'client' : 'office'}">${x.billable ? 'على الموكل' : 'على المكتب'}</span></div>
+                ${can('expenses.delete') ? `<button class="btn btn-ghost btn-sm" data-del-case-exp="${x.source}:${x.id}" style="color:var(--danger);margin-top:6px">🗑 حذف</button>` : ''}
               </div>
             `).join('') : empty('مفيش مصاريف', '💸')}`;
+        // حذف مصروف (جلسة / مهمة / عام) — كل نوع ليه مساره، والقيد في الحسابات بيتمسح معاه
+        el.querySelectorAll('[data-del-case-exp]').forEach(b => b.addEventListener('click', async () => {
+          const [src, xid] = b.dataset.delCaseExp.split(':');
+          if (!confirm('متأكد من حذف المصروف ده؟ القيد بتاعه في الحسابات هيتمسح كمان.')) return;
+          const path = `/api/expenses/${xid}?source=${src}`; // نفس حذف صفحة المصاريف (جلسة / مهمة / عام)
+          try { await apiJson(path, { method: 'DELETE' }); toast('✅ اتحذف المصروف', 'ok'); showCaseDetail(id, 'expenses'); }
+          catch (err) { toast(err.message, 'bad'); }
+        }));
         el.querySelector('[data-add-case-expense]')?.addEventListener('click', async () => {
           const res = await openModal({
             title: '➕ مصروف على القضية',

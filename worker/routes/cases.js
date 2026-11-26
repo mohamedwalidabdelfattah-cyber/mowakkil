@@ -204,7 +204,35 @@ async function profile({ env, officeId, params, access }) {
 async function updateStatus({ request, env, authUser, officeId, params }) {
   const id = toInt(params[0]);
   const b = await safeJson(request);
-  if (!b || (!b.status && b.branch_id === undefined)) return fail(env, 'status مطلوب', 400);
+  const EDITABLE = ['case_number', 'court', 'degree', 'case_type', 'client_id'];
+  const editing = b && EDITABLE.some(k => b[k] !== undefined);
+  if (!b || (!b.status && b.branch_id === undefined && !editing)) return fail(env, 'مفيش حاجة تتعدّل', 400);
+
+  // تعديل بيانات القضية نفسها (الرقم، المحكمة، الدرجة، النوع، الموكل)
+  if (editing) {
+    const cur = await env.DB.prepare('SELECT * FROM cases WHERE id = ? AND office_id = ? AND deleted_at IS NULL').bind(id, officeId).first();
+    if (!cur) return fail(env, 'القضية مش موجودة', 404);
+    const clean = (v, max = 200) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, max));
+    const next = {
+      case_number: b.case_number !== undefined ? clean(b.case_number, 100) : cur.case_number,
+      court: b.court !== undefined ? clean(b.court) : cur.court,
+      degree: b.degree !== undefined ? clean(b.degree, 100) : cur.degree,
+      case_type: b.case_type !== undefined ? clean(b.case_type, 100) : cur.case_type,
+      client_id: b.client_id !== undefined ? (toInt(b.client_id) || null) : cur.client_id,
+    };
+    if (next.client_id && next.client_id !== cur.client_id) {
+      const cl = await env.DB.prepare('SELECT id FROM clients WHERE id = ? AND office_id = ? AND deleted_at IS NULL').bind(next.client_id, officeId).first();
+      if (!cl) return fail(env, 'الموكل مش موجود', 400);
+    }
+    await env.DB.prepare(
+      'UPDATE cases SET case_number = ?, court = ?, degree = ?, case_type = ?, client_id = ? WHERE id = ? AND office_id = ?'
+    ).bind(next.case_number, next.court, next.degree, next.case_type, next.client_id, id, officeId).run();
+    await audit(env, {
+      office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'case', entity_id: id, request,
+      metadata: { from: Object.fromEntries(EDITABLE.map(k => [k, cur[k]])), to: next },
+    });
+    if (!b.status && b.branch_id === undefined) return ok(env, { updated: true, case: { id, ...next } });
+  }
 
   // الفرع (المتقدمة)
   if (b.branch_id !== undefined) {

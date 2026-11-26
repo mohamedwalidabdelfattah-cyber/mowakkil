@@ -451,6 +451,14 @@ async function repostSimpleExpense(env, officeId, refType, id, userId) {
 // ============================================================
 // ✅ حذف مصروف (عام + جلسة + مهمة)
 // ============================================================
+// تاريخ قيد الحركة في الحسابات (عشان نتأكد إن فترتها مش مقفولة)
+async function entryDay(env, officeId, refType, refId) {
+  const r = await env.DB.prepare(
+    'SELECT entry_date FROM journal_entries WHERE reference_type = ? AND reference_id = ? AND office_id = ? ORDER BY id LIMIT 1'
+  ).bind(refType, refId, officeId).first();
+  return r?.entry_date || null;
+}
+
 async function remove({ env, authUser, officeId, params, url }) {
   const gate = await requireFeature(env, officeId, 'finance');
   if (gate) return gate;
@@ -467,6 +475,8 @@ async function remove({ env, authUser, officeId, params, url }) {
        WHERE se.id = ? AND c.office_id = ?`
     ).bind(id, officeId).first();
     if (!s) return fail(env, 'not found', 404);
+    // الفترة المقفولة محاسبياً: ممنوع نمسح حركة جواها
+    try { await assertOpen(env, officeId, await entryDay(env, officeId, REF.session_expense, id)); } catch (e) { return fail(env, e.message, 423); }
 
     await deleteEntriesFor(env, officeId, REF.session_expense, id);
 
@@ -485,6 +495,7 @@ async function remove({ env, authUser, officeId, params, url }) {
       `SELECT id FROM task_expenses WHERE id = ? AND office_id = ?`
     ).bind(id, officeId).first();
     if (!ex) return fail(env, 'not found', 404);
+    try { await assertOpen(env, officeId, await entryDay(env, officeId, REF.task_expense, id)); } catch (e) { return fail(env, e.message, 423); }
 
     await deleteEntriesFor(env, officeId, REF.task_expense, id);
 

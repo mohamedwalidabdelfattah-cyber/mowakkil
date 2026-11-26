@@ -374,6 +374,7 @@ async function renderExpenses(host) {
           </div>
           <div class="acts">
             ${e.is_recurring ? `<button class="btn btn-ghost" data-stop-recurring="${e.id}">⏹ إيقاف التكرار</button>` : ''}
+            ${can('expenses.edit') && !e.from_trust ? `<button class="btn btn-ghost" data-edit-expense="${e.id}" data-source="${e.source || 'general'}">✏️ تعديل</button>` : ''}
             <button class="btn btn-ghost" data-del-expense="${e.id}" data-source="${e.source || 'general'}" style="color:var(--danger)">🗑 حذف</button>
           </div>
         </div>
@@ -436,6 +437,32 @@ async function renderExpenses(host) {
   host.querySelectorAll('[data-approve]').forEach(b => b.addEventListener('click', () => decide(b.dataset.approve, 'approve')));
   host.querySelectorAll('[data-reject]').forEach(b => b.addEventListener('click', () => decide(b.dataset.reject, 'reject')));
   host.querySelector('#payroll-btn')?.addEventListener('click', () => openPayroll(() => render(host, { subView: 'money-expenses' })));
+
+  // تعديل مصروف: الوصف والمبلغ (والتاريخ للمصروف العام) — السيرفر بيعيد القيد في الحسابات
+  host.querySelectorAll('[data-edit-expense]').forEach(b => b.addEventListener('click', async () => {
+    const source = b.dataset.source || 'general';
+    const e = expenses.find(x => String(x.id) === b.dataset.editExpense && (x.source || 'general') === source);
+    if (!e) return;
+    const general = source === 'general';
+    const saved = await openModal({
+      title: '✏️ تعديل المصروف',
+      submitText: 'حفظ التعديل',
+      fields: [
+        { name: 'description', label: 'الوصف', required: true },
+        { name: 'amount', label: `المبلغ (${cur()})`, type: 'number', required: true },
+        ...(general ? [{ name: 'expense_date', label: 'التاريخ', type: 'date', required: true }] : []),
+      ],
+      initialData: { description: e.description || '', amount: e.amount, expense_date: String(e.date || e.expense_date || '').slice(0, 10) },
+      onSubmit: async (d) => {
+        const amount = Number(d.amount);
+        const body = general
+          ? { source, description: d.description, amount, total_amount: amount + (Number(e.tax_amount) || 0), expense_date: d.expense_date }
+          : { source, description: d.description, amount };
+        await apiJson(`/api/expenses/${e.id}?source=${source}`, { method: 'PATCH', body: JSON.stringify(body) });
+      },
+    });
+    if (saved) { toast('✅ اتعدّل المصروف', 'ok'); render(host, { subView: 'money-expenses' }); }
+  }));
 
   host.querySelectorAll('[data-del-expense]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('متأكد من الحذف؟')) return;

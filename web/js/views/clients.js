@@ -8,6 +8,7 @@ import { openWhatsAppComposer } from '../whatsapp.js';
 import { waLinkFor } from '../phone.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { countryInfo } from '../country.js';
+import { openModal } from '../modal.js';
 
 // حالة الفلاتر
 let currentFilters = {
@@ -174,6 +175,24 @@ export async function render(host) {
       const wa = e.target.closest('[data-wa-client]');
       if (wa) return openWhatsAppComposer({ kind: 'general', phone: wa.dataset.waPhone, client_name: wa.dataset.waName });
       if (view) return showProfile(view.dataset.viewClient);
+      const ed = e.target.closest('[data-edit-client]');
+      if (ed) {
+        const c = list.find(x => String(x.id) === ed.dataset.editClient);
+        if (!c) return;
+        const saved = await openModal({
+          title: '✏️ تعديل بيانات الموكل',
+          submitText: 'حفظ التعديل',
+          fields: [
+            { name: 'name', label: 'الاسم', required: true },
+            { name: 'phone', label: 'رقم الموبايل' },
+            { name: 'national_id', label: `${countryInfo().idLabel} (اختياري)` },
+          ],
+          initialData: { name: c.name || '', phone: c.phone || '', national_id: c.national_id || '' },
+          onSubmit: async (d) => { await apiJson(`/api/clients/${c.id}`, { method: 'PATCH', body: JSON.stringify(d) }); },
+        });
+        if (saved) { toast('✅ اتعدّلت بيانات الموكل', 'ok'); loadAndRender(); }
+        return;
+      }
       if (del) {
         if (!confirm('متأكد من حذف الموكل؟')) return;
         await apiJson(`/api/clients/${del.dataset.delClient}`, { method: 'DELETE' });
@@ -246,6 +265,7 @@ function clientItem(c, status) {
           <button class="ghost" data-delete-account="${c.id}" style="color:var(--bad)">🗑 حذف الحساب</button>
         ` : ''}
         <button class="ghost" data-view-client="${c.id}" style="color:var(--primary);font-weight:700">👁 ملف</button>
+        ${canDo('clients.edit') ? `<button class="ghost" data-edit-client="${c.id}">✏️ تعديل</button>` : ''}
         <button class="ghost" data-del-client="${c.id}" style="color:var(--bad)">🗑 حذف الموكل</button>
       </div>
     </div>`;

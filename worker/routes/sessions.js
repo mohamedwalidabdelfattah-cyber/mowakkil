@@ -7,9 +7,66 @@ import { canAccessCase } from '../lib/permissions.js';
 
 export const routes = [
   { method: 'POST', path: '/api/sessions',                       handler: createSession },
+  { method: 'PATCH',  path: /^\/api\/sessions\/(\d+)$/,          handler: updateSession },
+  { method: 'DELETE', path: /^\/api\/sessions\/(\d+)$/,          handler: deleteSession },
   { method: 'GET',  path: '/api/session-expenses',               handler: listExpenses },
   { method: 'POST', path: '/api/session-expenses',               handler: createExpense },
 ];
+
+// الجلسة بتاعة المكتب ده؟ (ومتاحة للمستخدم لو صلاحيته "القضايا المكلّف بيها بس")
+async function ownSession(env, officeId, access, authUser, id) {
+  const s = await env.DB.prepare(
+    `SELECT s.id, s.case_id, s.session_date, s.session_time, s.notes, c.case_number
+       FROM sessions s JOIN cases c ON c.id = s.case_id
+      WHERE s.id = ? AND c.office_id = ? AND c.deleted_at IS NULL`
+  ).bind(id, officeId).first();
+  if (!s) return null;
+  if (!(await canAccessCase(env, access, authUser, s.case_id))) return null;
+  return s;
+}
+
+// تعديل جلسة: التاريخ والوقت والملاحظات (قرار الجلسة)
+async function updateSession({ request, env, authUser, officeId, access, params }) {
+  const id = toInt(params[0]);
+  const s = await ownSession(env, officeId, access, authUser, id);
+  if (!s) return fail(env, 'الجلسة مش موجودة', 404);
+  const b = await safeJson(request);
+  if (!b) return fail(env, 'JSON غلط', 400);
+
+  const date = b.session_date ?? s.session_date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return fail(env, 'تاريخ الجلسة غلط', 400);
+  let time = s.session_time;
+  if (b.session_time !== undefined) {
+    time = /^([01]\d|2[0-3]):[0-5]\d$/.test(b.session_time || '') ? b.session_time : null;
+  }
+  let notes = s.notes;
+  if (b.notes !== undefined) {
+    notes = b.notes == null ? null : String(b.notes).slice(0, 2000);
+  }
+
+  await env.DB.prepare(`UPDATE sessions SET session_date = ?, session_time = ?, notes = ? WHERE id = ?`)
+    .bind(date, time, notes, id).run();
+  await audit(env, {
+    office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'session', entity_id: id, request,
+    metadata: { from: { date: s.session_date, time: s.session_time }, to: { date, time } },
+  });
+  return ok(env, { id, session_date: date, session_time: time, notes });
+}
+
+// حذف جلسة — لو عليها مصاريف متسجلة (ليها قيود في الحسابات) لازم تتمسح الأول
+async function deleteSession({ env, authUser, officeId, access, params, request }) {
+  const id = toInt(params[0]);
+  const s = await ownSession(env, officeId, access, authUser, id);
+  if (!s) return fail(env, 'الجلسة مش موجودة', 404);
+  const exp = await env.DB.prepare(`SELECT COUNT(*) AS n FROM session_expenses WHERE session_id = ?`).bind(id).first();
+  if (exp?.n) return fail(env, `الجلسة دي عليها ${exp.n} مصروف متسجل — امسح المصاريف الأول (عشان الحسابات متتلخبطش)، وبعدين امسح الجلسة`, 409);
+  await env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(id).run();
+  await audit(env, {
+    office_id: officeId, user_id: authUser.user_id, action: 'delete', entity: 'session', entity_id: id, request,
+    metadata: { case_id: s.case_id, date: s.session_date },
+  });
+  return ok(env, { deleted: true });
+}
 
 async function createSession({ request, env, authUser, officeId, access }) {
   const b = await safeJson(request);

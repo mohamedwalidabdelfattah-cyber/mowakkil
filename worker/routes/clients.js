@@ -19,6 +19,7 @@ export const routes = [
   { method: 'POST',   path: '/api/clients',                     handler: create },
   { method: 'GET',    path: /^\/api\/clients\/(\d+)\/profile$/, handler: profile },
   { method: 'GET',    path: /^\/api\/clients\/(\d+)\/statement$/, handler: statement },
+  { method: 'PATCH',  path: /^\/api\/clients\/(\d+)$/,          handler: update },
   { method: 'DELETE', path: /^\/api\/clients\/(\d+)$/,          handler: remove },
 
   // Client Portal management
@@ -187,6 +188,29 @@ async function profile({ env, officeId, params }) {
       upcoming_count: upcomingSessions.length,
     },
   });
+}
+
+// تعديل بيانات الموكل: الاسم والموبايل والرقم القومي/الهوية
+async function update({ request, env, authUser, officeId, params }) {
+  const id = toInt(params[0]);
+  const cur = await env.DB.prepare('SELECT * FROM clients WHERE id = ? AND office_id = ? AND deleted_at IS NULL').bind(id, officeId).first();
+  if (!cur) return fail(env, 'الموكل مش موجود', 404);
+  const b = await safeJson(request);
+  if (!b) return fail(env, 'JSON غلط', 400);
+  if (b.name !== undefined && !isStr(String(b.name).trim(), 200)) return fail(env, 'اكتب اسم الموكل', 400);
+  const clean = (v, max) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, max));
+  const next = {
+    name: b.name !== undefined ? String(b.name).trim() : cur.name,
+    phone: b.phone !== undefined ? clean(b.phone, 30) : cur.phone,
+    national_id: b.national_id !== undefined ? clean(b.national_id, 30) : cur.national_id,
+  };
+  await env.DB.prepare('UPDATE clients SET name = ?, phone = ?, national_id = ? WHERE id = ? AND office_id = ?')
+    .bind(next.name, next.phone, next.national_id, id, officeId).run();
+  await audit(env, {
+    office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'client', entity_id: id, request,
+    metadata: { from: { name: cur.name, phone: cur.phone }, to: { name: next.name, phone: next.phone } },
+  });
+  return ok(env, { id, ...next });
 }
 
 async function remove({ env, authUser, officeId, params }) {

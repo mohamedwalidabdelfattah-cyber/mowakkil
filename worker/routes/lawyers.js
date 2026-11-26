@@ -6,6 +6,7 @@ import { requireLimit } from '../middleware/feature-gate.js';
 export const routes = [
   { method: 'GET',    path: '/api/lawyers',                handler: list,   adminOnly: true },
   { method: 'POST',   path: '/api/lawyers',                handler: create, adminOnly: true },
+  { method: 'PATCH',  path: /^\/api\/lawyers\/(\d+)$/,     handler: update, adminOnly: true },
   { method: 'DELETE', path: /^\/api\/lawyers\/(\d+)$/,     handler: remove, adminOnly: true },
 ];
 
@@ -59,6 +60,31 @@ async function create({ request, env, authUser, officeId }) {
     action: 'create', entity: 'lawyer', entity_id: r.meta.last_row_id, request,
   });
   return ok(env, { id: r.meta.last_row_id }, 201);
+}
+
+// تعديل بيانات المحامي: الاسم والدرجة والمرتب والموبايل
+async function update({ request, env, authUser, officeId, params }) {
+  const id = toInt(params[0]);
+  const cur = await env.DB.prepare('SELECT * FROM lawyers WHERE id = ? AND office_id = ?').bind(id, officeId).first();
+  if (!cur) return fail(env, 'المحامي مش موجود', 404);
+  const b = await safeJson(request);
+  if (!b) return fail(env, 'JSON غلط', 400);
+  if (b.name !== undefined && !isStr(String(b.name).trim(), 200)) return fail(env, 'اكتب اسم المحامي', 400);
+  if (b.salary !== undefined && b.salary !== null && b.salary !== '' && !(Number(b.salary) >= 0)) return fail(env, 'المرتب لازم يكون رقم', 400);
+  const clean = (v, max) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, max));
+  const next = {
+    name: b.name !== undefined ? String(b.name).trim() : cur.name,
+    grade: b.grade !== undefined ? clean(b.grade, 100) : cur.grade,
+    salary: b.salary !== undefined ? (b.salary === null || b.salary === '' ? null : Number(b.salary)) : cur.salary,
+    phone: b.phone !== undefined ? clean(b.phone, 30) : cur.phone,
+  };
+  await env.DB.prepare('UPDATE lawyers SET name = ?, grade = ?, salary = ?, phone = ? WHERE id = ? AND office_id = ?')
+    .bind(next.name, next.grade, next.salary, next.phone, id, officeId).run();
+  await audit(env, {
+    office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'lawyer', entity_id: id, request,
+    metadata: { from: { grade: cur.grade, salary: cur.salary }, to: { grade: next.grade, salary: next.salary } },
+  });
+  return ok(env, { id, ...next });
 }
 
 async function remove({ env, authUser, officeId, params }) {

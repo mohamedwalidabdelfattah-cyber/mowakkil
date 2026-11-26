@@ -3,7 +3,7 @@ import { assertOpen } from '../lib/period-lock.js';
 import { recordTrust, trustLedger, profitability, lockDate } from '../services/finance-advanced.js';
 import { audit } from '../lib/audit.js';
 import { toInt, safeJson } from '../lib/validation.js';
-import { autoEntryFeeCreated, recordPayment, deleteEntriesFor, REF, syncInvoiceEntry } from '../services/accounting.js';
+import { autoEntryFeeCreated, recordPayment, deleteEntriesFor, REF, syncInvoiceEntry, recalcFee } from '../services/accounting.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 import { cashSummary } from '../services/client-statement.js';
 
@@ -102,6 +102,10 @@ async function markPaid({ request, env, authUser, officeId, params }) {
 
   const id = toInt(params[0]);
   const b = await safeJson(request);
+  const EDITABLE = ['amount_due', 'due_date', 'notes', 'case_id', 'client_id'];
+  if (b && b.amount_paid == null && EDITABLE.some(k => b[k] !== undefined)) {
+    return editFee(env, { b, id, officeId, authUser, request });
+  }
   if (!b || b.amount_paid == null) return fail(env, 'amount_paid مطلوب', 400);
 
   // "المدفوع" بيتحسب من الدفعات — الزيادة بتتسجل كدفعة حقيقية (بتدخل الصندوق/البنك وبيطلعلها إيصال)
@@ -121,6 +125,55 @@ async function markPaid({ request, env, authUser, officeId, params }) {
     action: 'update', entity: 'fee', entity_id: id, request,
   });
   return ok(env, { updated: true });
+}
+
+// تعديل الأتعاب: المبلغ والاستحقاق والملاحظات والقضية/الموكل.
+// تغيير المبلغ = قيد الأتعاب بيتعمل من جديد بنفس تاريخه (وممنوع لو الفترة دي مقفولة محاسبياً).
+async function editFee(env, { b, id, officeId, authUser, request }) {
+  const fee = await env.DB.prepare('SELECT * FROM fees WHERE id = ? AND office_id = ?').bind(id, officeId).first();
+  if (!fee) return fail(env, 'الأتعاب مش موجودة', 404);
+  const toId = v => (v == null || v === '' ? null : toInt(v) || null);
+  const next = {
+    amount_due: b.amount_due !== undefined ? Number(b.amount_due) : Number(fee.amount_due),
+    due_date: b.due_date !== undefined ? (/^\d{4}-\d{2}-\d{2}$/.test(String(b.due_date || '')) ? b.due_date : null) : fee.due_date,
+    notes: b.notes !== undefined ? (b.notes ? String(b.notes).slice(0, 1000) : null) : fee.notes,
+    case_id: b.case_id !== undefined ? toId(b.case_id) : fee.case_id,
+    client_id: b.client_id !== undefined ? toId(b.client_id) : fee.client_id,
+  };
+  if (!(next.amount_due > 0)) return fail(env, 'اكتب المبلغ', 400);
+  if (next.amount_due + 0.009 < Number(fee.amount_paid || 0)) {
+    return fail(env, `المبلغ الجديد أقل من اللي اتدفع فعلاً (${fee.amount_paid}) — احذف دفعة الأول لو محتاج`, 400);
+  }
+  if (next.client_id && next.client_id !== fee.client_id) {
+    const c = await env.DB.prepare('SELECT id FROM clients WHERE id = ? AND office_id = ? AND deleted_at IS NULL').bind(next.client_id, officeId).first();
+    if (!c) return fail(env, 'الموكل مش موجود', 400);
+  }
+  if (next.case_id && next.case_id !== fee.case_id) {
+    const k = await env.DB.prepare('SELECT id FROM cases WHERE id = ? AND office_id = ? AND deleted_at IS NULL').bind(next.case_id, officeId).first();
+    if (!k) return fail(env, 'القضية مش موجودة', 400);
+  }
+
+  const amountChanged = Math.abs(next.amount_due - Number(fee.amount_due)) > 0.009;
+  if (amountChanged) {
+    const entry = await env.DB.prepare(
+      'SELECT entry_date FROM journal_entries WHERE reference_type = ? AND reference_id = ? AND office_id = ? ORDER BY id LIMIT 1'
+    ).bind(REF.fee, id, officeId).first();
+    const day = entry?.entry_date || String(fee.created_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+    try { await assertOpen(env, officeId, day); } catch (e) { return fail(env, e.message, 423); }
+    await deleteEntriesFor(env, officeId, REF.fee, id);
+    await autoEntryFeeCreated(env, {
+      officeId, feeId: id, amount: next.amount_due, date: day,
+      description: next.notes || `أتعاب${next.case_id ? ' - قضية #' + next.case_id : ''} (معدّلة)`, userId: authUser.user_id,
+    });
+  }
+  await env.DB.prepare('UPDATE fees SET amount_due = ?, due_date = ?, notes = ?, case_id = ?, client_id = ? WHERE id = ? AND office_id = ?')
+    .bind(next.amount_due, next.due_date, next.notes, next.case_id, next.client_id, id, officeId).run();
+  await recalcFee(env, officeId, id); // الحالة (مستحق / جزئي / مدفوع) حسب المبلغ الجديد
+  await audit(env, {
+    office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'fee', entity_id: id, request,
+    metadata: { from: { amount_due: fee.amount_due, due_date: fee.due_date }, to: { amount_due: next.amount_due, due_date: next.due_date } },
+  });
+  return ok(env, { id, ...next });
 }
 
 async function removeFee({ request, env, authUser, officeId, params }) {

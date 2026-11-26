@@ -6,6 +6,7 @@ import { apiJson, api, hasFeature } from '../api.js';
 import { openWhatsAppComposer } from '../whatsapp.js';
 import { esc, toast, skeleton } from '../ui.js';
 import { can } from '../access.js';
+import { editSession } from '../session-edit.js';
 import { dateLocale, fmtDay, hijriDate, isSaudi, dateMode, showsHijri } from '../country.js';
 
 // ============================================================
@@ -498,7 +499,7 @@ function showEventDetails(event) {
         ${(cat === 'session' || cat === 'fee' || (cat === 'event' && hasClient)) && !r.pending
           ? `<button class="btn wa-send btn-sm" data-action="wa">💬 رسالة للموكل</button>` : ''}
         ${cat === 'event' && canEdit ? `<button class="btn btn-ghost btn-sm" data-action="done">${r.done ? '↩️ لسه ما اتعملش' : '✔️ تم'}</button>` : ''}
-        ${cat === 'event' && canEdit ? `<button class="btn btn-ghost btn-sm" data-action="edit">✏️ تعديل</button>` : ''}
+        ${(cat === 'event' || cat === 'session') && canEdit ? `<button class="btn btn-ghost btn-sm" data-action="edit">✏️ تعديل</button>` : ''}
         ${canDel ? `<button class="btn btn-ghost btn-sm" data-action="delete" style="color:var(--danger)">🗑 حذف</button>` : ''}
       </div>
     </div>`;
@@ -536,6 +537,10 @@ function showEventDetails(event) {
       if (a === 'done') {
         await apiJson(`/api/calendar/events/event/${realId}`, { method: 'PATCH', body: JSON.stringify({ done: !r.done }) });
         toast(r.done ? 'اترجّع' : '✔️ تمام', 'ok'); close(); refresh();
+      }
+      if (a === 'edit' && cat === 'session') {
+        close();
+        return editSession({ id: realId, session_date: date, session_time: time || r.time || '', notes: r.notes || '' }, refresh);
       }
       if (a === 'edit') {
         close();

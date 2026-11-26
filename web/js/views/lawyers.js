@@ -2,6 +2,7 @@
 import { apiJson } from '../api.js';
 import { esc, empty, waLink, toast, fmtMoney, skeleton, bindPanels, curName } from '../ui.js';
 import { countryInfo } from '../country.js';
+import { openModal } from '../modal.js';
 import { setLawyers } from '../state.js';
 
 // حالة الفلاتر
@@ -125,6 +126,25 @@ export async function render(host) {
 
     // === ربط أحداث كل محامي ===
     host.querySelector('#lawyers-list').addEventListener('click', async e => {
+      const ed = e.target.closest('[data-edit-lawyer]');
+      if (ed) {
+        const l = list.find(x => String(x.id) === ed.dataset.editLawyer);
+        if (!l) return;
+        const saved = await openModal({
+          title: '✏️ تعديل بيانات المحامي',
+          submitText: 'حفظ التعديل',
+          fields: [
+            { name: 'name', label: 'الاسم', required: true },
+            { name: 'grade', label: 'الدرجة' },
+            { name: 'salary', label: `المرتب (${curName()})`, type: 'number' },
+            { name: 'phone', label: 'رقم واتساب' },
+          ],
+          initialData: { name: l.name || '', grade: l.grade || '', salary: l.salary ?? '', phone: l.phone || '' },
+          onSubmit: async (d) => { await apiJson(`/api/lawyers/${l.id}`, { method: 'PATCH', body: JSON.stringify(d) }); },
+        });
+        if (saved) { toast('✅ اتعدّلت بيانات المحامي', 'ok'); loadAndRender(); }
+        return;
+      }
       const btn = e.target.closest('[data-del-lawyer]');
       if (!btn) return;
       if (!confirm('متأكد من حذف المحامي؟ (هيتم فك ارتباطه بالمهام)')) return;
@@ -148,11 +168,12 @@ function renderLawyerItem(l) {
         <span class="num mono">${esc(l.grade || '')}</span>
       </div>
       <div class="meta">
-        💰 المرتب: ${l.salary ? fmtMoney(l.salary) + ' جنيه' : '—'}
+        💰 المرتب: ${l.salary ? fmtMoney(l.salary) + ' ' + curName() : '—'}
         ${l.phone ? ' · 📱 ' + esc(l.phone) : ''}
       </div>
       <div class="acts">
         ${l.phone ? `<a class="wa" href="${waLink(l.phone)}" target="_blank" rel="noopener">💬 واتساب</a>` : ''}
+        <button class="ghost" data-edit-lawyer="${l.id}">✏️ تعديل</button>
         <button class="ghost" data-del-lawyer="${l.id}" style="color:var(--danger)">🗑 حذف</button>
       </div>
     </div>`;

@@ -411,6 +411,9 @@ async function deleteEvent({ env, authUser, officeId, params, request, access })
        WHERE s.id = ? AND c.office_id = ?`
     ).bind(id, officeId).first();
     if (!s) return fail(env, 'الجلسة مش موجودة', 404);
+    // مصاريف الجلسة ليها قيود في الحسابات → متتمسحش الجلسة وتسيبهم يتامى
+    const exp = await env.DB.prepare(`SELECT COUNT(*) AS n FROM session_expenses WHERE session_id = ?`).bind(id).first();
+    if (exp?.n) return fail(env, `الجلسة دي عليها ${exp.n} مصروف متسجل — امسح المصاريف الأول، وبعدين امسح الجلسة`, 409);
 
     await env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(id).run();
     return ok(env, { deleted: true });
