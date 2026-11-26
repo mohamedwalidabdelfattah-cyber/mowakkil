@@ -7,6 +7,7 @@ import { esc, toast, fmtMoney, fmtDate } from '../ui.js';
 import { waLinkFor } from '../phone.js';
 import { mountFollowup } from './sa-followup.js';
 import { mountSources } from './sa-sources.js';
+import { mountAlerts } from './sa-alerts.js';
 
 let currentFilter = { search: '', plan: '', status: '', country: '' };
 // دولة المكتب (بتظهر كشارة جنب اسمه، وفيه فلتر بيها)
@@ -20,6 +21,7 @@ const SA_TABS = [
   ['payments', '💳 طلبات الدفع'],
   ['sources', '📊 مصادر التسجيل'],
   ['ai', '🤖 الذكاء الاصطناعي'],
+  ['alerts', '🚨 التنبيهات'],
 ];
 const SA_TAB_KEY = 'mowakkil_sa_tab';
 
@@ -160,6 +162,7 @@ async function renderSABody() {
 
     <!-- 📊 مصادر التسجيل -->
     <div class="card sa-pane" id="sa-sources" data-pane="sources" hidden></div>
+    <div class="card sa-pane" id="sa-alerts" data-pane="alerts" hidden></div>
 
     <!-- 🏢 المكاتب -->
     <div class="card sa-pane" data-pane="offices" hidden>
@@ -232,6 +235,7 @@ async function renderSABody() {
     payments: () => loadPaymentRequests(),
     sources: () => mountSources(host.querySelector('#sa-sources')),
     ai: () => {},
+    alerts: () => mountAlerts(host.querySelector('#sa-alerts')),
   };
   const loaded = new Set();
   const openTab = (k) => {
@@ -258,6 +262,8 @@ async function loadTabBadges(host) {
   const set = (k, n) => { const el = host.querySelector(`[data-badge="${k}"]`); if (el) { el.textContent = n; el.hidden = !n; } };
   saApiJson('/api/superadmin/followups').then(d => set('followup', d.due_today || 0)).catch(() => {});
   saApiJson('/api/superadmin/payment-requests?status=pending').then(l => set('payments', (l || []).length)).catch(() => {});
+  // تنبيهات آخر 24 ساعة
+  saApiJson('/api/superadmin/alerts').then(d => set('alerts', (d.alerts || []).filter(a => a.key !== 'test' && Date.now() - new Date(a.at) < 864e5).length)).catch(() => {});
 }
 
 // ============================================================

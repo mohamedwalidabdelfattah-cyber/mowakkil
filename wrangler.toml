@@ -20,8 +20,8 @@ binding = "VECTORIZE"
 index_name = "law-articles-m3"
 
 [triggers]
-crons = ["0 3 * * *"]
+crons = ["0 3 * * *", "*/30 * * * *"]
 
 [vars]
-ALLOWED_ORIGINS = "*"
+ALLOWED_ORIGINS = "https://mowakkil-2026.pages.dev,https://*.mowakkil-2026.pages.dev"
 GOOGLE_DRIVE_FOLDER_ID = "176icUx16KeOkstl-of39Vtoszo8R_h_o"

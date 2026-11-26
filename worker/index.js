@@ -178,6 +178,8 @@ async function handleFetch(request, env) {
     return res;
   } catch (err) {
     console.error('unhandled error', err);
+    // تنبيه صاحب النظام لو قاعدة البيانات وقفت أو الأخطاء زادت (lib/monitor.js)
+    try { const { noteError } = await import('./lib/monitor.js'); await noteError(env, err, `${request.method} ${new URL(request.url).pathname}`); } catch {}
     return fail(env, 'حصل خطأ في السيرفر، جرب تاني', 500, {}, request);
   }
 }
@@ -187,6 +189,12 @@ export default {
     return handleFetch(request, env);
   },
   async scheduled(event, env, ctx) {
+    // الفحص الدوري (كل نص ساعة): قاعدة البيانات بترد؟ — من غير شغل اليوم التقيل
+    if (event.cron === '*/30 * * * *') {
+      const { healthCheck } = await import('./lib/monitor.js');
+      ctx.waitUntil(healthCheck(env));
+      return;
+    }
     const { runTrialExpiry } = await import('../cron/trial-expiry.js');
     const { runNotificationJobs } = await import('./services/notification-jobs.js');
 

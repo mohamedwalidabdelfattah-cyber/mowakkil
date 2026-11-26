@@ -9,6 +9,20 @@ import { audit } from '../lib/audit.js';
 import { isValidEmail, isStr, toInt, safeJson } from '../lib/validation.js';
 import { getSubscription } from '../middleware/feature-gate.js';
 import { providersHealth } from '../services/llm.js';
+import { alertOwner, recentAlerts, channels } from '../lib/monitor.js';
+
+// 🚨 التنبيهات: القنوات المتظبطة + آخر التنبيهات
+async function listAlerts({ env }) {
+  return ok(env, { channels: channels(env), alerts: await recentAlerts(env) });
+}
+// تنبيه تجريبي عشان صاحب النظام يتأكد إن القناة واصلة
+async function testAlert({ env }) {
+  const ch = channels(env);
+  if (!ch.telegram && !ch.ntfy) return fail(env, 'مفيش قناة تنبيهات متظبطة — حط TELEGRAM_BOT_TOKEN وTELEGRAM_CHAT_ID أو NTFY_TOPIC', 400);
+  const r = await alertOwner(env, { key: 'test', title: 'تنبيه تجريبي ✅', body: 'لو الرسالة دي وصلتك يبقى التنبيهات شغالة.', force: true });
+  if (!r.sent?.length) return fail(env, 'التنبيه مااتبعتش: ' + (r.failed || []).join(' · '), 502);
+  return ok(env, r);
+}
 
 // ============================================================
 // AI: فحص المزودين + إعادة فهرسة المواد القانونية في Vectorize
@@ -95,6 +109,8 @@ export const protectedRoutes = [
   { method: 'PATCH',  path: /^\/api\/superadmin\/users\/(\d+)\/reset-password$/, handler: resetUserPassword },
   // ✅ أدوات الذكاء الاصطناعي
   { method: 'GET',    path: '/api/superadmin/ai/health',                         handler: aiHealth },
+  { method: 'GET',    path: '/api/superadmin/alerts',                            handler: listAlerts },
+  { method: 'POST',   path: '/api/superadmin/alerts/test',                       handler: testAlert },
   { method: 'POST',   path: '/api/superadmin/ai/reindex-laws',                   handler: reindexLaws },
 ];
 

@@ -185,6 +185,8 @@ export async function chatCompletion(env, {
       ? 'الحصة اليومية المجانية للوضع السري (Cloudflare) خلصت. جرب بكرة، أو حوّل المكتب للوضع "المتوازن" من الإعدادات.'
       : 'نموذج الوضع السري (Cloudflare) مش متاح دلوقتي. جرب تاني بعد دقيقة.');
   }
+  // تنبيه صاحب النظام لو ده اتكرر (lib/monitor.js)
+  try { const { noteAiDown } = await import('../lib/monitor.js'); await noteAiDown(env, errors[errors.length - 1]); } catch {}
   throw new Error('كل نماذج الذكاء الاصطناعي المجانية مش متاحة دلوقتي. جرب تاني بعد دقيقة.');
 }
 

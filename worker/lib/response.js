@@ -17,11 +17,17 @@ export function cors(resp, env, request) {
   // نجيب الـ Origin من الطلب
   const origin = request?.headers?.get('origin') || '';
 
-  // نحدد الـ origin المسموح
+  // نحدد الـ origin المسموح — بيقبل نجمة للنطاقات الفرعية (https://*.mowakkil-2026.pages.dev = روابط المعاينة)
+  // origin مش مسموح → بنرجّع أول واحد في القايمة، والمتصفح بيرفض الرد (من غير ما نكسر الطلبات اللي مفيهاش Origin)
+  const matches = (pat) => {
+    if (pat === origin) return true;
+    const m = pat.match(/^(https?:\/\/)\*\.(.+)$/);
+    return !!(m && origin.startsWith(m[1]) && origin.endsWith('.' + m[2]) && !origin.slice(m[1].length).includes('/'));
+  };
   let allowOrigin = '*';
   if (allowed.length === 0 || allowed.includes('*')) {
     allowOrigin = origin || '*';
-  } else if (allowed.includes(origin)) {
+  } else if (origin && allowed.some(matches)) {
     allowOrigin = origin;
   } else {
     allowOrigin = allowed[0];
