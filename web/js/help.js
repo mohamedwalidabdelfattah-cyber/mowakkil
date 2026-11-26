@@ -3,17 +3,17 @@
 // أول مرة المستخدم يفتح الصفحة بيظهرله تلميح صغير (مرة واحدة بس لكل صفحة).
 
 import { startTour, tourFor, isTourRunning } from './tour.js';
-import { VIDEOS } from './tour-videos.js';
+import { VIDEOS, CHANNEL } from './tour-videos.js';
 import { isSaudi } from './country.js';
 
 // نصوص القايمة والتلميح (مصري / فصحى للسعودية)
 const T = () => isSaudi() ? {
   need: 'تحتاج مساعدة؟', tour: 'جولة سريعة في الصفحة', tourSub: 'أسهم تشير إلى كل زر وتشرحه',
-  video: 'فيديو الشرح', videoSub: 'دقيقة أو دقيقتان على يوتيوب', wa: 'تواصل معنا عبر واتساب', waSub: 'سيرد عليك فريق الدعم',
+  video: 'فيديو الشرح', videoSub: 'دقيقة أو دقيقتان على يوتيوب', channel: 'قناة الشرح على يوتيوب', channelSub: 'جميع فيديوهات شرح النظام', wa: 'تواصل معنا عبر واتساب', waSub: 'سيرد عليك فريق الدعم',
   waMsg: 'أحتاج مساعدة في نظام مُوكِّل', hiTitle: 'أول مرة هنا؟ 👋', hiBody: 'شاهد شرح الصفحة في أقل من دقيقة.', go: 'ابدأ الشرح', later: 'لاحقًا',
 } : {
   need: 'محتاج مساعدة؟', tour: 'جولة سريعة في الصفحة', tourSub: 'أسهم بتشاور على كل زرار وتشرحه',
-  video: 'فيديو الشرح', videoSub: 'دقيقة أو اتنين على يوتيوب', wa: 'كلّمنا على واتساب', waSub: 'فريق الدعم هيرد عليك',
+  video: 'فيديو الشرح', videoSub: 'دقيقة أو اتنين على يوتيوب', channel: 'قناة الشرح على يوتيوب', channelSub: 'كل فيديوهات شرح النظام', wa: 'كلّمنا على واتساب', waSub: 'فريق الدعم هيرد عليك',
   waMsg: 'محتاج مساعدة في نظام مُوكِّل', hiTitle: 'أول مرة هنا؟ 👋', hiBody: 'اتفرّج على شرح الصفحة في أقل من دقيقة.', go: 'ابدأ الشرح', later: 'بعدين',
 };
 
@@ -75,7 +75,8 @@ function openMenu(btn) {
   m.innerHTML = `
     <div class="help-menu-title">${t.need}</div>
     ${tour ? `<button data-h="tour"><span>▶️</span><div><b>${t.tour}</b><small>${t.tourSub}</small></div></button>` : ''}
-    ${hasVideo ? `<button data-h="video"><span>🎬</span><div><b>${t.video}</b><small>${t.videoSub}</small></div></button>` : ''}
+    ${hasVideo ? `<button data-h="video"><span>🎬</span><div><b>${t.video}</b><small>${t.videoSub}</small></div></button>`
+      : CHANNEL ? `<a data-h="channel" target="_blank" rel="noopener" href="${CHANNEL}"><span>🎬</span><div><b>${t.channel}</b><small>${t.channelSub}</small></div></a>` : ''}
     <a data-h="wa" target="_blank" rel="noopener" href="https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent(t.waMsg)}">
       <span>💬</span><div><b>${t.wa}</b><small>${t.waSub}</small></div></a>`;
   m.style.top = (r.bottom + 8) + 'px';
