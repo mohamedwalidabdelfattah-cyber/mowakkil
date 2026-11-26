@@ -15,12 +15,22 @@ const tourKey = view => (TOURS[view] ? view : String(view || '').replace(/-.*$/,
 export function tourFor(view) {
   return TOURS[tourKey(view)] || null;
 }
-// نص الخطوة: فصحى مكتوبة جاهزة للسعودية (لو عدد الخطوات متطابق)، وإلا المصري
+// نص الخطوة للسعودية: الفصحى جوه الخطوة نفسها (sa: [عنوان, شرح])، أو من tours-msa.js
+// (القايمة دي بترتيب الخطوات اللي مالهاش sa بس). لو مفيش → المصري والتحويل التلقائي.
+function msaFor(view, steps, i) {
+  const s = steps[i];
+  if (s.sa) return s.sa;
+  const list = TOURS_MSA[tourKey(view)];
+  const plain = steps.filter(x => !x.sa);
+  if (list && list.length === plain.length) return list[plain.indexOf(s)];
+  return null;
+}
 function stepText(view, steps, i) {
-  const msa = isSaudi() ? TOURS_MSA[tourKey(view)] : null;
-  if (msa && msa.length === steps.length) return { title: msa[i][0], body: msa[i][1], msa: true };
+  const m = isSaudi() ? msaFor(view, steps, i) : null;
+  if (m) return { title: m[0], body: m[1], msa: true };
   return { title: steps[i].title || '', body: steps[i].body || '', msa: false };
 }
+const fullMsa = (view, steps) => isSaudi() && steps.every((_, i) => msaFor(view, steps, i));
 export const isTourRunning = () => !!active;
 
 // ---------- الوصول للعنصر ----------
@@ -187,7 +197,7 @@ export async function startTour(view, { autoplay = false, startAt = 0 } = {}) {
   const ui = buildUI();
   if (autoplay) ui.classList.add('tour-autoplay');
   const steps = tour.steps;
-  const sa = stepText(view, steps, 0).msa;
+  const sa = fullMsa(view, steps);
   // النص الفصيح مكتوب جاهز → طبقة التحويل التلقائي متلمسهوش
   if (sa) ui.setAttribute('data-no-msa', '');
   const L = { prev: '→ السابق', next: 'التالي ←', done: sa ? 'حسنًا، فهمت ✓' : 'تمام، فهمت ✓' };
