@@ -5,10 +5,10 @@
 export const CHANNEL = 'https://www.youtube.com/@mowakkil';
 
 export const VIDEOS = {
-  cases: '',
-  agenda: '',
-  clients: '',
-  fees: '',
-  search: '',
-  settings: '',
+  cases: 'oMJiIV0PrX0',
+  agenda: 'z05GhokUEwg',
+  clients: 'm_Wz9pmDz8w',
+  fees: 'a7o0iZjGLFY',
+  search: 'Jg9cvTpLxl0',
+  settings: 'kZx_Jz3DM3I',
 };
