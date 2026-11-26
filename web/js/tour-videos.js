@@ -6,7 +6,7 @@ export const CHANNEL = 'https://www.youtube.com/@mowakkil';
 
 export const VIDEOS = {
   cases: 'oMJiIV0PrX0',
-  agenda: 'z05GhokUEwg',
+  agenda: 'wNWxejNvo9o', // النسخة الجديدة بطرق العرض (القديمة: z05GhokUEwg)
   clients: 'm_Wz9pmDz8w',
   fees: 'a7o0iZjGLFY',
   search: 'Jg9cvTpLxl0',
