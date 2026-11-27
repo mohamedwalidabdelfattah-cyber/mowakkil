@@ -4,26 +4,56 @@
 //   - أخطاء كتير في السيرفر في وقت قصير                       → تنبيه
 //   - الذكاء الاصطناعي فشل في كل النماذج كذا مرة              → تنبيه
 // القنوات (اختياري — أي واحدة متظبطة بتشتغل):
-//   Telegram: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
-//   ntfy (تطبيق إشعارات مجاني من غير حساب): NTFY_TOPIC
+//   Telegram: TELEGRAM_BOT_TOKEN بس — رقم المحادثة بيتعرف لوحده أول ما صاحب النظام يبعت /start للبوت
+//             ويضغط «تنبيه تجريبي» (بيتحفظ في KV). أو TELEGRAM_CHAT_ID يدوي.
+//   ntfy: NTFY_TOPIC (+ NTFY_TOKEN اختياري). ⚠️ ntfy.sh بيرفض (429) الرسايل من غير حساب جاية من Cloudflare
+//         لأن عناوين Cloudflare مشتركة بين آلاف المواقع — عشان كده Telegram هو الأضمن.
 // التنبيهات كمان بتتسجل وتظهر في لوحة السوبر أدمن (تاب التنبيهات) حتى لو مفيش قناة.
 // ⚠️ التنبيه عمره ما بيحتوي بيانات موكلين — بس نوع المشكلة وأول سطر من رسالة الخطأ.
 
 const ALERTS_KEY = 'mon:alerts';
 const secret = (env, k) => String(env?.[k] ?? '').trim();
 const kvOf = env => env?.RATE_LIMIT_KV || null;
+const TG_CHAT_KEY = 'mon:tg_chat';
 
 export function channels(env) {
   return {
-    telegram: !!(secret(env, 'TELEGRAM_BOT_TOKEN') && secret(env, 'TELEGRAM_CHAT_ID')),
+    telegram: !!secret(env, 'TELEGRAM_BOT_TOKEN'),
     ntfy: !!secret(env, 'NTFY_TOPIC'),
   };
+}
+
+async function tgChat(env) {
+  const manual = secret(env, 'TELEGRAM_CHAT_ID');
+  if (manual) return manual;
+  try { return (await kvOf(env)?.get(TG_CHAT_KEY)) || ''; } catch { return ''; }
+}
+
+/**
+ * بيربط Telegram من غير ما صاحب النظام يدوّر على رقم المحادثة:
+ * بياخد آخر حد بعت رسالة للبوت (المفروض صاحب النظام نفسه بعد /start) ويحفظه.
+ */
+export async function linkTelegram(env) {
+  const tg = secret(env, 'TELEGRAM_BOT_TOKEN');
+  if (!tg) return { ok: false, error: 'مفيش TELEGRAM_BOT_TOKEN' };
+  if (await tgChat(env)) return { ok: true, already: true };
+  let d;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${tg}/getUpdates?limit=20`, { signal: AbortSignal.timeout(10000) });
+    d = await r.json();
+    if (!d.ok) return { ok: false, error: 'مفتاح البوت غلط (' + (d.description || r.status) + ')' };
+  } catch (e) { return { ok: false, error: 'مش قادر يوصل لتليجرام' }; }
+  const msgs = (d.result || []).map(u => u.message || u.my_chat_member).filter(Boolean);
+  const chat = msgs.length ? msgs[msgs.length - 1].chat : null;
+  if (!chat?.id) return { ok: false, error: 'افتح البوت على تليجرام واضغط Start (أو ابعتله أي رسالة) وبعدين جرّب تاني' };
+  await kvOf(env)?.put(TG_CHAT_KEY, String(chat.id));
+  return { ok: true, chat: chat.first_name || chat.title || '' };
 }
 
 async function send(env, title, body) {
   const text = `🚨 مُوكِّل — ${title}\n${body}`;
   const jobs = [];
-  const tg = secret(env, 'TELEGRAM_BOT_TOKEN'), chat = secret(env, 'TELEGRAM_CHAT_ID');
+  const tg = secret(env, 'TELEGRAM_BOT_TOKEN'), chat = tg ? await tgChat(env) : '';
   if (tg && chat) {
     jobs.push(fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -33,13 +63,17 @@ async function send(env, title, body) {
   }
   const topic = secret(env, 'NTFY_TOPIC');
   if (topic) {
+    // الهيدرز لازم ASCII — العنوان بالإنجليزي والتفاصيل بالعربي في الرسالة
+    const headers = { Title: 'Mowakkil alert', Priority: 'high', Tags: 'rotating_light' };
+    const ntfyToken = secret(env, 'NTFY_TOKEN');
+    if (ntfyToken) headers.Authorization = 'Bearer ' + ntfyToken;
     jobs.push(fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
-      method: 'POST',
-      // الهيدرز لازم ASCII — العنوان بالإنجليزي والتفاصيل بالعربي في الرسالة
-      headers: { Title: 'Mowakkil alert', Priority: 'high', Tags: 'rotating_light' },
-      body: text,
-      signal: AbortSignal.timeout(10000),
-    }).then(r => { if (!r.ok) throw new Error('ntfy ' + r.status); return 'ntfy'; }));
+      method: 'POST', headers, body: text, signal: AbortSignal.timeout(10000),
+    }).then(r => {
+      if (r.status === 429) throw new Error('ntfy 429 — ntfy رافض الرسايل الجاية من Cloudflare؛ استخدم Telegram');
+      if (!r.ok) throw new Error('ntfy ' + r.status);
+      return 'ntfy';
+    }));
   }
   const res = await Promise.allSettled(jobs);
   return { sent: res.filter(r => r.status === 'fulfilled').map(r => r.value), failed: res.filter(r => r.status === 'rejected').map(r => String(r.reason?.message || r.reason)) };

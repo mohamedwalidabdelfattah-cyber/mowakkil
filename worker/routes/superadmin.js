@@ -9,7 +9,7 @@ import { audit } from '../lib/audit.js';
 import { isValidEmail, isStr, toInt, safeJson } from '../lib/validation.js';
 import { getSubscription } from '../middleware/feature-gate.js';
 import { providersHealth } from '../services/llm.js';
-import { alertOwner, recentAlerts, channels } from '../lib/monitor.js';
+import { alertOwner, recentAlerts, channels, linkTelegram } from '../lib/monitor.js';
 
 // 🚨 التنبيهات: القنوات المتظبطة + آخر التنبيهات
 async function listAlerts({ env }) {
@@ -18,7 +18,12 @@ async function listAlerts({ env }) {
 // تنبيه تجريبي عشان صاحب النظام يتأكد إن القناة واصلة
 async function testAlert({ env }) {
   const ch = channels(env);
-  if (!ch.telegram && !ch.ntfy) return fail(env, 'مفيش قناة تنبيهات متظبطة — حط TELEGRAM_BOT_TOKEN وTELEGRAM_CHAT_ID أو NTFY_TOPIC', 400);
+  if (!ch.telegram && !ch.ntfy) return fail(env, 'مفيش قناة تنبيهات متظبطة — حط TELEGRAM_BOT_TOKEN (أو NTFY_TOPIC)', 400);
+  // أول مرة: نعرف رقم محادثة تليجرام لوحدنا من آخر رسالة اتبعتت للبوت
+  if (ch.telegram) {
+    const link = await linkTelegram(env);
+    if (!link.ok && !ch.ntfy) return fail(env, 'تليجرام: ' + link.error, 400);
+  }
   const r = await alertOwner(env, { key: 'test', title: 'تنبيه تجريبي ✅', body: 'لو الرسالة دي وصلتك يبقى التنبيهات شغالة.', force: true });
   if (!r.sent?.length) return fail(env, 'التنبيه مااتبعتش: ' + (r.failed || []).join(' · '), 502);
   return ok(env, r);
