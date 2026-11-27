@@ -661,6 +661,11 @@ async function openOfficeModal(officeId) {
         ` : ''}
       </div>
 
+      <div class="card" style="margin-bottom:12px;background:var(--gray-50)">
+        <h4 style="margin:0 0 10px;font-size:14px">👥 مستخدمين المكتب</h4>
+        <div id="sa-office-users" style="font-size:13px;color:var(--text-soft)">جاري التحميل…</div>
+      </div>
+
       <label class="label">🎛️ تغيير الباقة</label>
       <select id="sa-plan-select" class="select">
         <option value="starter" ${sub?.plan === 'starter' ? 'selected' : ''}>الأساسية (199 ج/شهر)</option>
@@ -699,6 +704,8 @@ async function openOfficeModal(officeId) {
         </details>
       ` : ''}
     `;
+
+    loadOfficeUsers(officeId);
 
     modal.querySelector('[data-action="change-plan"]').addEventListener('click', async () => {
       const plan = document.getElementById('sa-plan-select').value;
@@ -775,4 +782,62 @@ async function openOfficeModal(officeId) {
 // ============================================================
 export function render(host) {
   host.innerHTML = '<div class="card"><div class="empty">المسؤول له لوحة منفصلة — اضغط على "دخول مسؤول المنصة".</div></div>';
+}
+// ============================================================
+// مستخدمين المكتب + إعادة تعيين كلمة السر (للعميل اللي نسيها)
+// ============================================================
+const ROLE_LABELS = { admin: 'صاحب المكتب', lawyer: 'محامي', secretary: 'سكرتير', accountant: 'محاسب' };
+
+function tempPassword() {
+  // من غير حروف بتتلخبط (0/O و1/l/I)
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const a = crypto.getRandomValues(new Uint32Array(8));
+  return 'Mw-' + [...a].map(n => chars[n % chars.length]).join('');
+}
+
+async function loadOfficeUsers(officeId) {
+  const box = document.getElementById('sa-office-users');
+  if (!box) return;
+  try {
+    const users = await saApiJson(`/api/superadmin/offices/${officeId}/users`);
+    if (!users.length) { box.textContent = 'مفيش مستخدمين'; return; }
+    box.innerHTML = users.map(u => `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-soft);flex-wrap:wrap">
+        <div style="flex:1;min-width:150px">
+          <div style="font-weight:700;color:var(--text)">${esc(u.full_name || '—')} <span style="font-weight:400;font-size:12px;color:var(--text-soft)">· ${esc(ROLE_LABELS[u.role] || u.role || '')}${u.active ? '' : ' · موقوف'}</span></div>
+          <div style="font-size:12px;font-family:var(--font-mono)">${esc(u.phone || u.email || '')}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-reset-user="${u.id}">🔑 إعادة تعيين كلمة السر</button>
+        <div data-reset-result="${u.id}" style="width:100%"></div>
+      </div>`).join('');
+
+    box.querySelectorAll('[data-reset-user]').forEach(btn => btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.resetUser);
+      const u = users.find(x => x.id === id);
+      if (!confirm(`هتتغير كلمة السر بتاعة «${u.full_name || ''}» لكلمة سر مؤقتة جديدة، والقديمة مش هتشتغل تاني. تكمّل؟`)) return;
+      const pass = tempPassword();
+      btn.disabled = true;
+      try {
+        await saApiJson(`/api/superadmin/users/${id}/reset-password`, { method: 'PATCH', body: JSON.stringify({ new_password: pass }) });
+        const login = u.phone || u.email || '';
+        const msg = `أهلاً ${u.full_name || ''}، اتعملت لحضرتك كلمة سر مؤقتة على مُوكِّل:\n${pass}\n\nادخل برقمك (${login}) وكلمة السر دي، وبعدين غيّرها من «حسابي» ← تغيير كلمة السر.`;
+        const wa = u.phone ? (waLinkFor(u.phone, msg) || '') : '';
+        const res = box.querySelector(`[data-reset-result="${id}"]`);
+        res.innerHTML = `
+          <div style="background:var(--gray-100, #eef6f0);border:1px solid var(--success);border-radius:8px;padding:10px;margin-top:6px;color:var(--text)">
+            <div style="font-size:12.5px;margin-bottom:6px">✅ كلمة السر المؤقتة (ابعتها للعميل):</div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <code style="font-size:16px;font-weight:700;direction:ltr;user-select:all">${esc(pass)}</code>
+              <button class="btn btn-ghost btn-sm" data-copy-pass>📋 نسخ</button>
+              ${wa ? `<a class="btn btn-sm" href="${esc(wa)}" target="_blank" rel="noopener" style="background:#25D366;border-color:#25D366;color:#fff;text-decoration:none">💬 ابعتها واتساب</a>` : ''}
+            </div>
+          </div>`;
+        res.querySelector('[data-copy-pass]').addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(pass); toast('📋 اتنسخت', 'ok'); } catch { toast('انسخها يدوي', 'bad'); }
+        });
+        toast('✅ اتغيرت كلمة السر', 'ok');
+      } catch (e) { toast(e.message, 'bad'); }
+      finally { btn.disabled = false; }
+    }));
+  } catch (e) { box.textContent = e.message; }
 }

@@ -420,17 +420,22 @@ async function changePlan({ request, env, params, superAdmin }) {
 // ============================================================
 // Reset user password
 // ============================================================
-async function resetUserPassword({ request, env, params }) {
+async function resetUserPassword({ request, env, params, superAdmin }) {
   const id = toInt(params[0]);
+  if (!id) return fail(env, 'id غلط', 400);
+  const target = await env.DB.prepare(`SELECT id, office_id FROM users WHERE id = ?`).bind(id).first();
+  if (!target) return fail(env, 'المستخدم مش موجود', 404);
   const b = await safeJson(request);
   if (!b || !isStr(b.new_password, 200) || b.new_password.length < 8) {
     return fail(env, 'كلمة السر لازم 8 حروف على الأقل', 400);
   }
   const { hash, salt } = await hashPassword(b.new_password);
-  await env.DB.prepare(`UPDATE users SET password_hash = ?, salt = ? WHERE id = ?`)
+  // بيفك القفل كمان لو الحساب اتقفل من كتر المحاولات الغلط
+  await env.DB.prepare(`UPDATE users SET password_hash = ?, salt = ?, failed_logins = 0, locked_until = NULL WHERE id = ?`)
     .bind(hash, salt, id).run();
   await audit(env, {
-    action: 'password_reset_by_super', entity: 'user', entity_id: id, request,
+    office_id: target.office_id, action: 'password_reset_by_super', entity: 'user', entity_id: id, request,
+    metadata: { by: superAdmin?.admin_id },
   });
   return ok(env, { updated: true });
 }
