@@ -90,6 +90,16 @@ async function create({ request, env, authUser, officeId }) {
   const limitFail = await requireLimit(env, officeId, 'max_clients', clientsCount?.c || 0);
   if (limitFail) return limitFail;
 
+  // موكل بنفس الموبايل موجود؟ → تنبيه (والشاشة بتسأل المستخدم، ولو أكّد بتبعت allow_duplicate)
+  const digits = String(b.phone || '').replace(/\D/g, '');
+  if (digits.length >= 8 && !b.allow_duplicate) {
+    const dup = await env.DB.prepare(
+      `SELECT id, name FROM clients WHERE office_id = ? AND deleted_at IS NULL
+         AND REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', ''), '(', '') LIKE ?`
+    ).bind(officeId, '%' + digits.slice(-9)).first();
+    if (dup) return fail(env, `فيه موكل بنفس رقم الموبايل: «${dup.name}»`, 409, { code: 'DUPLICATE_PHONE', existing: dup });
+  }
+
   const r = await env.DB.prepare(
     `INSERT INTO clients (office_id, name, phone, national_id) VALUES (?,?,?,?)`
   ).bind(officeId, b.name.trim(), b.phone ?? null, b.national_id ?? null).run();
@@ -213,8 +223,21 @@ async function update({ request, env, authUser, officeId, params }) {
   return ok(env, { id, ...next });
 }
 
-async function remove({ env, authUser, officeId, params }) {
+async function remove({ env, authUser, officeId, params, url }) {
   const id = toInt(params[0]);
+  // عنده قضايا مفتوحة أو فلوس لسه عليه؟ → تنبيه الأول (الشاشة بتسأل، ولو أكّد بتبعت force=1)
+  if (url?.searchParams.get('force') !== '1') {
+    const open = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM cases WHERE client_id = ? AND office_id = ? AND deleted_at IS NULL AND status != 'مؤرشفة'`
+    ).bind(id, officeId).first();
+    const due = await env.DB.prepare(
+      `SELECT COALESCE(SUM(amount_due - amount_paid), 0) AS d FROM fees WHERE client_id = ? AND office_id = ? AND amount_due > amount_paid`
+    ).bind(id, officeId).first();
+    const parts = [];
+    if (open?.n) parts.push(`${open.n} قضية مفتوحة`);
+    if (Number(due?.d) > 0) parts.push(`مستحقات لسه متدفعتش (${Number(due.d).toLocaleString('en-US')})`);
+    if (parts.length) return fail(env, `الموكل ده عنده ${parts.join(' و')}`, 409, { code: 'CLIENT_HAS_DATA' });
+  }
   const r = await env.DB.prepare(
     `UPDATE clients SET deleted_at = datetime('now') WHERE id = ? AND office_id = ?`
   ).bind(id, officeId).run();

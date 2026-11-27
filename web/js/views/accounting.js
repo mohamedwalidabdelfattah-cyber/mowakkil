@@ -65,15 +65,25 @@ async function renderAccountingHome(host) {
 // ============================================================
 // دفتر اليومية
 // ============================================================
-async function renderJournal(host) {
-  const entries = await apiJson('/api/journal?limit=100');
+async function renderJournal(host, range = {}) {
+  // من غير فترة: آخر 100 قيد. بفترة: لحد 500 قيد جوه الفترة (القيود الأقدم كانت مش بتظهر خالص)
+  const qs = new URLSearchParams({ limit: range.from || range.to ? '500' : '100' });
+  if (range.from) qs.set('from', range.from);
+  if (range.to) qs.set('to', range.to);
+  const entries = await apiJson(`/api/journal?${qs}`);
 
   host.innerHTML = `
     <div class="card">
       <h3>📖 دفتر اليومية (${entries.length})</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-6px">
-        اضغط على أي قيد لعرض التفاصيل
+        اضغط على أي قيد لعرض التفاصيل${range.from || range.to ? '' : ' · بيظهر آخر 100 قيد — اختار فترة عشان تشوف الأقدم'}
       </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:8px">
+        <label style="font-size:12.5px">من<input type="date" id="jr-from" class="input" value="${esc(range.from || '')}"></label>
+        <label style="font-size:12.5px">لحد<input type="date" id="jr-to" class="input" value="${esc(range.to || '')}"></label>
+        <button class="btn btn-ghost btn-sm" id="jr-go">عرض</button>
+        ${range.from || range.to ? '<button class="btn btn-ghost btn-sm" id="jr-clear">آخر القيود</button>' : ''}
+      </div>
     </div>
 
     <div id="journal-list">
@@ -95,6 +105,12 @@ async function renderJournal(host) {
   host.querySelectorAll('[data-open-entry]').forEach(b => b.addEventListener('click', () => {
     showEntryDetail(b.dataset.openEntry);
   }));
+  host.querySelector('#jr-go')?.addEventListener('click', () => {
+    const from = host.querySelector('#jr-from').value, to = host.querySelector('#jr-to').value;
+    if (!from && !to) return toast('اختار تاريخ البداية أو النهاية', 'bad');
+    renderJournal(host, { from, to });
+  });
+  host.querySelector('#jr-clear')?.addEventListener('click', () => renderJournal(host));
 }
 
 function getRefLabel(type) {

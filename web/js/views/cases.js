@@ -89,6 +89,7 @@ export async function render(host) {
         <div class="row">
           <div><label>القضية</label><select id="sx-case">${caseOpts}</select></div>
           <div><label>تاريخ الجلسة</label><input id="sx-date" type="date"></div>
+          <div><label>الساعة (الرول — اختياري)</label><input id="sx-time" type="time"></div>
         </div>
         <input id="sx-note" placeholder="ملاحظة (اختياري)">
         <button class="primary" style="margin-top:10px" id="add-session">حفظ الجلسة</button>
@@ -224,9 +225,12 @@ export async function render(host) {
       if (!case_id || !session_date) return toast('اختار قضية وتاريخ', 'bad');
       await apiJson('/api/sessions', {
         method: 'POST',
-        body: JSON.stringify({ case_id, session_date, notes: host.querySelector('#sx-note').value.trim() }),
+        body: JSON.stringify({ case_id, session_date, session_time: host.querySelector('#sx-time').value || null, notes: host.querySelector('#sx-note').value.trim() }),
       });
       toast('اتسجلت الجلسة', 'ok');
+      // نفضّي الفورم ونحدّث القايمة (عشان «الجلسة الجاية» تظهر على طول)
+      ['#sx-date', '#sx-time', '#sx-note'].forEach(s => { const el = host.querySelector(s); if (el) el.value = ''; });
+      loadAndRender();
     });
 
     // أزرار كل قضية
@@ -259,6 +263,7 @@ function caseItem(c) {
         <span class="num mono">${esc(c.case_number || '—')}</span>
       </div>
       <div class="meta">${esc(c.court || '—')} · ${esc(c.degree || '')}${c.case_type ? ' · ' + esc(c.case_type) : ''}</div>
+      ${c.next_session ? `<div class="meta" style="color:var(--primary);font-weight:600">📅 الجلسة الجاية: ${esc(c.next_session)}</div>` : ''}
       <div class="acts">
         <button class="ghost" data-case-action="view" data-id="${c.id}" style="color:var(--primary);font-weight:700">👁 تفاصيل</button>
         <button class="ghost" data-case-action="ai" data-id="${c.id}" style="font-weight:700">🤖 تحليل ذكي</button>
@@ -470,6 +475,24 @@ async function showCaseDetail(id, initialTab = 'overview') {
           : empty('مفيش جلسات', '📅');
         // تعديل/حذف → نعيد فتح ملف القضية على تاب الجلسات بالبيانات الجديدة
         bindSessionActions(el, sessions, () => showCaseDetail(id, 'sessions'));
+        // إضافة جلسة من جوه ملف القضية
+        if (can('agenda.create')) {
+          el.insertAdjacentHTML('afterbegin', '<button class="btn btn-primary btn-sm" data-add-case-session style="margin-bottom:10px">➕ جلسة جديدة</button>');
+          el.querySelector('[data-add-case-session]').addEventListener('click', async () => {
+            const saved = await openModal({
+              title: '📅 جلسة جديدة', submitText: 'حفظ الجلسة',
+              fields: [
+                { name: 'session_date', label: 'تاريخ الجلسة', type: 'date', required: true },
+                { name: 'session_time', label: 'الساعة (الرول — اختياري)', type: 'time' },
+                { name: 'notes', label: 'ملاحظة (اختياري)', type: 'textarea' },
+              ],
+              onSubmit: async (d) => {
+                await apiJson('/api/sessions', { method: 'POST', body: JSON.stringify({ case_id: id, session_date: d.session_date, session_time: d.session_time || null, notes: d.notes || null }) });
+              },
+            });
+            if (saved) { toast('✅ اتسجلت الجلسة', 'ok'); reloadCases?.(); showCaseDetail(id, 'sessions'); }
+          });
+        }
       }
 
       if (tab === 'fees') {
@@ -569,6 +592,23 @@ async function showCaseDetail(id, initialTab = 'overview') {
               </div>
             `).join('')
           : empty('مفيش مهام', '✅');
+        // إضافة مهمة للقضية من جوه ملفها
+        if (can('tasks.create')) {
+          el.insertAdjacentHTML('afterbegin', '<button class="btn btn-primary btn-sm" data-add-case-task style="margin-bottom:10px">➕ مهمة جديدة</button>');
+          el.querySelector('[data-add-case-task]').addEventListener('click', async () => {
+            const saved = await openModal({
+              title: '✅ مهمة جديدة للقضية', submitText: 'حفظ المهمة',
+              fields: [
+                { name: 'title', label: 'المطلوب', required: true },
+                { name: 'due_date', label: 'الموعد', type: 'date' },
+              ],
+              onSubmit: async (d) => {
+                await apiJson('/api/tasks', { method: 'POST', body: JSON.stringify({ case_id: id, title: d.title, due_date: d.due_date || null }) });
+              },
+            });
+            if (saved) { toast('✅ اتسجلت المهمة', 'ok'); showCaseDetail(id, 'tasks'); }
+          });
+        }
       }
     };
 

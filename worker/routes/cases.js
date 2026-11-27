@@ -22,7 +22,9 @@ async function list({ env, officeId, url, access, authUser }) {
 
   const cond = archived ? `= 'مؤرشفة'` : `!= 'مؤرشفة'`;
 
-  let query = `SELECT c.*, cl.name as client_name
+  // next_session: أقرب جلسة جاية (بتظهر في قايمة القضايا)
+  let query = `SELECT c.*, cl.name as client_name,
+                 (SELECT MIN(s.session_date) FROM sessions s WHERE s.case_id = c.id AND s.session_date >= date('now')) AS next_session
                FROM cases c
                LEFT JOIN clients cl ON cl.id = c.client_id
                WHERE c.office_id = ? AND c.status ${cond} AND c.deleted_at IS NULL`;

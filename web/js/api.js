@@ -213,7 +213,10 @@ export async function apiJson(path, opts = {}) {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    // الرسالة زي ما هي + الكود والبيانات (عشان الشاشة تفرّق مثلاً بين "موكل مكرر" وأي خطأ تاني)
+    const e = new Error(err.error || `HTTP ${res.status}`);
+    e.status = res.status; e.code = err.code; e.data = err;
+    throw e;
   }
 
   const data = await res.json();

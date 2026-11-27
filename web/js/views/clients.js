@@ -195,7 +195,14 @@ export async function render(host) {
       }
       if (del) {
         if (!confirm('متأكد من حذف الموكل؟')) return;
-        await apiJson(`/api/clients/${del.dataset.delClient}`, { method: 'DELETE' });
+        try {
+          await apiJson(`/api/clients/${del.dataset.delClient}`, { method: 'DELETE' });
+        } catch (err) {
+          // عنده قضايا مفتوحة أو فلوس عليه → نوضّح ونسأل تاني قبل الحذف
+          if (err.code !== 'CLIENT_HAS_DATA') return toast(err.message, 'bad');
+          if (!confirm(`${err.message}.\nالقضايا والحسابات هتفضل محفوظة، بس الموكل هيختفي من القايمة. تحذفه برضه؟`)) return;
+          await apiJson(`/api/clients/${del.dataset.delClient}?force=1`, { method: 'DELETE' });
+        }
         toast('اتحذف', 'ok');
         loadAndRender();
       }
@@ -277,14 +284,19 @@ function clientItem(c, status) {
 async function addClient(host) {
   const name = document.getElementById('cl-name').value.trim();
   if (!name) return toast('اكتب اسم الموكل', 'bad');
-  await apiJson('/api/clients', {
-    method: 'POST',
-    body: JSON.stringify({
-      name,
-      phone: document.getElementById('cl-phone').value.trim(),
-      national_id: document.getElementById('cl-national').value.trim(),
-    }),
-  });
+  const body = {
+    name,
+    phone: document.getElementById('cl-phone').value.trim(),
+    national_id: document.getElementById('cl-national').value.trim(),
+  };
+  try {
+    await apiJson('/api/clients', { method: 'POST', body: JSON.stringify(body) });
+  } catch (e) {
+    // نفس الموبايل متسجل لموكل تاني → نسأل بدل ما نكرره من غير ما ياخد باله
+    if (e.code !== 'DUPLICATE_PHONE') return toast(e.message, 'bad');
+    if (!confirm(`${e.message}\nتضيف «${name}» كموكل جديد برضه؟`)) return;
+    await apiJson('/api/clients', { method: 'POST', body: JSON.stringify({ ...body, allow_duplicate: true }) });
+  }
   toast('اتحفظ ✓', 'ok');
   render(host);
 }
@@ -607,7 +619,7 @@ async function showProfile(id) {
                 </div>
                 <div class="meta">📅 ${esc(p.payment_date)} ${p.method ? '· 💳 ' + esc(p.method) : ''}</div>
               </div>
-            `).join('')
+            `).join('') + (payments.length >= 20 ? '<div class="meta" style="margin-top:8px">بيظهر آخر 20 دفعة — كل الدفعات في <b>كشف الحساب</b>.</div>' : '')
           : empty('مفيش دفعات', '💵');
       }
 
@@ -625,7 +637,7 @@ async function showProfile(id) {
                   ${s.notes ? `<div class="meta">📝 ${esc(s.notes)}</div>` : ''}
                 </div>
               `;
-            }).join('')
+            }).join('') + (sessions.length >= 30 ? '<div class="meta" style="margin-top:8px">بيظهر آخر 30 جلسة — كل جلسات أي قضية في ملفها.</div>' : '')
           : empty('مفيش جلسات', '📅');
       }
 
