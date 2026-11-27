@@ -6,6 +6,7 @@ import { audit } from '../lib/audit.js';
 import { phoneVariants } from '../lib/phone.js';
 import { isValidEmail, isStr, safeJson } from '../lib/validation.js';
 import { requireLimit } from '../middleware/feature-gate.js';
+import { alertOwner } from '../lib/monitor.js';
 
 // ============================================================
 // Public routes
@@ -13,6 +14,7 @@ import { requireLimit } from '../middleware/feature-gate.js';
 export const publicRoutes = [
   { method: 'POST', path: '/api/auth/setup', handler: setup },
   { method: 'POST', path: '/api/auth/login', handler: login },
+  { method: 'POST', path: '/api/auth/forgot', handler: forgotPassword },
 ];
 
 // ============================================================
@@ -214,4 +216,46 @@ async function createUser({ request, env, authUser, officeId }) {
     action: 'create', entity: 'user', entity_id: r.meta.last_row_id, request,
   });
   return ok(env, { id: r.meta.last_row_id }, 201);
+}
+// ============================================================
+// «نسيت كلمة السر»: بيسجّل طلب بيوصل للسوبر أدمن (اللي بيبعت كلمة سر مؤقتة واتساب)
+// الرد واحد دايمًا سواء الرقم موجود أو لأ، عشان محدش يعرف مين عنده حساب
+// ============================================================
+async function forgotPassword({ request, env, ctx }) {
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  if (!(await checkRateLimit(env, `forgot:${ip}`, 5, 3600))) {
+    return fail(env, 'طلبات كتير — حاول تاني بعد شوية أو كلمنا واتساب', 429);
+  }
+  const b = await safeJson(request);
+  const identifier = String(b?.identifier || '').trim().slice(0, 120);
+  if (!identifier) return fail(env, 'اكتب رقم الموبايل أو الإيميل', 400);
+
+  const variants = phoneVariants(identifier);
+  const phones = variants.length ? variants : [identifier];
+  const user = await env.DB.prepare(
+    `SELECT u.id, u.office_id, u.full_name, u.phone, u.role, o.name AS office_name, o.name_ar AS office_name_ar
+     FROM users u LEFT JOIN offices o ON o.id = u.office_id
+     WHERE u.email = ? OR u.phone IN (${phones.map(() => '?').join(',')}) ORDER BY (u.email = ?) DESC LIMIT 1`
+  ).bind(identifier, ...phones, identifier).first();
+
+  if (user) {
+    // طلب واحد مفتوح لكل مستخدم يكفي
+    const open = await env.DB.prepare(
+      `SELECT id FROM password_reset_requests WHERE user_id = ? AND status = 'pending' LIMIT 1`
+    ).bind(user.id).first();
+    if (!open) {
+      await env.DB.prepare(
+        `INSERT INTO password_reset_requests (user_id, office_id, identifier, ip) VALUES (?,?,?,?)`
+      ).bind(user.id, user.office_id, identifier, ip).run();
+      const office = user.office_name_ar || user.office_name || '';
+      const job = alertOwner(env, {
+        key: `pwreq:${user.id}`, everySec: 1800,
+        title: '🔑 طلب «نسيت كلمة السر»',
+        body: `${user.full_name || ''} — ${office} — ${user.phone || identifier}. افتح لوحة السوبر أدمن وابعتله كلمة سر مؤقتة.`,
+      }).catch(() => {});
+      if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
+    }
+    await audit(env, { office_id: user.office_id, action: 'password_reset_requested', entity: 'user', entity_id: user.id, request });
+  }
+  return ok(env, { received: true });
 }

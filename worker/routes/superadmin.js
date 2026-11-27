@@ -107,6 +107,8 @@ export const protectedRoutes = [
   { method: 'POST',   path: /^\/api\/superadmin\/offices\/(\d+)\/change-plan$/,  handler: changePlan },
   { method: 'GET',    path: /^\/api\/superadmin\/offices\/(\d+)\/users$/,        handler: getOfficeUsers },
   { method: 'PATCH',  path: /^\/api\/superadmin\/users\/(\d+)\/reset-password$/, handler: resetUserPassword },
+  { method: 'GET',    path: '/api/superadmin/password-requests',                 handler: listPasswordRequests },
+  { method: 'POST',   path: /^\/api\/superadmin\/password-requests\/(\d+)\/dismiss$/, handler: dismissPasswordRequest },
   // ✅ أدوات الذكاء الاصطناعي
   { method: 'GET',    path: '/api/superadmin/ai/health',                         handler: aiHealth },
   { method: 'GET',    path: '/api/superadmin/alerts',                            handler: listAlerts },
@@ -433,9 +435,37 @@ async function resetUserPassword({ request, env, params, superAdmin }) {
   // بيفك القفل كمان لو الحساب اتقفل من كتر المحاولات الغلط
   await env.DB.prepare(`UPDATE users SET password_hash = ?, salt = ?, failed_logins = 0, locked_until = NULL WHERE id = ?`)
     .bind(hash, salt, id).run();
+  // أي طلب «نسيت كلمة السر» مفتوح للمستخدم ده يتقفل
+  await env.DB.prepare(
+    `UPDATE password_reset_requests SET status = 'done', handled_at = datetime('now') WHERE user_id = ? AND status = 'pending'`
+  ).bind(id).run();
   await audit(env, {
     office_id: target.office_id, action: 'password_reset_by_super', entity: 'user', entity_id: id, request,
     metadata: { by: superAdmin?.admin_id },
   });
   return ok(env, { updated: true });
+}
+// ============================================================
+// طلبات «نسيت كلمة السر»
+// ============================================================
+async function listPasswordRequests({ env }) {
+  const { results } = await env.DB.prepare(
+    `SELECT r.id, r.user_id, r.office_id, r.identifier, r.created_at,
+            u.full_name, u.phone, u.email, u.role, o.name AS office_name, o.name_ar AS office_name_ar
+     FROM password_reset_requests r
+     LEFT JOIN users u ON u.id = r.user_id
+     LEFT JOIN offices o ON o.id = r.office_id
+     WHERE r.status = 'pending' ORDER BY r.id DESC LIMIT 50`
+  ).all();
+  return ok(env, results || []);
+}
+
+async function dismissPasswordRequest({ env, params, request, superAdmin }) {
+  const id = toInt(params[0]);
+  if (!id) return fail(env, 'id غلط', 400);
+  await env.DB.prepare(
+    `UPDATE password_reset_requests SET status = 'dismissed', handled_at = datetime('now') WHERE id = ? AND status = 'pending'`
+  ).bind(id).run();
+  await audit(env, { action: 'password_request_dismissed', entity: 'password_reset_request', entity_id: id, request, metadata: { by: superAdmin?.admin_id } });
+  return ok(env, { dismissed: true });
 }

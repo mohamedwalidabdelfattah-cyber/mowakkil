@@ -195,6 +195,7 @@ document.addEventListener('click', e => {
     'sa-login':         () => superadminView.doLogin(),
     'sa-logout':        () => superadminView.doLogout(),
     'login':            () => loginView.doLogin(),
+    'forgot-pass':      () => loginView.openForgot(),
     'logout':           () => loginView.doLogout(),
     'goto-subscription':() => {
       document.getElementById('trial-blocker')?.classList.remove('show');

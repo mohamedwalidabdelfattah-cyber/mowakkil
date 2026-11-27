@@ -124,6 +124,9 @@ async function renderSABody() {
 
     <div id="sa-stats" class="stats"></div>
 
+    <!-- 🔑 طلبات «نسيت كلمة السر» (بتظهر بس لو فيه طلبات) -->
+    <div id="sa-pw-requests"></div>
+
     <!-- التابات: كل قسم لوحده بدل صفحة واحدة طويلة -->
     <nav class="sa-tabs" role="tablist" aria-label="أقسام لوحة المسؤول">
       ${SA_TABS.map(([k, label]) => `<button class="sa-tab" role="tab" data-sa-tab="${k}" aria-selected="false">${label}<span class="sa-tab-badge" data-badge="${k}" hidden></span></button>`).join('')}
@@ -255,6 +258,7 @@ async function renderSABody() {
 
   loadStats();
   loadTabBadges(host);
+  loadPasswordRequests();
 }
 
 // أرقام صغيرة على التابات: كام مكتب مستني رسالة النهارده، وكام طلب دفع مستني مراجعة
@@ -814,7 +818,16 @@ async function loadOfficeUsers(officeId) {
     box.querySelectorAll('[data-reset-user]').forEach(btn => btn.addEventListener('click', async () => {
       const id = Number(btn.dataset.resetUser);
       const u = users.find(x => x.id === id);
-      if (!confirm(`هتتغير كلمة السر بتاعة «${u.full_name || ''}» لكلمة سر مؤقتة جديدة، والقديمة مش هتشتغل تاني. تكمّل؟`)) return;
+      const res = box.querySelector(`[data-reset-result="${id}"]`);
+      await resetAndShow(u, btn, res);
+    }));
+  } catch (e) { box.textContent = e.message; }
+}
+
+// بيعمل كلمة سر مؤقتة للمستخدم ويعرضها مع «نسخ» و«ابعتها واتساب»
+async function resetAndShow(u, btn, res) {
+      const id = u.id;
+      if (!confirm(`هتتغير كلمة السر بتاعة «${u.full_name || ''}» لكلمة سر مؤقتة جديدة، والقديمة مش هتشتغل تاني. تكمّل؟`)) return false;
       const pass = tempPassword();
       btn.disabled = true;
       try {
@@ -822,7 +835,6 @@ async function loadOfficeUsers(officeId) {
         const login = u.phone || u.email || '';
         const msg = `أهلاً ${u.full_name || ''}، اتعملت لحضرتك كلمة سر مؤقتة على مُوكِّل:\n${pass}\n\nادخل برقمك (${login}) وكلمة السر دي، وبعدين غيّرها من «حسابي» ← تغيير كلمة السر.`;
         const wa = u.phone ? (waLinkFor(u.phone, msg) || '') : '';
-        const res = box.querySelector(`[data-reset-result="${id}"]`);
         res.innerHTML = `
           <div style="background:var(--gray-100, #eef6f0);border:1px solid var(--success);border-radius:8px;padding:10px;margin-top:6px;color:var(--text)">
             <div style="font-size:12.5px;margin-bottom:6px">✅ كلمة السر المؤقتة (ابعتها للعميل):</div>
@@ -836,8 +848,42 @@ async function loadOfficeUsers(officeId) {
           try { await navigator.clipboard.writeText(pass); toast('📋 اتنسخت', 'ok'); } catch { toast('انسخها يدوي', 'bad'); }
         });
         toast('✅ اتغيرت كلمة السر', 'ok');
-      } catch (e) { toast(e.message, 'bad'); }
+        return true;
+      } catch (e) { toast(e.message, 'bad'); return false; }
       finally { btn.disabled = false; }
-    }));
-  } catch (e) { box.textContent = e.message; }
+}
+
+async function loadPasswordRequests() {
+  const box = document.getElementById('sa-pw-requests');
+  if (!box) return;
+  let list = [];
+  try { list = await saApiJson('/api/superadmin/password-requests'); } catch { return; }
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `
+    <div class="card" style="margin:12px 0;border:2px solid var(--warning, #f59e0b)">
+      <h3 style="margin:0 0 6px;font-size:16px">🔑 طلبات «نسيت كلمة السر» (${list.length})</h3>
+      <p style="margin:0 0 10px;font-size:12.5px;color:var(--text-soft)">اضغط «اعمل كلمة سر» وبعدين «ابعتها واتساب». الطلب بيتقفل لوحده.</p>
+      ${list.map(r => `
+        <div data-req="${r.id}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border-soft);flex-wrap:wrap">
+          <div style="flex:1;min-width:170px">
+            <div style="font-weight:700">${esc(r.full_name || '—')} <span style="font-weight:400;font-size:12px;color:var(--text-soft)">· ${esc(ROLE_LABELS[r.role] || r.role || '')} · ${esc(r.office_name_ar || r.office_name || '')}</span></div>
+            <div style="font-size:12px"><span style="font-family:var(--font-mono)">${esc(r.phone || r.email || r.identifier || '')}</span> · <span style="color:var(--text-soft)">${esc(fmtDate(r.created_at))}</span></div>
+          </div>
+          <button class="btn btn-primary btn-sm" data-req-reset="${r.id}">🔑 اعمل كلمة سر</button>
+          <button class="btn btn-ghost btn-sm" data-req-dismiss="${r.id}" title="تجاهل الطلب">✕</button>
+          <div data-req-result="${r.id}" style="width:100%"></div>
+        </div>`).join('')}
+    </div>`;
+  box.querySelectorAll('[data-req-reset]').forEach(btn => btn.addEventListener('click', async () => {
+    const r = list.find(x => x.id === Number(btn.dataset.reqReset));
+    const done = await resetAndShow({ id: r.user_id, full_name: r.full_name, phone: r.phone, email: r.email }, btn, box.querySelector(`[data-req-result="${r.id}"]`));
+    if (done) { btn.remove(); box.querySelector(`[data-req-dismiss="${r.id}"]`)?.remove(); }
+  }));
+  box.querySelectorAll('[data-req-dismiss]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('تتجاهل الطلب ده من غير ما تغيّر كلمة السر؟')) return;
+    try {
+      await saApiJson(`/api/superadmin/password-requests/${btn.dataset.reqDismiss}/dismiss`, { method: 'POST' });
+      loadPasswordRequests();
+    } catch (e) { toast(e.message, 'bad'); }
+  }));
 }
