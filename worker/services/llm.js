@@ -2,7 +2,7 @@
 // سلسلة موديلات مجانية بالكامل (مفيش أي مزود محتاج بطاقة دفع).
 // أسماء النماذج مش ثابتة: بتيجي من model-discovery.js اللي بيسأل كل مزود عن
 // النماذج المتاحة حالياً ويجربها (وبيتحدث كل يوم لوحده). الترتيب:
-//   Gemini → Mistral → Cerebras → Groq → (النماذج التانية لكل مزود) → OpenRouter → Workers AI
+//   Gemini → NVIDIA → Groq → Mistral → Cerebras → (النماذج التانية لكل مزود) → OpenRouter → Workers AI
 //   أي مزود مفتاحه مش متحط بيتخطّى لوحده.
 // لو نموذج رجّع "مش موجود/اتقفل" بيتشال فوراً وبننتقل للي بعده — المستخدم مش بيحس بحاجة.
 
@@ -21,12 +21,14 @@ async function buildAttempts(env) {
   const openrouter = list('openrouter');
   const mistral = list('mistral');
   const cerebras = list('cerebras');
+  const nvidia = list('nvidia');
   // الأقوى في العربي الأول، وأي مزود حصته خلصت (429) بننتقل للي بعده فوراً
+  // (NVIDIA وMistral وOpenRouter بيتشالوا لوحدهم من أي طلب فيه بيانات موكلين — noClientData)
   const order = [
-    ['gemini', gemini[0]], ['mistral', mistral[0]],
-    ['cerebras', cerebras[0]], ['groq', groq[0]],
-    ['gemini', gemini[1]], ['cerebras', cerebras[1]],
-    ['groq', groq[1]], ['mistral', mistral[1]],
+    ['gemini', gemini[0]], ['nvidia', nvidia[0]], ['groq', groq[0]],
+    ['mistral', mistral[0]], ['cerebras', cerebras[0]],
+    ['gemini', gemini[1]], ['nvidia', nvidia[1]], ['groq', groq[1]],
+    ['mistral', mistral[1]], ['cerebras', cerebras[1]],
     ['openrouter', openrouter[0]], ['openrouter', openrouter[1]],
   ];
   return order
@@ -52,7 +54,8 @@ const isCooling = p => (cooling.get(`${p.name}/${p.model}`) || 0) > Date.now();
 // الأخطاء اللي معناها إن النموذج نفسه مبقاش متاح (مش مشكلة مؤقتة)
 const MODEL_GONE = /\b(404)\b|no longer available|not found|does not exist|decommissioned|deprecated|model_not_found|invalid model/i;
 
-const WORKERS_AI_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const WORKERS_AI_MODEL = '@cf/openai/gpt-oss-120b';
+const WORKERS_AI_FALLBACK = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 // المفتاح بعد شيل أي مسافات/سطر جديد اتلزق معاه وقت الحفظ
 export const secret = (env, name) => String(env?.[name] ?? '').trim();
@@ -102,19 +105,45 @@ async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temper
 }
 
 // الوضع السري: نماذج Cloudflare بس. Llama 4 Scout سياقه طويل (مناسب لمستندات القضية) وأرخص في الحصة.
-const STRICT_MODELS = ['@cf/meta/llama-4-scout-17b-16e-instruct', WORKERS_AI_MODEL];
+const STRICT_MODELS = [WORKERS_AI_MODEL, '@cf/meta/llama-4-scout-17b-16e-instruct', WORKERS_AI_FALLBACK];
+
+// الردود بتيجي بأشكال مختلفة حسب النموذج (Llama: response — gpt-oss: Responses API أو chat completions)
+function workersAIText(r) {
+  if (typeof r === 'string') return r;
+  if (typeof r?.response === 'string') return r.response;
+  const c = r?.choices?.[0]?.message?.content;
+  if (typeof c === 'string' && c) return c;
+  if (typeof r?.output_text === 'string' && r.output_text) return r.output_text;
+  if (Array.isArray(r?.output)) {
+    const t = r.output.filter(o => o?.type === 'message')
+      .flatMap(o => o.content || []).filter(x => x?.type === 'output_text' || typeof x?.text === 'string')
+      .map(x => x.text).join('');
+    if (t) return t;
+  }
+  return r?.response != null ? JSON.stringify(r.response) : '';
+}
 
 async function callWorkersAI(env, { messages, maxTokens, temperature, model = WORKERS_AI_MODEL }) {
   if (!env.AI) throw new Error('Workers AI binding مش موجود');
-  const r = await env.AI.run(model, {
-    messages: messages.map(m => {
-      if (m.role === 'tool') return { role: 'user', content: `نتيجة البحث: ${m.content}` };
-      return { role: m.role, content: m.content || '' };
-    }),
-    max_tokens: maxTokens,
-    temperature,
+  const msgs = messages.map(m => {
+    if (m.role === 'tool') return { role: 'user', content: `نتيجة البحث: ${m.content}` };
+    return { role: m.role, content: m.content || '' };
   });
-  const text = typeof r?.response === 'string' ? r.response : JSON.stringify(r?.response ?? '');
+  let r;
+  if (/gpt-oss/.test(model)) {
+    // gpt-oss على Cloudflare بياخد صيغة Responses API: instructions + input
+    const instructions = msgs.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+    const input = msgs.filter(m => m.role !== 'system');
+    r = await env.AI.run(model, {
+      ...(instructions ? { instructions } : {}),
+      input,
+      max_output_tokens: Math.max(maxTokens, 1000),
+      reasoning: { effort: 'low' },
+    });
+  } else {
+    r = await env.AI.run(model, { messages: msgs, max_tokens: maxTokens, temperature });
+  }
+  const text = workersAIText(r);
   if (!text) throw new Error('workers-ai: رد فاضي');
   return { role: 'assistant', content: text };
 }
@@ -167,7 +196,7 @@ export async function chatCompletion(env, {
   }
 
   if (!skip.includes('workers-ai')) {
-    const models = route === 'strict' ? STRICT_MODELS : [WORKERS_AI_MODEL];
+    const models = route === 'strict' ? STRICT_MODELS : [WORKERS_AI_MODEL, WORKERS_AI_FALLBACK];
     for (const model of models) {
       try {
         const message = await callWorkersAI(env, { messages: outMessages, maxTokens, temperature, model });

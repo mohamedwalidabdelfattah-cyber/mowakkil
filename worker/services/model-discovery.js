@@ -7,18 +7,19 @@
 // - بتتحدث لوحدها كل يوم من الـ cron، أو فوراً لو نموذج رجّع "مش موجود".
 // - لو الاكتشاف فشل لأي سبب → بنرجع لقايمة افتراضية آمنة.
 
-const KV_KEY = 'llm:models:v2'; // v2: Mistral/Cerebras اتضافوا (GitHub Models اتقفلت نهائياً 30/7/2026)
+const KV_KEY = 'llm:models:v3'; // v3: NVIDIA NIM اتضاف (11/2026). v2: Mistral/Cerebras (GitHub Models اتقفلت نهائياً 30/7/2026)
 // الـ cron بيحدّث كل يوم، والـ TTL أطول من يوم عشان المستخدم عمره ما يستنى اكتشاف جديد
 const TTL_SECONDS = 36 * 60 * 60;
 const secret = (env, name) => String(env?.[name] ?? '').trim();
 
 // قوايم افتراضية (لو الاكتشاف فشل). gemini-flash-latest اسم بيشاور دايماً على أحدث Flash.
 export const DEFAULT_MODELS = {
-  groq: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'],
+  groq: ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'],
   gemini: ['gemini-flash-latest', 'gemini-flash-lite-latest'],
   openrouter: [],
   mistral: ['mistral-large-latest', 'mistral-medium-latest'],
   cerebras: ['gpt-oss-120b'],
+  nvidia: ['deepseek-ai/deepseek-v3.2', 'openai/gpt-oss-120b', 'qwen/qwen3-235b-a22b'],
 };
 
 let memo = null; // { at, models }
@@ -57,7 +58,7 @@ async function discoverGemini(env) {
 
 // ---------------- Groq ----------------
 // بنفضّل نماذج كبيرة بتدعم الأدوات (tools)، وبنستبعد الصوت/الحماية.
-const GROQ_PREFERRED = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'moonshotai/kimi-k2-instruct', 'qwen/qwen3-32b', 'openai/gpt-oss-20b'];
+const GROQ_PREFERRED = ['openai/gpt-oss-120b', 'moonshotai/kimi-k2-instruct', 'qwen/qwen3.8-27b', 'qwen/qwen3-32b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
 
 async function discoverGroq(env) {
   const key = secret(env, 'GROQ_API_KEY');
@@ -127,6 +128,35 @@ async function discoverCerebras(env) {
   return ids.filter(id => !/8b$|guard|embed/i.test(id)).sort((a, b) => score(b) - score(a)).slice(0, 3);
 }
 
+// ---------------- NVIDIA NIM (اختياري) ----------------
+// build.nvidia.com: نماذج مفتوحة كبيرة (DeepSeek / Qwen / Kimi / gpt-oss) ببلاش بحد ~40 طلب/دقيقة للحساب.
+// الشروط بتوصفها كتجربة، ومش واضح استخدام البيانات → noClientData (أسئلة عامة بس).
+const NVIDIA_PREFER = [
+  /deepseek-v3\.?\d|deepseek-v4/i,          // الأقوى في العربي والقانون
+  /kimi-k2/i,
+  /qwen3[\.\d-]*-?235b|qwen3\.\d/i,
+  /gpt-oss-120b/i,
+  /llama-4-maverick/i,
+  /llama-3\.3-70b|nemotron.*(super|ultra)/i,
+];
+async function discoverNvidia(env) {
+  const key = secret(env, 'NVIDIA_API_KEY');
+  if (key.length < 20) return null;
+  const res = await fetch('https://integrate.api.nvidia.com/v1/models', {
+    headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`nvidia models ${res.status}`);
+  const ids = ((await res.json()).data || []).map(m => String(m.id || '')).filter(Boolean)
+    // مش نماذج كلام عادي
+    .filter(id => !/embed|rerank|guard|safety|reward|vision|vl\b|-vl-|clip|parse|ocr|retriever|translate|coder|math|-r1\b|distill|\b\d{1,2}b\b/i.test(id));
+  const rank = id => { const i = NVIDIA_PREFER.findIndex(re => re.test(id)); return i < 0 ? 99 : i; };
+  // الأحدث رقماً في نفس الفئة الأول (v3.2 قبل v3.1)
+  const ver = id => parseFloat((id.match(/(\d+(?:\.\d+)?)(?!.*\d)/) || [0, 0])[1]) || 0;
+  return ids.filter(id => rank(id) < 99)
+    .sort((a, b) => rank(a) - rank(b) || ver(b) - ver(a))
+    .slice(0, 4);
+}
+
 // ---------------- تجربة فعلية لكل نموذج ----------------
 // القايمة لوحدها مش كفاية: Google مثلاً لسه بيعرض gemini-2.5-flash في القايمة
 // بس بيرفضه للحسابات الجديدة. فبنبعت سؤال صغير جداً ونحتفظ باللي بيرد بس.
@@ -140,6 +170,7 @@ export const ENDPOINTS = {
   cerebras: { url: 'https://api.cerebras.ai/v1/chat/completions', key: 'CEREBRAS_API_KEY', optional: true },
   groq: { url: 'https://api.groq.com/openai/v1/chat/completions', key: 'GROQ_API_KEY' },
   openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', key: 'OPENROUTER_API_KEY', optional: true, noClientData: true },
+  nvidia: { url: 'https://integrate.api.nvidia.com/v1/chat/completions', key: 'NVIDIA_API_KEY', optional: true, noClientData: true },
 };
 
 async function probe(env, provider, model) {
@@ -166,7 +197,7 @@ async function keepWorking(env, provider, list) {
 /** يسأل كل المزودين، يجرب نماذجهم، ويحفظ الشغال. أي مزود يفشل → قايمته الافتراضية. */
 export async function refreshModels(env) {
   const models = {}; const errors = {};
-  const jobs = { gemini: discoverGemini, groq: discoverGroq, openrouter: discoverOpenRouter, mistral: discoverMistral, cerebras: discoverCerebras };
+  const jobs = { gemini: discoverGemini, groq: discoverGroq, openrouter: discoverOpenRouter, mistral: discoverMistral, cerebras: discoverCerebras, nvidia: discoverNvidia };
   await Promise.all(Object.entries(jobs).map(async ([name, fn]) => {
     try {
       const list = await fn(env);
