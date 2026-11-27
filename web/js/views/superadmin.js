@@ -278,13 +278,17 @@ async function runAiHealth() {
   out.textContent = '⏳ جاري فحص النماذج...';
   try {
     const d = await saApiJson('/api/superadmin/ai/health');
+    // ⏳ = مشكلة مؤقتة عند المزود (الطلبات بتعدّي للي بعده لوحدها) — ❌ = محتاجة تدخّل (مفتاح/اشتراك)
+    const BUSY = { overloaded: 'ضغط مؤقت عند المزود — بيرجع لوحده', quota: 'الحصة خلصت مؤقتاً — بترجع لوحدها', slow: 'بطيء دلوقتي — ماردّش في 20 ثانية' };
     const rows = (d.providers || []).map(p => `
       <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-soft)">
-        <span>${p.ok ? '✅' : '❌'} <strong>${esc(p.provider)}</strong> <span class="mono" style="font-size:12px">${esc(p.model || '')}</span></span>
-        <span style="font-size:12px">${p.ok ? esc(p.ms + 'ms') : esc(p.error || '')}</span>
+        <span>${p.ok ? '✅' : p.busy ? '⏳' : '❌'} <strong>${esc(p.provider)}</strong> <span class="mono" style="font-size:12px">${esc(p.model || '')}</span></span>
+        <span style="font-size:12px" title="${esc(p.error || '')}">${p.ok ? esc(p.ms + 'ms') : p.busy ? esc(BUSY[p.busy] || 'مؤقت') : esc(p.error || '')}</span>
       </div>`).join('');
+    const anyBusy = (d.providers || []).some(p => !p.ok && p.busy);
     const v = d.vectorize || {};
     out.innerHTML = `${rows}
+      ${anyBusy ? '<div style="margin-top:6px;font-size:12px;color:var(--text-soft)">⏳ مشكلة مؤقتة من ناحية المزود: الطلبات بتروح للمزود اللي بعده لوحدها، ومفيش حاجة محتاجة تتعمل.</div>' : ''}
       <div style="margin-top:8px">📚 المواد في الداتابيز: <strong>${esc(d.law_articles)}</strong> ·
         المفهرس في Vectorize: <strong>${esc(v.count ?? (v.error ? 'خطأ' : '—'))}</strong> ·
         بحث الويب (Tavily): ${d.tavily ? '✅' : '❌'}</div>`;

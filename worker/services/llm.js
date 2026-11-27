@@ -232,6 +232,17 @@ export async function completeText(env, { system, prompt, maxTokens = 1500, temp
 }
 
 /** فحص سريع لكل مزود (للسوبر أدمن). refresh=true → يعيد اكتشاف النماذج الأول. */
+// مشكلة مؤقتة عند المزود (ضغط / حصة / بطء) ≠ مشكلة حقيقية (مفتاح غلط / اشتراك / نموذج اتشال)
+// المؤقت بيظهر ⏳ في الفحص، والطلبات أصلاً بتعدّي للمزود اللي بعده لوحدها
+export function busyReason(e) {
+  const m = String(e?.message || '');
+  if (e?.name === 'TimeoutError' || /timed? ?out|aborted/i.test(m)) return { busy: 'slow' };
+  const st = (m.match(/ (\d{3}):/) || [])[1];
+  if (st === '503' || st === '502' || st === '504' || /high demand|overloaded|unavailable/i.test(m)) return { busy: 'overloaded' };
+  if (st === '429') return { busy: 'quota' };
+  return {};
+}
+
 export async function providersHealth(env, { refresh = true } = {}) {
   const ping = [{ role: 'user', content: 'رد بكلمة واحدة: تمام' }];
   const out = [];
@@ -257,7 +268,7 @@ export async function providersHealth(env, { refresh = true } = {}) {
       await callOpenAICompatible(env, p, { messages: ping, maxTokens: 400, temperature: 0, timeoutMs: 20000 });
       out.push({ provider: p.name, model: p.model, ok: true, ms: Date.now() - t0 });
     } catch (e) {
-      out.push({ provider: p.name, model: p.model, ok: false, error: e.message.slice(0, 200) });
+      out.push({ provider: p.name, model: p.model, ok: false, ...busyReason(e), error: e.message.slice(0, 200) });
     }
   }
   try {
