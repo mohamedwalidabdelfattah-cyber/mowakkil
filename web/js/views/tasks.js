@@ -56,6 +56,8 @@ export async function render(host) {
           <div><label>المحامي</label><select id="t-lawyer"><option value="">— بدون —</option>${lawyerOpts}</select></div>
           <div><label>القضية (اختياري)</label><select id="t-case"><option value="">— بدون قضية —</option>${caseOpts}</select></div>
         </div>
+        <label>التفاصيل (اختياري)</label>
+        <textarea id="t-notes" rows="2" placeholder="المطلوب بالظبط، المستندات اللازمة…"></textarea>
         <button class="primary" style="margin-top:10px" id="add-task">حفظ</button>
       </div>
 
@@ -168,6 +170,7 @@ export async function render(host) {
           due_date: host.querySelector('#t-date').value || null,
           lawyer_id: host.querySelector('#t-lawyer').value || null,
           case_id: host.querySelector('#t-case').value || null,
+          notes: host.querySelector('#t-notes')?.value.trim() || null,
         }),
       });
       toast('اتحفظ', 'ok');
@@ -223,6 +226,7 @@ function renderTaskItem(t) {
         📅 ${esc(t.due_date || '—')}
         ${isOverdue ? ' · <span style="color:var(--danger);font-weight:700">⚠️ متأخرة</span>' : ''}
       </div>
+      ${t.notes ? `<div class="meta" style="line-height:1.7">📝 ${esc(t.notes)}</div>` : ''}
       <div class="acts">
         <button class="ghost" data-open-task="${t.id}" style="color:var(--primary);font-weight:700">👁 تفاصيل</button>
         <button class="ghost" data-edit-task="${t.id}" style="color:var(--warning)">✏️ تعديل</button>
@@ -273,6 +277,9 @@ async function showEditTaskModal(id, lawyers, cases, host, onDone) {
         ${caseOpts}
       </select>
 
+      <label class="label" style="margin-top:10px">التفاصيل</label>
+      <textarea id="edit-notes" class="input" rows="3">${esc(task.notes || '')}</textarea>
+
       <label class="label" style="margin-top:10px">الحالة</label>
       <select id="edit-status" class="input">
         <option value="قيد التنفيذ" ${task.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
@@ -300,6 +307,7 @@ async function showEditTaskModal(id, lawyers, cases, host, onDone) {
       const lawyer_id = modal.querySelector('#edit-lawyer').value || null;
       const case_id = modal.querySelector('#edit-case').value || null;
       const status = modal.querySelector('#edit-status').value;
+      const notes = modal.querySelector('#edit-notes').value.trim() || null;
       const msg = modal.querySelector('#edit-status-msg');
 
       if (!title) {
@@ -314,7 +322,7 @@ async function showEditTaskModal(id, lawyers, cases, host, onDone) {
       try {
         await apiJson(`/api/tasks/${id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ title, due_date, lawyer_id, case_id, status }),
+          body: JSON.stringify({ title, due_date, lawyer_id, case_id, status, notes }),
         });
         toast('✅ اتعدلت', 'ok');
         modal.remove();

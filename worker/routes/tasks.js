@@ -61,14 +61,15 @@ async function create({ request, env, authUser, officeId, access }) {
   if (b.case_id && !(await canAccessCase(env, access, authUser, toInt(b.case_id)))) return fail(env, 'القضية مش موجودة', 400);
 
   const r = await env.DB.prepare(
-    `INSERT INTO tasks (office_id, lawyer_id, case_id, title, due_date)
-     VALUES (?,?,?,?,?)`
+    `INSERT INTO tasks (office_id, lawyer_id, case_id, title, due_date, notes)
+     VALUES (?,?,?,?,?,?)`
   ).bind(
     officeId,
     b.lawyer_id ?? null,
     b.case_id ?? null,
     b.title.trim(),
-    b.due_date ?? null
+    b.due_date ?? null,
+    b.notes ? String(b.notes).trim().slice(0, 2000) : null
   ).run();
 
   await audit(env, {
@@ -123,11 +124,12 @@ async function update({ request, env, authUser, officeId, params }) {
   const lawyer_id = b.lawyer_id !== undefined ? (b.lawyer_id || null) : task.lawyer_id;
   const case_id = b.case_id !== undefined ? (b.case_id || null) : task.case_id;
   const status = b.status !== undefined ? b.status : task.status;
+  const notes = b.notes !== undefined ? (b.notes ? String(b.notes).trim().slice(0, 2000) : null) : task.notes;
 
   await env.DB.prepare(
-    `UPDATE tasks SET title = ?, due_date = ?, lawyer_id = ?, case_id = ?, status = ?
+    `UPDATE tasks SET title = ?, due_date = ?, lawyer_id = ?, case_id = ?, status = ?, notes = ?
      WHERE id = ? AND office_id = ?`
-  ).bind(title, due_date, lawyer_id, case_id, status, id, officeId).run();
+  ).bind(title, due_date, lawyer_id, case_id, status, notes, id, officeId).run();
 
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,

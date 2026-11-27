@@ -101,8 +101,9 @@ async function create({ request, env, authUser, officeId }) {
   }
 
   const r = await env.DB.prepare(
-    `INSERT INTO clients (office_id, name, phone, national_id) VALUES (?,?,?,?)`
-  ).bind(officeId, b.name.trim(), b.phone ?? null, b.national_id ?? null).run();
+    `INSERT INTO clients (office_id, name, phone, national_id, email, address, notes) VALUES (?,?,?,?,?,?,?)`
+  ).bind(officeId, b.name.trim(), b.phone ?? null, b.national_id ?? null,
+    b.email ? String(b.email).trim().slice(0, 200) : null, b.address ? String(b.address).trim().slice(0, 300) : null, b.notes ? String(b.notes).trim().slice(0, 2000) : null).run();
 
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id,
@@ -213,9 +214,12 @@ async function update({ request, env, authUser, officeId, params }) {
     name: b.name !== undefined ? String(b.name).trim() : cur.name,
     phone: b.phone !== undefined ? clean(b.phone, 30) : cur.phone,
     national_id: b.national_id !== undefined ? clean(b.national_id, 30) : cur.national_id,
+    email: b.email !== undefined ? clean(b.email, 200) : cur.email,
+    address: b.address !== undefined ? clean(b.address, 300) : cur.address,
+    notes: b.notes !== undefined ? clean(b.notes, 2000) : cur.notes,
   };
-  await env.DB.prepare('UPDATE clients SET name = ?, phone = ?, national_id = ? WHERE id = ? AND office_id = ?')
-    .bind(next.name, next.phone, next.national_id, id, officeId).run();
+  await env.DB.prepare('UPDATE clients SET name = ?, phone = ?, national_id = ?, email = ?, address = ?, notes = ? WHERE id = ? AND office_id = ?')
+    .bind(next.name, next.phone, next.national_id, next.email, next.address, next.notes, id, officeId).run();
   await audit(env, {
     office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'client', entity_id: id, request,
     metadata: { from: { name: cur.name, phone: cur.phone }, to: { name: next.name, phone: next.phone } },

@@ -71,6 +71,12 @@ export async function render(host) {
           <div><label>رقم الهاتف</label><input id="cl-phone" placeholder="${countryInfo().phonePlaceholder}"></div>
         </div>
         <label>${countryInfo().idLabel} (اختياري)</label><input id="cl-national" inputmode="numeric" placeholder="${countryInfo().idHint}">
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;font-weight:600;font-size:13.5px">➕ بيانات إضافية (اختياري): الإيميل، العنوان، ملاحظات</summary>
+          <label>الإيميل</label><input id="cl-email" type="email" inputmode="email" placeholder="name@example.com">
+          <label>العنوان</label><input id="cl-address" placeholder="المدينة، الشارع…">
+          <label>ملاحظات</label><textarea id="cl-notes" rows="2"></textarea>
+        </details>
         <button class="primary" style="margin-top:10px" id="add-client">حفظ الموكل</button>
       </div>
 
@@ -186,8 +192,11 @@ export async function render(host) {
             { name: 'name', label: 'الاسم', required: true },
             { name: 'phone', label: 'رقم الموبايل' },
             { name: 'national_id', label: `${countryInfo().idLabel} (اختياري)` },
+            { name: 'email', label: 'الإيميل (اختياري)', type: 'email' },
+            { name: 'address', label: 'العنوان (اختياري)' },
+            { name: 'notes', label: 'ملاحظات (اختياري)', type: 'textarea' },
           ],
-          initialData: { name: c.name || '', phone: c.phone || '', national_id: c.national_id || '' },
+          initialData: { name: c.name || '', phone: c.phone || '', national_id: c.national_id || '', email: c.email || '', address: c.address || '', notes: c.notes || '' },
           onSubmit: async (d) => { await apiJson(`/api/clients/${c.id}`, { method: 'PATCH', body: JSON.stringify(d) }); },
         });
         if (saved) { toast('✅ اتعدّلت بيانات الموكل', 'ok'); loadAndRender(); }
@@ -288,6 +297,9 @@ async function addClient(host) {
     name,
     phone: document.getElementById('cl-phone').value.trim(),
     national_id: document.getElementById('cl-national').value.trim(),
+    email: document.getElementById('cl-email')?.value.trim() || null,
+    address: document.getElementById('cl-address')?.value.trim() || null,
+    notes: document.getElementById('cl-notes')?.value.trim() || null,
   };
   try {
     await apiJson('/api/clients', { method: 'POST', body: JSON.stringify(body) });
@@ -533,6 +545,9 @@ async function showProfile(id) {
         <div style="font-size:22px;font-weight:800">${esc(client.name)}</div>
         ${client.phone ? `<div style="font-size:13.5px;color:var(--text-soft);margin-top:6px;font-family:var(--font-mono)">📱 ${esc(client.phone)}</div>` : ''}
         ${client.national_id ? `<div style="font-size:12.5px;color:var(--text-soft);margin-top:4px">🆔 ${esc(client.national_id)}</div>` : ''}
+        ${client.email ? `<div style="font-size:12.5px;color:var(--text-soft);margin-top:4px">✉️ <a href="mailto:${esc(client.email)}">${esc(client.email)}</a></div>` : ''}
+        ${client.address ? `<div style="font-size:12.5px;color:var(--text-soft);margin-top:4px">📍 ${esc(client.address)}</div>` : ''}
+        ${client.notes ? `<div style="font-size:12.5px;color:var(--text-soft);margin-top:6px;line-height:1.7">📝 ${esc(client.notes)}</div>` : ''}
       </div>
 
       <div class="stats" style="margin-bottom:16px">

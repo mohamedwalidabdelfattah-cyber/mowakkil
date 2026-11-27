@@ -31,8 +31,9 @@ async function list({ env, officeId, url, access, authUser }) {
   const binds = [officeId];
 
   if (search) {
-    query += ' AND (c.case_number LIKE ? OR c.court LIKE ? OR cl.name LIKE ?)';
-    binds.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    // البحث بالرقم أو المحكمة أو الموكل أو الخصم أو موضوع الدعوى
+    query += ' AND (c.case_number LIKE ? OR c.court LIKE ? OR cl.name LIKE ? OR c.opponent_name LIKE ? OR c.subject LIKE ?)';
+    binds.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
   }
 
   if (type) {
@@ -77,8 +78,8 @@ async function create({ request, env, authUser, officeId }) {
   const branchId = await validBranch(env, officeId, b.branch_id);
   if (branchId === undefined) return fail(env, 'الفرع مش موجود', 400);
   const r = await env.DB.prepare(
-    `INSERT INTO cases (office_id, client_id, case_number, court, degree, case_type, branch_id)
-     VALUES (?,?,?,?,?,?,?)`
+    `INSERT INTO cases (office_id, client_id, case_number, court, degree, case_type, branch_id, opponent_name, client_role, subject)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     officeId,
     b.client_id ?? null,
@@ -86,7 +87,10 @@ async function create({ request, env, authUser, officeId }) {
     b.court ?? null,
     b.degree ?? null,
     b.case_type ?? null,
-    branchId
+    branchId,
+    b.opponent_name ? String(b.opponent_name).trim().slice(0, 200) : null,
+    b.client_role ? String(b.client_role).trim().slice(0, 50) : null,
+    b.subject ? String(b.subject).trim().slice(0, 2000) : null
   ).run();
 
   await audit(env, {
@@ -206,7 +210,7 @@ async function profile({ env, officeId, params, access }) {
 async function updateStatus({ request, env, authUser, officeId, params }) {
   const id = toInt(params[0]);
   const b = await safeJson(request);
-  const EDITABLE = ['case_number', 'court', 'degree', 'case_type', 'client_id'];
+  const EDITABLE = ['case_number', 'court', 'degree', 'case_type', 'client_id', 'opponent_name', 'client_role', 'subject'];
   const editing = b && EDITABLE.some(k => b[k] !== undefined);
   if (!b || (!b.status && b.branch_id === undefined && !editing)) return fail(env, 'مفيش حاجة تتعدّل', 400);
 
@@ -221,14 +225,17 @@ async function updateStatus({ request, env, authUser, officeId, params }) {
       degree: b.degree !== undefined ? clean(b.degree, 100) : cur.degree,
       case_type: b.case_type !== undefined ? clean(b.case_type, 100) : cur.case_type,
       client_id: b.client_id !== undefined ? (toInt(b.client_id) || null) : cur.client_id,
+      opponent_name: b.opponent_name !== undefined ? clean(b.opponent_name) : cur.opponent_name,
+      client_role: b.client_role !== undefined ? clean(b.client_role, 50) : cur.client_role,
+      subject: b.subject !== undefined ? clean(b.subject, 2000) : cur.subject,
     };
     if (next.client_id && next.client_id !== cur.client_id) {
       const cl = await env.DB.prepare('SELECT id FROM clients WHERE id = ? AND office_id = ? AND deleted_at IS NULL').bind(next.client_id, officeId).first();
       if (!cl) return fail(env, 'الموكل مش موجود', 400);
     }
     await env.DB.prepare(
-      'UPDATE cases SET case_number = ?, court = ?, degree = ?, case_type = ?, client_id = ? WHERE id = ? AND office_id = ?'
-    ).bind(next.case_number, next.court, next.degree, next.case_type, next.client_id, id, officeId).run();
+      'UPDATE cases SET case_number = ?, court = ?, degree = ?, case_type = ?, client_id = ?, opponent_name = ?, client_role = ?, subject = ? WHERE id = ? AND office_id = ?'
+    ).bind(next.case_number, next.court, next.degree, next.case_type, next.client_id, next.opponent_name, next.client_role, next.subject, id, officeId).run();
     await audit(env, {
       office_id: officeId, user_id: authUser.user_id, action: 'update', entity: 'case', entity_id: id, request,
       metadata: { from: Object.fromEntries(EDITABLE.map(k => [k, cur[k]])), to: next },

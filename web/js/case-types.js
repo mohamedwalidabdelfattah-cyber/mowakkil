@@ -22,6 +22,16 @@ export const DEGREE_GROUPS_SA = [
 ];
 
 /** القوائم حسب دولة المكتب */
+// صفة الموكل في الدعوى
+const CLIENT_ROLES = ['مدعي', 'مدعى عليه', 'متهم', 'مجني عليه / مدعي بالحق المدني', 'مستأنف', 'مستأنف ضده', 'طاعن', 'مطعون ضده', 'متدخل', 'أخرى'];
+const CLIENT_ROLES_SA = ['مدعي', 'مدعى عليه', 'متهم', 'مجني عليه', 'مستأنف', 'مستأنف ضده', 'معترض', 'معترض ضده', 'متدخل', 'أخرى'];
+export const clientRoles = () => (isSaudi() ? CLIENT_ROLES_SA : CLIENT_ROLES);
+export function clientRoleOptions(selected = '') {
+  const list = clientRoles();
+  const extra = selected && !list.includes(selected) ? `<option value="${esc(selected)}" selected>${esc(selected)}</option>` : '';
+  return `<option value="">— اختر —</option>${extra}` + list.map(r => `<option value="${esc(r)}" ${r === selected ? 'selected' : ''}>${esc(r)}</option>`).join('');
+}
+
 export const caseTypeGroups = () => (isSaudi() ? CASE_TYPE_GROUPS_SA : CASE_TYPE_GROUPS);
 export const degreeGroups = () => (isSaudi() ? DEGREE_GROUPS_SA : DEGREE_GROUPS);
 export const defaultDegree = () => (isSaudi() ? 'المحكمة العامة' : 'ابتدائي');

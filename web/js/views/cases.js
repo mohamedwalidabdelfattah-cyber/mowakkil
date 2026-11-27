@@ -2,7 +2,7 @@
 import { apiJson, api, uploadDocument, downloadDocument } from '../api.js';
 import { esc, empty, toast, skeleton, fmtMoney, fmtDate, cur, curName, localISO, monthStartISO, monthEndISO } from '../ui.js';
 import { getClients, setCases } from '../state.js';
-import { caseTypeOptions, degreeOptions, caseTypeGroups, degreeGroups } from '../case-types.js';
+import { caseTypeOptions, degreeOptions, caseTypeGroups, degreeGroups, clientRoles, clientRoleOptions } from '../case-types.js';
 import { renderAttachments, DOC_CATEGORIES } from '../attachments.js';
 import { mountExportMenu, filterMeta } from '../exporter.js';
 import { bindPanels } from '../ui.js';
@@ -81,6 +81,12 @@ export async function render(host) {
             <select id="c-branch"><option value="">— من غير فرع —</option></select>
           </div>
         </div>
+        <div class="row">
+          <div><label>الخصم (اختياري)</label><input id="c-opponent" placeholder="اسم الخصم"></div>
+          <div><label>صفة الموكل (اختياري)</label><select id="c-role">${clientRoleOptions()}</select></div>
+        </div>
+        <label>موضوع الدعوى (اختياري)</label>
+        <textarea id="c-subject" rows="2" placeholder="مثلاً: تعويض عن فسخ عقد توريد"></textarea>
         <button class="primary" style="margin-top:10px" id="add-case">حفظ القضية</button>
       </div>
 
@@ -100,7 +106,7 @@ export async function render(host) {
         <div class="filter-bar-inner">
           <div class="filter-item">
             <input type="text" class="filter-input" id="filter-search" 
-                   placeholder="🔍 بحث برقم القضية أو اسم الموكل..." 
+                   placeholder="🔍 بحث برقم القضية أو الموكل أو الخصم..." 
                    value="${esc(currentFilters.search)}">
           </div>
           <div class="filter-item">
@@ -212,6 +218,9 @@ export async function render(host) {
         degree: host.querySelector('#c-degree').value,
         case_type: host.querySelector('#c-type').value || null,
         branch_id: host.querySelector('#c-branch')?.value || null,
+        opponent_name: host.querySelector('#c-opponent').value.trim() || null,
+        client_role: host.querySelector('#c-role').value || null,
+        subject: host.querySelector('#c-subject').value.trim() || null,
       };
       if (!body.case_number && !body.court) return toast('اكتب رقم القضية أو المحكمة', 'bad');
       await apiJson('/api/cases', { method: 'POST', body: JSON.stringify(body) });
@@ -263,6 +272,7 @@ function caseItem(c) {
         <span class="num mono">${esc(c.case_number || '—')}</span>
       </div>
       <div class="meta">${esc(c.court || '—')} · ${esc(c.degree || '')}${c.case_type ? ' · ' + esc(c.case_type) : ''}</div>
+      ${c.opponent_name ? `<div class="meta">⚔️ ضد: ${esc(c.opponent_name)}${c.client_role ? ' · الموكل ' + esc(c.client_role) : ''}</div>` : ''}
       ${c.next_session ? `<div class="meta" style="color:var(--primary);font-weight:600">📅 الجلسة الجاية: ${esc(c.next_session)}</div>` : ''}
       <div class="acts">
         <button class="ghost" data-case-action="view" data-id="${c.id}" style="color:var(--primary);font-weight:700">👁 تفاصيل</button>
@@ -302,8 +312,12 @@ async function editCaseInfo(c, onDone) {
       { name: 'court', label: isSaudi() ? 'المحكمة والدائرة' : 'المحكمة' },
       { name: 'degree', label: isSaudi() ? 'نوع المحكمة / الدرجة' : 'الدرجة', type: 'select', options: withCur(degrees, c.degree).map(opt) },
       { name: 'case_type', label: 'النوع', type: 'select', options: [{ value: '', label: '— اختر —' }, ...withCur(types, c.case_type).map(opt)] },
+      { name: 'opponent_name', label: 'الخصم' },
+      { name: 'client_role', label: 'صفة الموكل', type: 'select', options: [{ value: '', label: '— اختر —' }, ...withCur(clientRoles(), c.client_role).map(opt)] },
+      { name: 'subject', label: 'موضوع الدعوى', type: 'textarea' },
     ],
-    initialData: { client_id: String(c.client_id || ''), case_number: c.case_number || '', court: c.court || '', degree: c.degree || '', case_type: c.case_type || '' },
+    initialData: { client_id: String(c.client_id || ''), case_number: c.case_number || '', court: c.court || '', degree: c.degree || '', case_type: c.case_type || '',
+      opponent_name: c.opponent_name || '', client_role: c.client_role || '', subject: c.subject || '' },
     onSubmit: async (d) => {
       await apiJson(`/api/cases/${c.id}`, { method: 'PATCH', body: JSON.stringify({ ...d, client_id: d.client_id || null }) });
     },
@@ -436,6 +450,13 @@ async function showCaseDetail(id, initialTab = 'overview') {
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
               <span>النوع:</span><strong>${esc(c.case_type || '—')}</strong>
             </div>
+            ${c.opponent_name ? `<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
+              <span>الخصم:</span><strong>${esc(c.opponent_name)}</strong>
+            </div>` : ''}
+            ${c.client_role ? `<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
+              <span>صفة الموكل:</span><strong>${esc(c.client_role)}</strong>
+            </div>` : ''}
+            ${c.subject ? `<div style="font-size:13.5px;margin-top:8px;line-height:1.7"><span>موضوع الدعوى:</span> <strong style="font-weight:600">${esc(c.subject)}</strong></div>` : ''}
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
               <span>الحالة:</span><strong>${esc(c.status)}</strong>
             </div>
@@ -589,6 +610,7 @@ async function showCaseDetail(id, initialTab = 'overview') {
                   <span class="badge ${t.status === 'منجزة' ? 'active' : 'trial'}">${esc(t.status)}</span>
                 </div>
                 <div class="meta">${t.lawyer_name ? '👤 ' + esc(t.lawyer_name) + ' · ' : ''}📅 ${esc(t.due_date || '—')}</div>
+                ${t.notes ? `<div class="meta">📝 ${esc(t.notes)}</div>` : ''}
               </div>
             `).join('')
           : empty('مفيش مهام', '✅');
@@ -601,9 +623,10 @@ async function showCaseDetail(id, initialTab = 'overview') {
               fields: [
                 { name: 'title', label: 'المطلوب', required: true },
                 { name: 'due_date', label: 'الموعد', type: 'date' },
+                { name: 'notes', label: 'التفاصيل (اختياري)', type: 'textarea' },
               ],
               onSubmit: async (d) => {
-                await apiJson('/api/tasks', { method: 'POST', body: JSON.stringify({ case_id: id, title: d.title, due_date: d.due_date || null }) });
+                await apiJson('/api/tasks', { method: 'POST', body: JSON.stringify({ case_id: id, title: d.title, due_date: d.due_date || null, notes: d.notes || null }) });
               },
             });
             if (saved) { toast('✅ اتسجلت المهمة', 'ok'); showCaseDetail(id, 'tasks'); }
