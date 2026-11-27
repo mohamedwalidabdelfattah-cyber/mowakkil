@@ -190,8 +190,9 @@ async function probe(env, provider, model) {
     body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ok' }], ...(/(^|\/)(gpt-5|o\d)/i.test(model) ? { max_completion_tokens: 64 } : { max_tokens: 16 }) }),
     signal: AbortSignal.timeout(20000),
   });
-  // 429 = النموذج موجود بس الحصة خلصت مؤقتاً → نعتبره شغال
-  if (res.ok || res.status === 429) return true;
+  // 429 = الحصة خلصت مؤقتاً، 503 = ضغط مؤقت عند المزود (Gemini بيرجّعها كتير) → النموذج موجود، نعتبره شغال
+  // (من غير كده ضغط لحظي كان بيشيل Gemini Flash 36 ساعة وننزل لـ Flash-Lite)
+  if (res.ok || res.status === 429 || res.status === 503) return true;
   // سبب الرفض بيتسجل في الـ snapshot عشان نعرف ليه نموذج قوي اتشال (حصة/صلاحية/اسم اتغير)
   const txt = await res.text().catch(() => '');
   const err = new Error(`${res.status} ${txt.replace(/s+/g, ' ').slice(0, 140)}`);

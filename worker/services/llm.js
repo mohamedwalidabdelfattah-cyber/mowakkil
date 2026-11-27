@@ -94,7 +94,8 @@ async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temper
 
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    if (res.status === 429) coolDown(p.name, p.model, res.headers.get('retry-after'));
+    // 429 حصة خلصت / 503 ضغط مؤقت → نعدّي النموذج شوية بدل ما كل طلب يستناه
+    if (res.status === 429 || res.status === 503) coolDown(p.name, p.model, res.headers.get('retry-after') || (res.status === 503 ? 60 : undefined));
     const err = new Error(`${p.name}/${p.model} ${res.status}: ${txt.slice(0, 200)}`);
     err.modelGone = (res.status === 404 || res.status === 400) && MODEL_GONE.test(`${res.status} ${txt}`);
     throw err;
