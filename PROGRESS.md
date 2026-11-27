@@ -2575,6 +2575,32 @@ node seed-vectorize.mjs
   - مفتاح NVIDIA من build.nvidia.com، وبعدين `wrangler secret put NVIDIA_API_KEY`، وبعدين «فحص النماذج».
   - Groq: صاحب المشروع بيقول إنه مش راضي يديه مفتاح، والسبب لسه مش معروف.
 
+## ٧.٥١) اختيار النماذج بالعيلة + Qwen على Cloudflare + DeepSeek (2026-11-28)
+
+- **فحص NVIDIA الحقيقي:**
+  - `llm:models:v3` كان فيه nvidia = Nemotron Ultra بس.
+  - قايمة NVIDIA العامة (30 نموذج) مبقاش فيها DeepSeek. الموجود: Kimi K3.1 Pro، GLM-5.3 Flash، MiniMax M3.1 Flash، Nemotron 3 Ultra.
+  - الكود كان بيدوّر على `kimi-k2`.
+- **OpenRouter:** كان بيختار ernie-5.5-preview وparticle-1 (سياق طويل بس). المجاني الحالي 10 نماذج، أقواهم Nemotron Ultra وGemma 4 31B.
+- **الإصلاح (`model-discovery.js`):**
+  - `OPEN_FAMILIES` + `NOT_CHAT` + `pickOpen()` مشتركين بين NVIDIA وOpenRouter.
+  - الترتيب: Kimi، DeepSeek، GLM، Qwen الكبير، MiniMax، Nemotron Ultra/Super، gpt-oss-120b، Llama 4 Maverick، Gemma 27b+، Llama 3.3 70b.
+  - النتيجة على القوايم الحقيقية: NVIDIA ← Kimi K3.1 Pro، GLM-5.3، MiniMax، Nemotron. OpenRouter ← Nemotron Ultra، Gemma 4 31B.
+  - الكاش بقى `llm:models:v4`.
+- **Cloudflare (worker مؤقت بـ `wrangler dev --remote`):**
+  - DeepSeek V4.1 Flash: «5035 not available on the Workers Free plan».
+  - Qwen 3.8 27B: شغال، عربي ممتاز، حوالي 3.8 ثانية، حوالي 51 neurons للرد القصير، وسياقه 262K.
+  - GLM-4.7 Flash: صرف التوكنز كلها في التفكير، فاستبعدناه.
+- **سلسلة Cloudflare بقت:**
+  - العادي: gpt-oss-120b ثم Qwen 3.8 ثم Llama 3.3.
+  - الوضع السري: gpt-oss ثم Qwen ثم Llama 4 Scout ثم Llama 3.3.
+- **المفاتيح على السيرفر:**
+  - موجودة: GEMINI، NVIDIA، OPENROUTER، GROQ، MISTRAL، TAVILY، TELEGRAM_BOT_TOKEN.
+  - Groq: حالته مش معروفة. Mistral: مرفوض.
+  - مش مستخدمين في الكود: ANTHROPIC_API_KEY (مدفوع) وGITHUB_MODELS_TOKEN (الخدمة اتقفلت، يتمسح).
+- **DeepSeek:** مفيش طريق مجاني. الاقتراح: Workers Paid بـ 5 دولار/شهر (بيفتح DeepSeek على Cloudflare وبيرفع حد D1)، أو شحن DeepSeek الرسمي.
+- **النشر:** السيرفر نسخة `59b28bf3`.
+
 ## ٨) لو حاجة باظت — ارجع لنسخة سابقة
 
 **الموقع:** من لوحة Cloudflare → Workers & Pages → mowakkil-2026 → Deployments → اختار نسخة قديمة → «Rollback».
