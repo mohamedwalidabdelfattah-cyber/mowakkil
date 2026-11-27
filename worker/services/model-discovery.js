@@ -191,13 +191,18 @@ async function probe(env, provider, model) {
     signal: AbortSignal.timeout(20000),
   });
   // 429 = النموذج موجود بس الحصة خلصت مؤقتاً → نعتبره شغال
-  return res.ok || res.status === 429;
+  if (res.ok || res.status === 429) return true;
+  // سبب الرفض بيتسجل في الـ snapshot عشان نعرف ليه نموذج قوي اتشال (حصة/صلاحية/اسم اتغير)
+  const txt = await res.text().catch(() => '');
+  const err = new Error(`${res.status} ${txt.replace(/s+/g, ' ').slice(0, 140)}`);
+  throw err;
 }
 
-async function keepWorking(env, provider, list) {
+async function keepWorking(env, provider, list, fails = []) {
   const good = [];
   for (const m of list) {
-    try { if (await probe(env, provider, m)) good.push(m); } catch {}
+    try { if (await probe(env, provider, m)) good.push(m); }
+    catch (e) { fails.push(`${m} ← ${e.name === 'TimeoutError' ? 'مردش في 20 ثانية' : e.message}`); }
     if (good.length >= 2) break; // كفاية اتنين شغالين لكل مزود (توفير للحصة)
   }
   return good;
@@ -205,22 +210,26 @@ async function keepWorking(env, provider, list) {
 
 /** يسأل كل المزودين، يجرب نماذجهم، ويحفظ الشغال. أي مزود يفشل → قايمته الافتراضية. */
 export async function refreshModels(env) {
-  const models = {}; const errors = {};
+  const models = {}; const errors = {}; const skipped = {};
   const jobs = { gemini: discoverGemini, groq: discoverGroq, openrouter: discoverOpenRouter, mistral: discoverMistral, cerebras: discoverCerebras, nvidia: discoverNvidia };
   await Promise.all(Object.entries(jobs).map(async ([name, fn]) => {
     try {
       const list = await fn(env);
       if (list === null) { models[name] = DEFAULT_MODELS[name]; return; } // مفيش مفتاح
       const candidates = [...new Set([...(list || []), ...DEFAULT_MODELS[name]])];
-      const working = await keepWorking(env, name, candidates);
-      if (!working.length) errors[name] = 'مفيش نموذج رد في التجربة (المفتاح أو الحصة)';
+      const fails = [];
+      const working = await keepWorking(env, name, candidates, fails);
+      if (!working.length) errors[name] = 'مفيش نموذج رد في التجربة (المفتاح أو الحصة)' + (fails.length ? ': ' + fails.join(' | ') : '');
+      else if (fails.length) skipped[name] = fails;
       models[name] = working.length ? working : candidates.slice(0, 2);
     } catch (e) {
       errors[name] = e.message;
       models[name] = DEFAULT_MODELS[name];
     }
   }));
-  const snapshot = { at: new Date().toISOString(), models, errors };
+  // keys: مين مفتاحه موجود أصلاً (من غير القيمة) — عشان نفرّق بين "مفيش مفتاح" و"المفتاح شغال"
+  const keys = Object.fromEntries(Object.entries(ENDPOINTS).map(([n, ep]) => [n, secret(env, ep.key).length >= 20]));
+  const snapshot = { at: new Date().toISOString(), models, errors, skipped, keys };
   memo = { at: Date.now(), models };
   try { await env.RATE_LIMIT_KV?.put(KV_KEY, JSON.stringify(snapshot), { expirationTtl: TTL_SECONDS }); } catch {}
   return snapshot;
