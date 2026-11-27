@@ -497,6 +497,38 @@
   }
 </script>
 
+<!-- تحميل ملفات البداية كلها مع بعض من الأول (بدل ما كل ملف يكتشف اللي بعده = 5 مستويات ورا بعض على نت الموبايل).
+     القايمة = الـ imports الثابتة من main.js. لو اتضاف ملف جديد ومش هنا مفيش مشكلة — بيتحمّل عادي بس متأخر شوية. -->
+<link rel="modulepreload" href="/js/main.js">
+<link rel="modulepreload" href="/js/api.js">
+<link rel="modulepreload" href="/js/ui.js">
+<link rel="modulepreload" href="/js/offline.js">
+<link rel="modulepreload" href="/js/router.js">
+<link rel="modulepreload" href="/js/access.js">
+<link rel="modulepreload" href="/js/drawer.js">
+<link rel="modulepreload" href="/js/notifications.js">
+<link rel="modulepreload" href="/js/search.js">
+<link rel="modulepreload" href="/js/icons.js">
+<link rel="modulepreload" href="/js/chart-theme.js">
+<link rel="modulepreload" href="/js/msa.js">
+<link rel="modulepreload" href="/js/date-dom.js">
+<link rel="modulepreload" href="/js/help.js">
+<link rel="modulepreload" href="/js/views/login.js">
+<link rel="modulepreload" href="/js/views/account.js">
+<link rel="modulepreload" href="/js/views/superadmin.js">
+<link rel="modulepreload" href="/js/config.js">
+<link rel="modulepreload" href="/js/state.js">
+<link rel="modulepreload" href="/js/phone.js">
+<link rel="modulepreload" href="/js/country.js">
+<link rel="modulepreload" href="/js/nav-links.js">
+<link rel="modulepreload" href="/js/tour.js">
+<link rel="modulepreload" href="/js/tour-videos.js">
+<link rel="modulepreload" href="/js/views/sa-followup.js">
+<link rel="modulepreload" href="/js/views/sa-sources.js">
+<link rel="modulepreload" href="/js/views/sa-alerts.js">
+<link rel="modulepreload" href="/js/tours.js">
+<link rel="modulepreload" href="/js/tours-msa.js">
+<link rel="modulepreload" href="/js/tours-more.js">
 <script type="module" src="/js/main.js"></script>
 <script src="/js/attribution.js"></script>
 <script defer src="/js/support-fab.js"></script>

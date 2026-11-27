@@ -11,7 +11,9 @@
 const CACHE_PREFIX = 'mowakkil-v2';
 const CODE_CACHE = `${CACHE_PREFIX}-code`;
 const ASSET_CACHE = `${CACHE_PREFIX}-assets`;
-const NETWORK_TIMEOUT_MS = 4000;
+// لو الملف محفوظ عندنا ومستنيين الشبكة أكتر من كده → بنفتح بالمحفوظ (الأبلكيشن كان بيبان معلّق على نت الموبايل الضعيف).
+// الملفات لسه بتتحدث من الشبكة في الخلفية، فالنسخة الجديدة بتوصل في الفتحة اللي بعدها.
+const NETWORK_TIMEOUT_MS = 1500;
 
 // مكتبات الأجندة والرسوم: بتتحفظ من أول تثبيت عشان الأجندة تفتح من غير نت حتى لو اتفتحت أول مرة أوفلاين
 const PRECACHE_LIBS = [
@@ -43,7 +45,7 @@ const isCode = (url, req) =>
   req.mode === 'navigate' || /\.(html|js|mjs|css|webmanifest|json)$/.test(url.pathname) || url.pathname === '/';
 const isAsset = url => /\.(png|jpe?g|webp|svg|ico|gif|woff2?|ttf)$/.test(url.pathname);
 
-function networkFirst(req) {
+function networkFirst(req, event) {
   return new Promise((resolve) => {
     let settled = false;
     const fromCache = () => caches.match(req).then(r => r || (req.mode === 'navigate' ? caches.match('/') : null));
@@ -52,14 +54,17 @@ function networkFirst(req) {
       if (cached && !settled) { settled = true; resolve(cached); }
     }, NETWORK_TIMEOUT_MS);
 
-    fetch(req).then(res => {
+    const net = fetch(req).then(res => {
       clearTimeout(timer);
-      if (res && res.ok && res.type === 'basic') {
-        const copy = res.clone();
-        caches.open(CODE_CACHE).then(c => c.put(req, copy)).catch(() => {});
-      }
+      // النسخة لازم تتاخد قبل ما الرد يروح للصفحة (بعدها الـ body بيبقى اتقرا)
+      const copy = (res && res.ok && res.type === 'basic') ? res.clone() : null;
+      const saved = copy ? caches.open(CODE_CACHE).then(c => c.put(req, copy)).catch(() => {}) : null;
       if (!settled) { settled = true; resolve(res); }
-    }).catch(async () => {
+      return saved;
+    });
+    // لو فتحنا بالمحفوظ، تحميل النسخة الجديدة بيكمّل في الخلفية لحد ما يتحفظ
+    event?.waitUntil(net.catch(() => {}));
+    net.catch(async () => {
       clearTimeout(timer);
       if (settled) return;
       settled = true;
@@ -102,5 +107,5 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/downloads/') || url.pathname.startsWith('/.well-known/')) return;
 
   if (isAsset(url)) { event.respondWith(staleWhileRevalidate(req)); return; }
-  if (isCode(url, req)) { event.respondWith(networkFirst(req)); return; }
+  if (isCode(url, req)) { event.respondWith(networkFirst(req, event)); return; }
 });

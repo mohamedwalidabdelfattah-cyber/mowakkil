@@ -514,7 +514,12 @@ export function startOffline(fetchJson) {
     prefetchAll(fetchJson, { force: r.sent > 0 });
   });
   window.addEventListener('offline', updateBanner);
-  syncOutbox().then(() => prefetchAll(fetchJson));
+  // اللي اتسجل من غير نت بيتبعت على طول، لكن تحميل كل القوايم للاستخدام من غير نت (عشرات الطلبات)
+  // بيستنى لحد ما الأبلكيشن يفتح والشاشة تهدى — كان بيزاحم بيانات أول شاشة على نت الموبايل الضعيف
+  syncOutbox().then(() => {
+    const later = () => prefetchAll(fetchJson);
+    setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(later, { timeout: 10000 }) : later()), 8000);
+  });
   setInterval(() => { if (navigator.onLine) prefetchAll(fetchJson); }, 15 * 60 * 1000);
   updateBanner();
 }
