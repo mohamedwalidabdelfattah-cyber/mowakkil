@@ -394,6 +394,39 @@ export async function recordPayment(env, { officeId, userId = null, amount, meth
   return { id: paymentId, receipt_number: receipt, client_id: client, fee, invoice: inv };
 }
 
+// تعديل دفعة (المبلغ/التاريخ/طريقة الدفع/الملاحظات) — بنفس رقم الإيصال
+// بيعيد قيدها في الحسابات بالقيم الجديدة، وبيعيد حساب المدفوع على الأتعاب والفاتورة.
+// الفترة المقفولة: لا التاريخ القديم ولا الجديد ينفع يكون فيها.
+export async function editPayment(env, officeId, payment, changes, userId = null) {
+  const amount = changes.amount !== undefined ? Math.round(Number(changes.amount) * 100) / 100 : Number(payment.amount);
+  if (!(amount > 0)) throw new Error('اكتب مبلغ صحيح');
+  const day = changes.payment_date ? String(changes.payment_date).slice(0, 10) : String(payment.payment_date).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('تاريخ غلط');
+  const method = changes.method !== undefined ? (String(changes.method || '').trim().slice(0, 50) || 'نقدي') : (payment.method || 'نقدي');
+  const notes = changes.notes !== undefined ? (String(changes.notes || '').trim().slice(0, 1000) || null) : payment.notes;
+  await assertOpen(env, officeId, payment.payment_date);
+  if (day !== String(payment.payment_date).slice(0, 10)) await assertOpen(env, officeId, day);
+
+  await env.DB.prepare(
+    `UPDATE payments SET amount = ?, payment_date = ?, method = ?, notes = ? WHERE id = ? AND office_id = ?`
+  ).bind(amount, day, method, notes, payment.id, officeId).run();
+
+  await deleteEntriesFor(env, officeId, REF.payment, payment.id);
+  let invNo = null;
+  if (payment.invoice_id) {
+    invNo = (await env.DB.prepare('SELECT invoice_number FROM invoices WHERE id = ? AND office_id = ?').bind(payment.invoice_id, officeId).first())?.invoice_number || null;
+  }
+  await autoEntryPayment(env, {
+    officeId, paymentId: payment.id, amount, date: day, method,
+    description: `تحصيل دفعة - ${payment.receipt_number || ''}${invNo ? ' - فاتورة ' + invNo : ''} (معدّلة)`,
+    feeId: payment.fee_id, invoiceId: payment.invoice_id, clientId: payment.client_id, userId,
+  });
+  await recalcFee(env, officeId, payment.fee_id);
+  await recalcInvoice(env, officeId, payment.invoice_id);
+  await recalcInvoicesForFee(env, officeId, payment.fee_id);
+  return { amount, payment_date: day, method, notes };
+}
+
 // حذف دفعة + قيدها + إعادة حساب الأتعاب والفاتورة
 export async function removePayment(env, officeId, payment) {
   await assertOpen(env, officeId, payment.payment_date);

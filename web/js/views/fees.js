@@ -588,6 +588,7 @@ function showFeePaymentsModal(data) {
             ${p.notes ? `<div class="meta">📝 ${esc(p.notes)}</div>` : ''}
             <div class="acts">
               <button class="btn btn-ghost" data-print="${p.id}">🖨 طباعة إيصال</button>
+              <button class="btn btn-ghost" data-edit-payment="${p.id}">✏️ تعديل</button>
               <button class="btn btn-ghost" data-del-payment="${p.id}" style="color:var(--danger)">🗑 حذف</button>
             </div>
           </div>
@@ -608,6 +609,34 @@ function showFeePaymentsModal(data) {
   backdrop.querySelectorAll('[data-print]').forEach(b => b.addEventListener('click', () => {
     const p = payments.find(x => x.id == b.dataset.print);
     if (p) showReceipt(null, p, fee);
+  }));
+
+  backdrop.querySelectorAll('[data-edit-payment]').forEach(b => b.addEventListener('click', async () => {
+    const p = payments.find(x => x.id == b.dataset.editPayment);
+    if (!p) return;
+    const saved = await openModal({
+      title: '✏️ تعديل الدفعة',
+      submitText: 'حفظ التعديل',
+      initialData: { amount: p.amount, payment_date: String(p.payment_date || '').slice(0, 10), method: p.method || '', notes: p.notes || '' },
+      fields: [
+        { name: 'amount', label: `المبلغ (${cur()})`, type: 'number', required: true },
+        { name: 'payment_date', label: 'تاريخ الدفعة', type: 'date', required: true },
+        { name: 'method', label: 'طريقة الدفع', type: 'datalist', placeholder: 'نقدي',
+          options: ['نقدي', 'تحويل بنكي', 'شيك', 'فودافون كاش', 'إنستاباي'] },
+        { name: 'notes', label: 'ملاحظات', type: 'textarea' },
+      ],
+      onSubmit: async (d) => {
+        await apiJson(`/api/payments/${p.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ amount: d.amount, payment_date: d.payment_date, method: d.method, notes: d.notes }),
+        });
+      },
+    });
+    if (!saved) return;
+    toast('✅ اتعدّلت الدفعة', 'ok');
+    close();
+    const host = document.getElementById('view-host');
+    if (host) render(host);
   }));
 
   backdrop.querySelectorAll('[data-del-payment]').forEach(b => b.addEventListener('click', async () => {

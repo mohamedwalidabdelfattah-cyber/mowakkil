@@ -1,7 +1,7 @@
 import { ok, fail } from '../lib/response.js';
 import { audit } from '../lib/audit.js';
 import { isStr, toInt, safeJson } from '../lib/validation.js';
-import { recordPayment, removePayment } from '../services/accounting.js';
+import { recordPayment, removePayment, editPayment } from '../services/accounting.js';
 import { requireFeature } from '../middleware/feature-gate.js';
 import { createNotification } from './notifications.js';
 
@@ -10,6 +10,7 @@ export const routes = [
   { method: 'POST',   path: '/api/payments',                    handler: create },
   { method: 'GET',    path: '/api/payments/stats',              handler: stats },
   { method: 'GET',    path: /^\/api\/payments\/(\d+)$/,         handler: get },
+  { method: 'PATCH',  path: /^\/api\/payments\/(\d+)$/,         handler: update },
   { method: 'DELETE', path: /^\/api\/payments\/(\d+)$/,         handler: remove },
   { method: 'GET',    path: /^\/api\/fees\/(\d+)\/payments$/,   handler: feePayments },
 ];
@@ -134,6 +135,31 @@ async function create({ request, env, authUser, officeId }) {
   });
 
   return ok(env, { id: r.meta.last_row_id, receipt_number }, 201);
+}
+
+async function update({ request, env, authUser, officeId, params }) {
+  const gate = await requireFeature(env, officeId, 'finance');
+  if (gate) return gate;
+
+  const id = toInt(params[0]);
+  const p = await env.DB.prepare(
+    `SELECT * FROM payments WHERE id = ? AND office_id = ?`
+  ).bind(id, officeId).first();
+  if (!p) return fail(env, 'not found', 404);
+
+  const b = await safeJson(request);
+  if (!b) return fail(env, 'JSON غلط', 400);
+
+  let after;
+  try { after = await editPayment(env, officeId, p, b, authUser.user_id); }
+  catch (e) { return fail(env, e.message, e.status || 400); }
+
+  await audit(env, {
+    office_id: officeId, user_id: authUser.user_id,
+    action: 'update', entity: 'payment', entity_id: id, request,
+    metadata: { from: { amount: p.amount, payment_date: p.payment_date, method: p.method }, to: after },
+  });
+  return ok(env, { updated: true, ...after });
 }
 
 async function remove({ request, env, authUser, officeId, params }) {

@@ -87,6 +87,8 @@ export async function render(host) {
         </div>
         <label>موضوع الدعوى (اختياري)</label>
         <textarea id="c-subject" rows="2" placeholder="مثلاً: تعويض عن فسخ عقد توريد"></textarea>
+        <label>قيمة الدعوى (اختياري)</label>
+        <input id="c-claim" type="number" min="0" step="any" inputmode="decimal" placeholder="المبلغ المطالب بيه">
         <button class="primary" style="margin-top:10px" id="add-case">حفظ القضية</button>
       </div>
 
@@ -221,6 +223,7 @@ export async function render(host) {
         opponent_name: host.querySelector('#c-opponent').value.trim() || null,
         client_role: host.querySelector('#c-role').value || null,
         subject: host.querySelector('#c-subject').value.trim() || null,
+        claim_amount: host.querySelector('#c-claim').value || null,
       };
       if (!body.case_number && !body.court) return toast('اكتب رقم القضية أو المحكمة', 'bad');
       await apiJson('/api/cases', { method: 'POST', body: JSON.stringify(body) });
@@ -315,9 +318,10 @@ async function editCaseInfo(c, onDone) {
       { name: 'opponent_name', label: 'الخصم' },
       { name: 'client_role', label: 'صفة الموكل', type: 'select', options: [{ value: '', label: '— اختر —' }, ...withCur(clientRoles(), c.client_role).map(opt)] },
       { name: 'subject', label: 'موضوع الدعوى', type: 'textarea' },
+      { name: 'claim_amount', label: `قيمة الدعوى (${cur()})`, type: 'number' },
     ],
     initialData: { client_id: String(c.client_id || ''), case_number: c.case_number || '', court: c.court || '', degree: c.degree || '', case_type: c.case_type || '',
-      opponent_name: c.opponent_name || '', client_role: c.client_role || '', subject: c.subject || '' },
+      opponent_name: c.opponent_name || '', client_role: c.client_role || '', subject: c.subject || '', claim_amount: c.claim_amount ?? '' },
     onSubmit: async (d) => {
       await apiJson(`/api/cases/${c.id}`, { method: 'PATCH', body: JSON.stringify({ ...d, client_id: d.client_id || null }) });
     },
@@ -455,6 +459,9 @@ async function showCaseDetail(id, initialTab = 'overview') {
             </div>` : ''}
             ${c.client_role ? `<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
               <span>صفة الموكل:</span><strong>${esc(c.client_role)}</strong>
+            </div>` : ''}
+            ${c.claim_amount ? `<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">
+              <span>قيمة الدعوى:</span><strong>${fmtMoney(c.claim_amount)} ${cur()}</strong>
             </div>` : ''}
             ${c.subject ? `<div style="font-size:13.5px;margin-top:8px;line-height:1.7"><span>موضوع الدعوى:</span> <strong style="font-weight:600">${esc(c.subject)}</strong></div>` : ''}
             <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px">

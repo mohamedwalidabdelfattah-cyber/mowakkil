@@ -23,6 +23,7 @@ const ACTION_GUARDS = [
   ['[data-del-task]', 'tasks.delete'],
   ['[data-edit-task]', 'tasks.edit'],
   ['[data-del-fee],[data-del-payment]', 'fees.delete'],
+  ['[data-edit-payment]', 'fees.edit'],
   ['[data-add-payment]', 'fees.create'],
   ['[data-del-invoice]', 'invoices.delete'],
   ['[data-del-expense],[data-del-task-expense]', 'expenses.delete'],
