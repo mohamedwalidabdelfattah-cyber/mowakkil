@@ -56,6 +56,8 @@ const MODEL_GONE = /\b(404)\b|no longer available|not found|does not exist|decom
 
 const WORKERS_AI_MODEL = '@cf/openai/gpt-oss-120b';
 const WORKERS_AI_FALLBACK = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+// Qwen 3.8 27B: عربي ممتاز وسياق 262K (مناسب لمستندات القضية) ومتاح في الخطة المجانية — بس أغلى في الحصة (~50 وحدة للرد القصير)
+const WORKERS_AI_QWEN = '@cf/qwen/qwen3.8-27b';
 
 // المفتاح بعد شيل أي مسافات/سطر جديد اتلزق معاه وقت الحفظ
 export const secret = (env, name) => String(env?.[name] ?? '').trim();
@@ -105,7 +107,7 @@ async function callOpenAICompatible(env, p, { messages, tools, maxTokens, temper
 }
 
 // الوضع السري: نماذج Cloudflare بس. Llama 4 Scout سياقه طويل (مناسب لمستندات القضية) وأرخص في الحصة.
-const STRICT_MODELS = [WORKERS_AI_MODEL, '@cf/meta/llama-4-scout-17b-16e-instruct', WORKERS_AI_FALLBACK];
+const STRICT_MODELS = [WORKERS_AI_MODEL, WORKERS_AI_QWEN, '@cf/meta/llama-4-scout-17b-16e-instruct', WORKERS_AI_FALLBACK];
 
 // الردود بتيجي بأشكال مختلفة حسب النموذج (Llama: response — gpt-oss: Responses API أو chat completions)
 function workersAIText(r) {
@@ -143,7 +145,7 @@ async function callWorkersAI(env, { messages, maxTokens, temperature, model = WO
   } else {
     r = await env.AI.run(model, { messages: msgs, max_tokens: maxTokens, temperature });
   }
-  const text = workersAIText(r);
+  const text = String(workersAIText(r) || '').trim();
   if (!text) throw new Error('workers-ai: رد فاضي');
   return { role: 'assistant', content: text };
 }
@@ -196,7 +198,7 @@ export async function chatCompletion(env, {
   }
 
   if (!skip.includes('workers-ai')) {
-    const models = route === 'strict' ? STRICT_MODELS : [WORKERS_AI_MODEL, WORKERS_AI_FALLBACK];
+    const models = route === 'strict' ? STRICT_MODELS : [WORKERS_AI_MODEL, WORKERS_AI_QWEN, WORKERS_AI_FALLBACK];
     for (const model of models) {
       try {
         const message = await callWorkersAI(env, { messages: outMessages, maxTokens, temperature, model });
