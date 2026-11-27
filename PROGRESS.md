@@ -2601,6 +2601,22 @@ node seed-vectorize.mjs
 - **DeepSeek:** مفيش طريق مجاني. الاقتراح: Workers Paid بـ 5 دولار/شهر (بيفتح DeepSeek على Cloudflare وبيرفع حد D1)، أو شحن DeepSeek الرسمي.
 - **النشر:** السيرفر نسخة `59b28bf3`.
 
+## ٧.٥٢) أسباب رفض النماذج + Gemini 503 + Groq اشتغل (2026-11-28)
+
+- **التشخيص:** الـ probe بقى بيسجّل سبب رفض كل نموذج في الـ snapshot (`skipped` و`errors`)، وبيسجّل مين مفتاحه موجود (`keys`). اتنشر في نسخة `49a616c5`.
+- **الأسباب اللي ظهرت:**
+  - **Gemini 3.5–3.8 Flash:** 503 «high demand» (ضغط مؤقت عند Google)، وكان بيتشال 36 ساعة وننزل لـ Flash-Lite.
+  - **Groq:** المفتاح القديم كان أقل من 20 حرف (غلط). Cloudflare Turnstile في Groq بيفشل في متصفح Claude الداخلي، والمفتاح الجديد اتعمل من Chrome العادي.
+  - **Mistral:** 402 `billing_no_api_budget_configured` («You need a subscription»)، وLarge بيرجع 403 `tier_not_allowed`. خطة Experiment مش متفعّلة.
+  - **Kimi K3.1 Pro / GLM-5.3 (NVIDIA):** مردّوش في 20 ثانية.
+- **الإصلاح (نسخة `3889a4c0`):** الـ probe بيعتبر 503 زي 429 (النموذج موجود بس عليه ضغط). و503 وقت الاستخدام بيعمل cooldown دقيقة للنموذج ده بس.
+- **الفحص الأخير:**
+  - Gemini ← gemini-3.8-flash وgemini-3.7-flash.
+  - Groq ← gpt-oss-120b وqwen3.8-27b (المفتاح الجديد شغال).
+  - NVIDIA ← MiniMax M3.1 وNemotron Ultra.
+  - OpenRouter ← Nemotron Ultra وGemma 4 31B.
+  - Mistral لسه 402.
+
 ## ٨) لو حاجة باظت — ارجع لنسخة سابقة
 
 **الموقع:** من لوحة Cloudflare → Workers & Pages → mowakkil-2026 → Deployments → اختار نسخة قديمة → «Rollback».
