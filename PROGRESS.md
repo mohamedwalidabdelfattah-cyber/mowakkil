@@ -2542,6 +2542,39 @@ node seed-vectorize.mjs
   - السيرفر نسخة `eb071405`، والموقع اتنشر.
   - على الحقيقي: PATCH من غير دخول بيرجع 401، والملفات الجديدة بتتحمل من غير أخطاء.
 
+## ٧.٥٠) بحث المفاتيح المجانية الحالي + NVIDIA + Cloudflare gpt-oss (2026-11-28)
+
+- **بحث (نوفمبر 2026)، مصادره مواقع بتجمع معلومات، والأرقام بتتغير:**
+  - **مبقاش فيهم مجاني فعلي:**
+    - DeepSeek الرسمي: مفيش free tier منشور.
+    - Qwen/Alibaba: مليون توكن مرة واحدة لمدة 90 يوم (سنغافورة)، والـ OAuth المجاني اتقفل 4/2026.
+    - Cerebras: بقى 5 دولار بكارت، بتخلص في 30 يوم.
+    - SambaNova: 20 طلب في اليوم، وممكن يطلب كارت.
+    - Chutes وTogether وHugging Face وGitHub Models: مقفولين.
+    - Kimi على OpenRouter: اتشال 6/2026.
+  - **المجاني القوي:**
+    - Groq: gpt-oss-120b وQwen3.8، حوالي 30 طلب/دقيقة و1000 طلب/يوم، وLlama اتشالت 8/2026.
+    - NVIDIA NIM: حوالي 40 طلب/دقيقة للحساب، والشروط بتوصفه «تجربة».
+    - Gemini: Flash بس، والحدود اتقلّت.
+    - Cloudflare: 10K neurons/يوم.
+    - OpenRouter: `:free` بـ 50 طلب/يوم.
+- **NVIDIA NIM (`model-discovery.js`):**
+  - `NVIDIA_API_KEY` اختياري، و`noClientData` (أسئلة عامة بس).
+  - `discoverNvidia` بيرتّب: DeepSeek v3.x/v4 ثم Kimi K2 ثم Qwen3 ثم gpt-oss-120b ثم Llama 4 Maverick، وبيستبعد الصغير والـ embed والـ r1.
+  - الترتيب في `buildAttempts`: Gemini ثم NVIDIA ثم Groq ثم Mistral ثم Cerebras.
+  - مفتاح الكاش بقى `llm:models:v3`.
+- **Cloudflare (`llm.js`):**
+  - `@cf/openai/gpt-oss-120b` بصيغة Responses API (`instructions` + `input` + `reasoning.effort: low`).
+  - `workersAIText()` بيقرأ كل أشكال الرد، وLlama 3.3 احتياطي.
+  - الوضع السري: gpt-oss ثم Llama 4 Scout ثم Llama 3.3.
+  - اتجرب على الـ binding الحقيقي بـ worker مؤقت (`wrangler dev --remote`): رد في حوالي 0.6 ثانية واستهلك حوالي 5.5 neurons.
+  - ⚠️ في التجربة قال مدة الاستئناف المدني 15 يوم (الصح 40)، ده بيأكد أهمية الاعتماد على المواد القانونية في الإجابة.
+- **Groq:** قايمة التفضيل اتحدّثت (gpt-oss-120b، Kimi، Qwen3.8 قبل Llama).
+- **النشر:** السيرفر نسخة `54b5d80b`.
+- **فاضل على صاحب المشروع:**
+  - مفتاح NVIDIA من build.nvidia.com، وبعدين `wrangler secret put NVIDIA_API_KEY`، وبعدين «فحص النماذج».
+  - Groq: صاحب المشروع بيقول إنه مش راضي يديه مفتاح، والسبب لسه مش معروف.
+
 ## ٨) لو حاجة باظت — ارجع لنسخة سابقة
 
 **الموقع:** من لوحة Cloudflare → Workers & Pages → mowakkil-2026 → Deployments → اختار نسخة قديمة → «Rollback».
