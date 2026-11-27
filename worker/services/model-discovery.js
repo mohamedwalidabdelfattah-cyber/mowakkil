@@ -7,7 +7,7 @@
 // - بتتحدث لوحدها كل يوم من الـ cron، أو فوراً لو نموذج رجّع "مش موجود".
 // - لو الاكتشاف فشل لأي سبب → بنرجع لقايمة افتراضية آمنة.
 
-const KV_KEY = 'llm:models:v3'; // v3: NVIDIA NIM اتضاف (11/2026). v2: Mistral/Cerebras (GitHub Models اتقفلت نهائياً 30/7/2026)
+const KV_KEY = 'llm:models:v4'; // v3: NVIDIA NIM اتضاف (11/2026). v2: Mistral/Cerebras (GitHub Models اتقفلت نهائياً 30/7/2026)
 // الـ cron بيحدّث كل يوم، والـ TTL أطول من يوم عشان المستخدم عمره ما يستنى اكتشاف جديد
 const TTL_SECONDS = 36 * 60 * 60;
 const secret = (env, name) => String(env?.[name] ?? '').trim();
@@ -19,7 +19,7 @@ export const DEFAULT_MODELS = {
   openrouter: [],
   mistral: ['mistral-large-latest', 'mistral-medium-latest'],
   cerebras: ['gpt-oss-120b'],
-  nvidia: ['deepseek-ai/deepseek-v3.2', 'openai/gpt-oss-120b', 'qwen/qwen3-235b-a22b'],
+  nvidia: ['nvidia/nemotron-3-ultra-550b-a55b'],
 };
 
 let memo = null; // { at, models }
@@ -79,6 +79,27 @@ async function discoverGroq(env) {
   return [...preferred, ...others].slice(0, 4);
 }
 
+// ---------------- ترتيب النماذج المفتوحة حسب العيلة ----------------
+// الأقوى في العربي/الاستدلال الأول. بنطابق العيلة مش النسخة (kimi-k2 → kimi-k3.1 …) عشان التحديثات متكسرش الاختيار.
+export const OPEN_FAMILIES = [
+  /kimi-k\d/i,                                   // Moonshot Kimi
+  /deepseek-v\d/i,                               // DeepSeek
+  /glm-\d/i,                                     // Z.ai GLM
+  /qwen3(\.\d+)?-?(235b|max)|qwen-?3\.\d+(?!.*\b\d{1,2}b\b)/i, // Qwen الكبير
+  /minimax-m\d/i,                                // MiniMax
+  /nemotron[\w.-]*(ultra|super)(?![\w.-]*vl)/i,  // NVIDIA Nemotron الكبير (مش الـ vision)
+  /gpt-oss-120b/i,
+  /llama-4-maverick/i,
+  /gemma-\d+-(2[7-9]|3\d)b/i,                    // Gemma الكبير (27b+)
+  /llama-3\.3-70b/i,
+];
+// مش نماذج كلام عادي، أو صغيرة/تجريبية
+export const NOT_CHAT = /embed|rerank|guard|safety|reward|vision|[-_]vl\b|[-_]vl[-_:]|omni|clip|parse|ocr|retriever|translate|coder|math|-r1\b|distill|nano|lightning|\b\d(\.\d)?b\b|\b1\d?b\b/i;
+export const familyRank = id => { const i = OPEN_FAMILIES.findIndex(re => re.test(id)); return i < 0 ? 99 : i; };
+const verNum = id => parseFloat((id.match(/(\d+(?:\.\d+)?)(?!.*\d)/) || [0, 0])[1]) || 0;
+export const pickOpen = (ids, n = 4) => ids.filter(id => !NOT_CHAT.test(id) && familyRank(id) < 99)
+  .sort((a, b) => familyRank(a) - familyRank(b) || verNum(b) - verNum(a)).slice(0, n);
+
 // ---------------- OpenRouter (اختياري) ----------------
 // النماذج المجانية عندهم اسمها بيخلص بـ :free. بنختار الكبيرة اللي بتدعم أدوات وسياق طويل.
 async function discoverOpenRouter(env) {
@@ -94,8 +115,11 @@ async function discoverOpenRouter(env) {
     String(m.id).endsWith(':free') &&
     Number(m.pricing?.prompt || 0) === 0 && Number(m.pricing?.completion || 0) === 0 &&
     (m.context_length || 0) >= 32000);
+  // العيلات المعروفة القوية الأول (من غير ما نختار نماذج مجهولة لمجرد إن سياقها طويل)، وبعدين دعم الأدوات
+  const known = pickOpen(free.map(m => String(m.id)), 3);
+  if (known.length) return known;
   const score = m => (m.supported_parameters?.includes('tools') ? 1000 : 0) + Math.min(500, (m.context_length || 0) / 1000);
-  return free.sort((a, b) => score(b) - score(a)).slice(0, 3).map(m => m.id);
+  return free.filter(m => !NOT_CHAT.test(m.id)).sort((a, b) => score(b) - score(a)).slice(0, 2).map(m => m.id);
 }
 
 // ---------------- Mistral (اختياري) ----------------
@@ -131,14 +155,6 @@ async function discoverCerebras(env) {
 // ---------------- NVIDIA NIM (اختياري) ----------------
 // build.nvidia.com: نماذج مفتوحة كبيرة (DeepSeek / Qwen / Kimi / gpt-oss) ببلاش بحد ~40 طلب/دقيقة للحساب.
 // الشروط بتوصفها كتجربة، ومش واضح استخدام البيانات → noClientData (أسئلة عامة بس).
-const NVIDIA_PREFER = [
-  /deepseek-v3\.?\d|deepseek-v4/i,          // الأقوى في العربي والقانون
-  /kimi-k2/i,
-  /qwen3[\.\d-]*-?235b|qwen3\.\d/i,
-  /gpt-oss-120b/i,
-  /llama-4-maverick/i,
-  /llama-3\.3-70b|nemotron.*(super|ultra)/i,
-];
 async function discoverNvidia(env) {
   const key = secret(env, 'NVIDIA_API_KEY');
   if (key.length < 20) return null;
@@ -146,15 +162,8 @@ async function discoverNvidia(env) {
     headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`nvidia models ${res.status}`);
-  const ids = ((await res.json()).data || []).map(m => String(m.id || '')).filter(Boolean)
-    // مش نماذج كلام عادي
-    .filter(id => !/embed|rerank|guard|safety|reward|vision|vl\b|-vl-|clip|parse|ocr|retriever|translate|coder|math|-r1\b|distill|\b\d{1,2}b\b/i.test(id));
-  const rank = id => { const i = NVIDIA_PREFER.findIndex(re => re.test(id)); return i < 0 ? 99 : i; };
-  // الأحدث رقماً في نفس الفئة الأول (v3.2 قبل v3.1)
-  const ver = id => parseFloat((id.match(/(\d+(?:\.\d+)?)(?!.*\d)/) || [0, 0])[1]) || 0;
-  return ids.filter(id => rank(id) < 99)
-    .sort((a, b) => rank(a) - rank(b) || ver(b) - ver(a))
-    .slice(0, 4);
+  const ids = ((await res.json()).data || []).map(m => String(m.id || '')).filter(Boolean);
+  return pickOpen(ids, 4);
 }
 
 // ---------------- تجربة فعلية لكل نموذج ----------------
