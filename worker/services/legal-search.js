@@ -323,35 +323,56 @@ export async function generateDocument(env, { doc_type, facts, parties, extra, c
     try {
       // ✅ لازم القضية تكون تبع نفس المكتب (منع تسريب بيانات بين المكاتب)
       const c = await env.DB.prepare(
-        `SELECT c.case_number, c.court, c.case_type, c.status, cl.name as client_name
+        `SELECT c.case_number, c.court, c.degree, c.case_type, c.status, c.opponent_name, c.client_role, c.subject, c.claim_amount,
+                cl.name as client_name
          FROM cases c LEFT JOIN clients cl ON cl.id = c.client_id
          WHERE c.id = ? AND c.office_id = ? AND c.deleted_at IS NULL`
       ).bind(case_id, officeId).first();
       if (c) {
-        knownNames.push(c.client_name);
+        knownNames.push(c.client_name, c.opponent_name);
         caseContext = `\n\nبيانات القضية:
 - رقم القضية: ${c.case_number || '—'}
-- المحكمة: ${c.court || '—'}
+- المحكمة: ${c.court || '—'}${c.degree ? ' · الدرجة: ' + c.degree : ''}
 - نوع القضية: ${c.case_type || '—'}
-- الموكل: ${c.client_name || '—'}
+- الموكل: ${c.client_name || '—'}${c.client_role ? ' (صفته: ' + c.client_role + ')' : ''}
+- الخصم: ${c.opponent_name || '—'}${c.subject ? '\n- موضوع الدعوى: ' + c.subject : ''}${c.claim_amount ? '\n- قيمة الدعوى: ' + c.claim_amount : ''}
 - الحالة: ${c.status || '—'}`;
       }
     } catch (e) { console.warn('case context failed:', e.message); }
   }
 
+  // بنية كل نوع معروف — أي نوع تاني (المحامي كتبه بنفسه) بيتكتب بالبنية المتعارف عليها لنوعه
   const templates = {
-    'إنذار على يد محضر': 'إنذار رسمي على يد محضر يشمل: المرسل إليه، الوقائع، المطالب المحددة، المهلة، التحذير القانوني',
-    'مذكرة دفاع': 'مذكرة دفاع قانونية تشمل: مقدمة، وقائع، دفوع شكلية، دفوع موضوعية مع النصوص، الطلبات الختامية',
-    'صحيفة دعوى': 'صحيفة دعوى تشمل: بيانات المدعي والمدعى عليه، الموضوع، الأسانيد، الطلبات، المستندات',
-    'إنذار رسمي بفسخ عقد': 'إنذار رسمي بفسخ عقد يشمل: بيانات الطرفين، أسباب الفسخ، المطالب، التحذير القانوني',
-    'إخطار بإنهاء علاقة عمل': 'إخطار بإنهاء علاقة عمل وفق قانون العمل المصري يشمل: البيانات، تاريخ البداية والنهاية، السبب، المستحقات',
-    'توكيل خاص': 'توكيل خاص يشمل: بيانات الموكل، الوكيل، نطاق التوكيل، المدة',
+    'إنذار على يد محضر': 'إنذار رسمي على يد محضر يشمل: بيانات الطالب ومحله المختار، المعلن إليه، الوقائع، المطالب المحددة، المهلة، التحذير القانوني',
+    'مذكرة دفاع': 'مذكرة دفاع قانونية تشمل: بيانات الدعوى والجلسة، الوقائع، دفوع شكلية، دفوع موضوعية مستندة للنصوص، الطلبات الختامية',
+    'صحيفة دعوى': 'صحيفة دعوى تشمل: بيانات المدعي والمدعى عليه، الموضوع، الوقائع، الأسانيد القانونية، الطلبات، التكليف بالحضور',
+    'صحيفة استئناف': 'صحيفة استئناف تشمل: بيانات المستأنف والمستأنف ضده، الحكم المستأنف وتاريخه، أسباب الاستئناف (خطأ في تطبيق القانون، فساد الاستدلال، الإخلال بحق الدفاع…)، الطلبات',
+    'إنذار رسمي بفسخ عقد': 'إنذار رسمي بفسخ عقد يشمل: بيانات الطرفين، العقد، الإخلال، المهلة، الفسخ والتعويض',
+    'إخطار بإنهاء علاقة عمل': 'إخطار بإنهاء علاقة عمل يشمل: البيانات، تاريخ البداية والنهاية، السبب، المستحقات، وفقاً لقانون العمل',
+    'توكيل خاص': 'صيغة توكيل خاص تشمل: بيانات الموكل، الوكيل، نطاق التوكيل بدقة، المدة',
+    'عقد': 'عقد متكامل يشمل: التمهيد وبيانات الأطراف، محل العقد، الالتزامات، المقابل وطريقة السداد، المدة، الإخلال والفسخ، الشرط الجزائي إن لزم، الاختصاص، التوقيعات',
+    'اتفاق صلح': 'اتفاق صلح يشمل: الأطراف، النزاع القائم، التنازلات المتبادلة، المبالغ ومواعيد سدادها، التنازل عن الدعاوى، إلحاق الصلح بمحضر الجلسة',
+    'بلاغ للنيابة العامة': 'بلاغ للنيابة العامة يشمل: بيانات المبلغ والمبلغ ضده، الوقائع بالتفصيل والتواريخ، الوصف القانوني للجريمة، الأدلة والشهود، الطلبات',
+    'شكوى إدارية': 'شكوى لجهة إدارية تشمل: الجهة، مقدم الشكوى، الوقائع، المخالفة، المستندات، الطلبات',
+    'مذكرة جوابية': 'مذكرة جوابية تشمل: بيانات القضية، الرد على دعوى المدعي بنداً بنداً، الدفوع، الطلبات',
+    'لائحة اعتراضية': 'لائحة اعتراضية على حكم تشمل: بيانات الحكم المعترض عليه، أسباب الاعتراض بالتفصيل، الطلبات',
   };
-  const template = templates[doc_type] || templates['مذكرة دفاع'];
+  const template = templates[doc_type]
+    || (/عقد/.test(doc_type) ? templates['عقد'] : `${doc_type} بالشكل والبنية المتعارف عليها لهذا النوع من المستندات في العمل القانوني`);
+
+  // مواد قانونية حقيقية من قاعدة البيانات عشان المستند يستند عليها (بدل ما النموذج يخترع أرقام مواد)
+  let articlesBlock = '';
+  try {
+    const { articles } = await findRelevantArticles(env, `${doc_type} ${safeFacts}`.slice(0, 1500), { topK: 6, country });
+    if (articles?.length) {
+      articlesBlock = `\n\nمواد قانونية ذات صلة من قاعدة البيانات (استند إليها عند الحاجة، ولا تذكر رقم مادة غير موجود هنا إلا مع "(يُراجع النص)"):\n`
+        + articles.map((a, i) => `[${i + 1}] ${a.law_name}${a.law_number ? ' (' + a.law_number + ')' : ''} — ${a.article_number}:\n${String(a.article_text || '').slice(0, 700)}`).join('\n\n');
+    }
+  } catch (e) { console.warn('generate doc articles failed:', e.message); }
 
   const prompt = `أنت محامٍ مصري محترف. اكتب ${doc_type} بالشكل الرسمي المعتمد في مصر.
 
-المطلوب: ${template}${caseContext}
+المطلوب: ${template}${caseContext}${articlesBlock}
 
 الوقائع:
 ${safeFacts}
@@ -369,7 +390,8 @@ ${safeExtra ? 'تفاصيل إضافية:\n' + safeExtra : ''}
     // الوقائع والأطراف بيانات موكلين → إخفاء الأسماء/الأرقام + توجيه حسب خصوصية المكتب
     const masker = createMasker({ names: knownNames });
     // المكتب السعودي: الصيغة والأنظمة السعودية
-    const document = await callAI(env, localizeLegalPrompt(prompt, country), 1500, localizeLegalPrompt(DEFAULT_SYSTEM, country), { route, masker });
+    // العقود والصحف بتطول — 3000 توكن عشان المستند ميتقطعش في النص
+    const document = await callAI(env, localizeLegalPrompt(prompt, country), 3000, localizeLegalPrompt(DEFAULT_SYSTEM, country), { route, masker });
     return {
       document: document ? await withCitationCheck(env, document, country) : buildTemplateDocument(doc_type, safeFacts, safeParties, safeExtra),
       doc_type,
@@ -384,6 +406,37 @@ ${safeExtra ? 'تفاصيل إضافية:\n' + safeExtra : ''}
       note: 'مسودة مبنية على قالب عام',
     };
   }
+}
+
+// ============================================================
+// أدوات تعديل مسودة موجودة: صياغة أقوى / اختصار / إضافة بند / تعديل حر
+// ============================================================
+const REFINE = {
+  stronger: 'أعد صياغة المستند بلغة قانونية أقوى وأدق: شدّد الالتزامات والجزاءات لصالح موكلنا، وأحكم الصياغة لسد الثغرات، مع الحفاظ على نفس الوقائع والبيانات.',
+  shorter: 'اختصر المستند مع الحفاظ على كل العناصر القانونية الجوهرية والبيانات، واحذف التكرار والحشو.',
+  formal: 'حسّن الصياغة لتكون بالعربية الفصحى القانونية الرسمية المعتمدة أمام المحاكم، دون تغيير المضمون.',
+  clause: 'أضف إلى المستند البند/الجزء المطلوب أدناه في مكانه المناسب مع إعادة ترقيم البنود إن لزم، دون تغيير باقي المستند.',
+  custom: 'نفّذ التعديل المطلوب أدناه على المستند، دون تغيير ما لم يُطلب تغييره.',
+};
+
+export async function refineDocument(env, { text, action = 'custom', instruction = '', route = 'balanced', country = 'EG' }) {
+  const doc = String(text || '').trim().slice(0, 12000);
+  if (doc.length < 30) return { error: 'المستند قصير جداً' };
+  const task = REFINE[action] || REFINE.custom;
+  const ask = String(instruction || '').trim().slice(0, 800);
+  if ((action === 'clause' || action === 'custom') && !ask) return { error: 'اكتب المطلوب' };
+  const prompt = `${task}${ask ? '\n\nالمطلوب: ' + ask : ''}
+
+المستند:
+<<<
+${doc}
+>>>
+
+أعد المستند كاملاً بعد التعديل فقط، بدون أي شرح أو تعليق قبله أو بعده.`;
+  const masker = createMasker();
+  const out = await callAI(env, localizeLegalPrompt(prompt, country), 3500, localizeLegalPrompt(DEFAULT_SYSTEM, country), { route, masker });
+  if (!out) return { error: 'الذكاء الاصطناعي مش متاح دلوقتي — جرّب تاني بعد دقيقة' };
+  return { document: await withCitationCheck(env, out.replace(/^<<<\s*|\s*>>>$/g, '').trim(), country) };
 }
 
 function buildTemplateDocument(doc_type, facts, parties, extra) {

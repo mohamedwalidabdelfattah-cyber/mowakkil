@@ -21,7 +21,7 @@ export const AI_TRIAL_LIMIT = 40;
 const AI_PATHS = [
   /^\/api\/chat$/,
   /^\/api\/legal-search$/,
-  /^\/api\/generate-doc$/,
+  /^\/api\/generate-doc(\/refine)?$/,
   /^\/api\/analyze\/(contract|case|document)$/,
   /^\/api\/cases\/\d+\/analyze$/,
 ];

@@ -167,7 +167,7 @@ const RULES = [
   [/^\/api\/cases\/\d+\/analyses$/, () => 'cases.view'],
   [/^\/api\/analyze\//, () => 'ai.use'],
   [/^\/api\/chat/, () => 'ai.use'],
-  [/^\/api\/generate-doc$/, () => 'ai.use'],
+  [/^\/api\/generate-doc(\/refine)?$/, () => 'ai.use'],
   [/^\/api\/legal-search$/, () => 'ai.use'],
   // فريق القضية
   [/^\/api\/cases\/\d+\/members$/, m => (m === 'GET' ? 'cases.view' : 'cases.edit')],

@@ -16,6 +16,7 @@ import * as paymentsRoutes        from './routes/payments.js';
 import * as sessionsRoutes        from './routes/sessions.js';
 import * as tasksRoutes           from './routes/tasks.js';
 import * as documentsRoutes       from './routes/documents.js';
+import * as generatedDocsRoutes   from './routes/generated-docs.js';
 import * as reportsRoutes         from './routes/reports.js';
 import * as toolsRoutes           from './routes/tools.js';
 import * as accountsRoutes        from './routes/accounts.js';
@@ -66,6 +67,7 @@ const OFFICE_ROUTES = [
   ...paymentsRoutes.routes,
   ...sessionsRoutes.routes,
   ...tasksRoutes.routes,
+  ...generatedDocsRoutes.routes,
   ...documentsRoutes.routes,
   ...reportsRoutes.routes,
   ...toolsRoutes.routes,

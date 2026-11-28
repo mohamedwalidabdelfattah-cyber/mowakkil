@@ -3,6 +3,7 @@ import { apiJson } from '../api.js';
 import { esc, toast, skeleton } from '../ui.js';
 import { mountExportMenu } from '../exporter.js';
 import { mountAiMeter } from '../ai-usage.js';
+import { mountDocStudio } from '../doc-studio.js';
 import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 const GOV_LINKS = [
@@ -47,7 +48,7 @@ export async function render(host) {
     <div class="tabs" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <button class="tab-btn primary" data-tab="chat">💬 مساعد قانوني ذكي</button>
       <button class="tab-btn ghost" data-tab="analyze">🧠 تحليل ذكي</button>
-      <button class="tab-btn ghost" data-tab="generate">📝 توليد مستندات</button>
+      <button class="tab-btn ghost" data-tab="generate">📝 المستندات</button>
     </div>
     <div id="ai-meter-host" style="margin-bottom:12px"></div>
 
@@ -166,38 +167,8 @@ export async function render(host) {
       </div>
     </div>
 
-    <!-- ==================== توليد مستندات ==================== -->
-    <div id="tab-generate" class="tab-content" style="display:none">
-      <div class="card">
-        <h3>📝 توليد مسودة مستند قانوني</h3>
-        <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-6px">
-          اختار نوع المستند، اكتب الوقائع، والـ AI هيولّدلك مسودة احترافية.
-        </p>
-
-        <label>نوع المستند</label>
-        <select id="doc-type">
-          <option>مذكرة دفاع</option>
-          <option>إنذار على يد محضر</option>
-          <option>صحيفة دعوى</option>
-          <option>إنذار رسمي بفسخ عقد</option>
-          <option>إخطار بإنهاء علاقة عمل</option>
-          <option>توكيل خاص</option>
-        </select>
-
-        <label style="margin-top:10px">الأطراف (اختياري)</label>
-        <input id="doc-parties" placeholder="مثال: أحمد السيد (موكل) ضد شركة النيل (خصم)">
-
-        <label style="margin-top:10px">الوقائع *</label>
-        <textarea id="doc-facts" placeholder="اكتب ملخص الوقائع: إيه اللي حصل، امتى، وإيه المطالب..." style="min-height:120px"></textarea>
-
-        <label style="margin-top:10px">تفاصيل إضافية (اختياري)</label>
-        <input id="doc-extra" placeholder="أي معلومات إضافية">
-
-        <button class="primary" style="margin-top:10px" id="gen-btn">✍️ توليد المسودة</button>
-        <div id="doc-out" style="margin-top:14px"></div>
-        <div class="warn">⚠️ المسودات أولية — محتاجة مراجعة محامٍ متخصص قبل التقديم الرسمي.</div>
-      </div>
-    </div>
+    <!-- ==================== المستندات: قوالب + توليد + محفوظة (doc-studio.js) ==================== -->
+    <div id="tab-generate" class="tab-content" style="display:none"></div>
   `;
 
   mountAiMeter(host.querySelector('#ai-meter-host'));
@@ -560,45 +531,8 @@ export async function render(host) {
     }
   }
 
-  // ==================== توليد المستندات ====================
-  host.querySelector('#gen-btn').addEventListener('click', async () => {
-    const doc_type = host.querySelector('#doc-type').value;
-    const facts = host.querySelector('#doc-facts').value.trim();
-    const parties = host.querySelector('#doc-parties').value.trim();
-    const extra = host.querySelector('#doc-extra').value.trim();
-    const box = host.querySelector('#doc-out');
-    if (facts.length < 10) return toast('اكتب الوقائع بوضوح', 'bad');
-    box.innerHTML = '<div class="answer">' + skeleton(5) + '</div>';
-    try {
-      const data = await apiJson('/api/generate-doc', {
-        method: 'POST',
-        body: JSON.stringify({ doc_type, facts, parties, extra }),
-      });
-      if (data.error) {
-        box.innerHTML = `<div class="warn">${esc(data.error)}</div>`;
-        return;
-      }
-      box.innerHTML = `
-        <div class="doc-output" style="white-space:pre-wrap">${esc(data.document)}</div>
-        <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-          <button class="ghost" id="copy-doc">📋 نسخ</button>
-          <div id="doc-export"></div>
-        </div>
-      `;
-      host.querySelector('#copy-doc').addEventListener('click', () => {
-        navigator.clipboard.writeText(data.document);
-        toast('اتنسخ', 'ok');
-      });
-      // المسودة كمستند Word للتعديل، أو طباعة/PDF
-      mountExportMenu(host.querySelector('#doc-export'), () => ({
-        title: doc_type,
-        meta: parties ? [['الأطراف', parties]] : [],
-        blocks: [{ type: 'text', text: data.document }],
-      }), { formats: ['word', 'pdf'], label: '⬇️ Word / طباعة', filename: doc_type });
-    } catch (e) {
-      box.innerHTML = `<div class="warn">${esc(e.message)}</div>`;
-    }
-  });
+  // ==================== المستندات ====================
+  mountDocStudio(host.querySelector('#tab-generate'));
 }
 
 // ============================================================

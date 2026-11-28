@@ -1,7 +1,7 @@
 // worker/routes/tools.js
 import { ok, fail } from '../lib/response.js';
 import { calcFee } from '../services/fee-calc.js';
-import { legalSearch, generateDocument } from '../services/legal-search.js';
+import { legalSearch, generateDocument, refineDocument } from '../services/legal-search.js';
 import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { isStr, safeJson } from '../lib/validation.js';
 import { requireFeature } from '../middleware/feature-gate.js';
@@ -13,7 +13,26 @@ export const routes = [
   { method: 'GET',  path: '/api/ai/usage',         handler: aiUsage },
   { method: 'POST', path: '/api/legal-search',     handler: search },
   { method: 'POST', path: '/api/generate-doc',     handler: generateDoc },
+  { method: 'POST', path: '/api/generate-doc/refine', handler: refineDoc },
 ];
+
+// تعديل مسودة: صياغة أقوى / اختصار / رسمي / إضافة بند / تعديل حر
+async function refineDoc({ request, env, officeId }) {
+  const gate = await requireFeature(env, officeId, 'ai');
+  if (gate) return gate;
+  const b = await safeJson(request);
+  if (!b || !isStr(b.text, 12000)) return fail(env, 'المستند مش موجود', 400);
+  if (['clause', 'custom'].includes(b.action) && !String(b.instruction || '').trim()) return fail(env, 'اكتب المطلوب', 400);
+  // نص المستند فيه بيانات موكلين → نفس قواعد خصوصية التوليد
+  const privacy = await requireClientDataAi(env, officeId);
+  if (privacy.block) return privacy.block;
+  const r = await refineDocument(env, {
+    text: b.text, action: String(b.action || 'custom'), instruction: b.instruction || '',
+    route: routeFor(privacy.mode), country: await officeCountry(env, officeId),
+  });
+  if (r.error) return fail(env, r.error, 400);
+  return ok(env, r);
+}
 
 // رصيد الذكاء الاصطناعي للمكتب (للعدّاد في الواجهة)
 async function aiUsage({ env, officeId }) {
