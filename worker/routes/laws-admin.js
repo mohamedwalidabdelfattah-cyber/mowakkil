@@ -29,43 +29,104 @@ const OCR_PROMPT = `هذه صورة صفحة من نص قانوني رسمي (ا
 - لو الصفحة فاضية أو غلاف بلا نص قانوني اكتب: [صفحة بدون نص]
 اكتب النص فقط بدون أي مقدمة أو تعليق.`;
 
+// لو Gemini رفض ينسخ نص معروف حرفياً (finishReason: RECITATION) بنطلبه بصيغة تانية
+const OCR_PROMPT_JSON = `${OCR_PROMPT}
+اكتب الناتج بصيغة JSON فقط بالشكل: {"lines": ["السطر الأول", "السطر الثاني", ...]} — كل سطر من الصفحة عنصر في المصفوفة.`;
+
+const fromJsonLines = t => {
+  try {
+    const m = String(t).match(/\{[\s\S]*\}/);
+    const j = JSON.parse(m ? m[0] : t);
+    return Array.isArray(j.lines) ? j.lines.join('\n') : '';
+  } catch { return ''; }
+};
+
+async function geminiOcr(env, model, image, mime, prompt) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': String(env.GEMINI_API_KEY || '').trim() },
+    body: JSON.stringify({
+      contents: [{ parts: [{ inline_data: { mime_type: mime, data: image } }, { text: prompt }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (res.status === 429) return { err: 'quota' };
+  if (res.status === 503 || res.status === 500) return { err: 'busy' };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { err: `${res.status}: ${JSON.stringify(data).slice(0, 120)}` };
+  const cand = data.candidates?.[0];
+  const text = (cand?.content?.parts || []).map(p => p.text || '').join('').trim();
+  if (!text) return { err: cand?.finishReason === 'RECITATION' ? 'recitation' : `رد فاضي (${cand?.finishReason || data.promptFeedback?.blockReason || '?'})` };
+  return { text };
+}
+
+// نماذج رؤية بصيغة OpenAI (NVIDIA / OpenRouter) — احتياطي لما حصة Gemini تخلص
+async function openaiVisionOcr(env, { url, key, model }, image, mime) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model, temperature: 0, max_tokens: 6000,
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: OCR_PROMPT },
+        { type: 'image_url', image_url: { url: `data:${mime};base64,${image}` } },
+      ] }],
+    }),
+    signal: AbortSignal.timeout(90000),
+  });
+  if (res.status === 429) return { err: 'quota' };
+  if (res.status >= 500) return { err: 'busy' };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { err: `${res.status}: ${JSON.stringify(data).slice(0, 120)}` };
+  const text = String(data.choices?.[0]?.message?.content || '').trim();
+  return text ? { text } : { err: 'رد فاضي' };
+}
+
 async function ocrPage({ request, env }) {
-  const key = String(env.GEMINI_API_KEY || '').trim();
-  if (key.length < 20) return fail(env, 'مفتاح Gemini مش متظبط', 503);
   const b = await safeJson(request);
   const image = String(b?.image || '');
   const mime = /^image\/(jpeg|png|webp)$/.test(b?.mime) ? b.mime : 'image/jpeg';
   if (image.length < 1000) return fail(env, 'مفيش صورة', 400);
   if (image.length > 6_000_000) return fail(env, 'الصورة كبيرة — قلل الدقة', 400);
 
-  // Flash-Lite الأول (حصته المجانية أكبر)، وبعدين Flash
-  const models = ['gemini-flash-lite-latest', 'gemini-flash-latest'];
-  let lastErr = '';
-  for (const model of models) {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          contents: [{ parts: [{ inline_data: { mime_type: mime, data: image } }, { text: OCR_PROMPT }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 8192 },
-        }),
-        signal: AbortSignal.timeout(60000),
-      });
-      if (res.status === 429 || res.status === 503) {
-        lastErr = res.status === 429 ? 'quota' : 'busy';
-        continue; // نجرب النموذج التاني
+  const sec = k => String(env[k] || '').trim();
+  // الترتيب: Gemini Flash-Lite ← Flash (الأدق في العربي) ← NVIDIA (نموذج رؤية، 40 طلب/دقيقة) ← Gemma 4 على OpenRouter
+  const attempts = [];
+  if (sec('GEMINI_API_KEY').length >= 20) {
+    for (const m of ['gemini-flash-lite-latest', 'gemini-flash-latest']) attempts.push({ name: m, run: async () => {
+      let r = await geminiOcr(env, m, image, mime, OCR_PROMPT);
+      if (r.err === 'recitation') {
+        r = await geminiOcr(env, m, image, mime, OCR_PROMPT_JSON);
+        if (r.text) r = { text: fromJsonLines(r.text) || r.text };
       }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { lastErr = `${res.status}: ${JSON.stringify(data).slice(0, 160)}`; continue; }
-      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
-      if (!text) { lastErr = 'رد فاضي'; continue; }
-      return ok(env, { text, model });
-    } catch (e) { lastErr = e.message; }
+      return r;
+    } });
   }
-  if (lastErr === 'quota') return fail(env, 'حصة Gemini المجانية خلصت مؤقتاً — كمّل بعد شوية (التقدم محفوظ)', 429);
-  if (lastErr === 'busy') return fail(env, 'Gemini عليه ضغط دلوقتي — كمّل بعد دقيقة (التقدم محفوظ)', 503);
-  return fail(env, 'مقدرتش أقرا الصفحة: ' + lastErr, 502);
+  if (sec('NVIDIA_API_KEY').length >= 20) {
+    attempts.push({ name: 'nvidia/nemotron-vl', run: () => openaiVisionOcr(env,
+      { url: 'https://integrate.api.nvidia.com/v1/chat/completions', key: sec('NVIDIA_API_KEY'), model: String(b?.nvidia_model || 'nvidia/nemotron-3.5-super-vl-120b-a12b') }, image, mime) });
+  }
+  if (sec('OPENROUTER_API_KEY').length >= 20) {
+    attempts.push({ name: 'openrouter/gemma-4', run: () => openaiVisionOcr(env,
+      { url: 'https://openrouter.ai/api/v1/chat/completions', key: sec('OPENROUTER_API_KEY'), model: 'google/gemma-4-31b-it:free' }, image, mime) });
+  }
+  if (!attempts.length) return fail(env, 'مفيش مفتاح لنموذج يقرا صور (Gemini / NVIDIA / OpenRouter)', 503);
+
+  const errors = [];
+  for (const a of attempts) {
+    try {
+      const r = await a.run();
+      if (r.text) return ok(env, { text: r.text, model: a.name });
+      errors.push(`${a.name}: ${r.err}`);
+    } catch (e) { errors.push(`${a.name}: ${e.message}`); }
+  }
+  const allLimited = errors.every(e => /: (quota|busy)$/.test(e));
+  if (allLimited) {
+    // حد في الدقيقة غالباً — الواجهة بتستنى retry_after وتعيد لوحدها
+    return fail(env, 'كل النماذج عليها ضغط أو حصتها خلصت دلوقتي — هستنى وأعيد لوحدي', 429, { retry_after: 60, details: errors });
+  }
+  return fail(env, 'مقدرتش أقرا الصفحة — ' + errors.join(' | ').slice(0, 300), 502, { details: errors });
 }
 
 const STATUSES = ['active', 'review', 'repealed', 'unofficial'];

@@ -245,7 +245,9 @@ export async function saApiJson(path, opts = {}) {
   const res = await saApi(path, opts);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const e = new Error(err.error || `HTTP ${res.status}`);
+    e.status = res.status; e.data = err;
+    throw e;
   }
   return res.json();
 }

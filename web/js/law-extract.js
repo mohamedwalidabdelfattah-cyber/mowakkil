@@ -55,19 +55,33 @@ export async function aiReadPdf(file, ocrPage, onProgress = () => {}) {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, vp.width, vp.height);
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    const b64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+    // دقة أقل شوية = صورة أصغر (النماذج الاحتياطية زي NVIDIA عندها حد لحجم الصورة)
+    const b64 = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
     // حوالي 14 طلب في الدقيقة — تحت حد Gemini المجاني
     const wait = 4300 - (Date.now() - last);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    last = Date.now();
-    try {
-      saved[i] = String(await ocrPage(b64)).replace(/^\s*\[صفحة بدون نص\]\s*$/, '');
-      save();
-    } catch (e) {
-      save();
-      const err = new Error(`اتقرا ${Object.keys(saved).length} من ${pdf.numPages} صفحة — ${e.message}. اختار نفس الملف تاني بعدين وهيكمّل من مكانه.`);
-      err.partial = true;
-      throw err;
+    // لو كل النماذج عليها ضغط (حد في الدقيقة) نستنى ونعيد لوحدنا — لحد 4 مرات قبل ما نوقف
+    for (let attempt = 0; ; attempt++) {
+      last = Date.now();
+      try {
+        saved[i] = String(await ocrPage(b64)).replace(/^\s*\[صفحة بدون نص\]\s*$/, '');
+        save();
+        break;
+      } catch (e) {
+        save();
+        const limited = e.status === 429 || e.status === 503;
+        if (limited && attempt < 4) {
+          const secs = Math.min(180, Number(e.data?.retry_after) || 60) * (attempt + 1);
+          for (let s = secs; s > 0; s--) {
+            onProgress(`⏳ الصفحة ${i} من ${pdf.numPages}: النماذج عليها ضغط — هعيد لوحدي بعد ${s} ثانية (محاولة ${attempt + 2} من 5)… التقدم محفوظ`);
+            await new Promise(r => setTimeout(r, 1000));
+          }
+          continue;
+        }
+        const err = new Error(`اتقرا ${Object.keys(saved).length} من ${pdf.numPages} صفحة — ${e.message}. دوس «كمّل القراءة» بعدين وهيكمّل من مكانه.`);
+        err.partial = true;
+        throw err;
+      }
     }
   }
   const text = Array.from({ length: pdf.numPages }, (_, k) => saved[k + 1] || '').join('\n');
