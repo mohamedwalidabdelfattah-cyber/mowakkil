@@ -107,7 +107,6 @@ export function mountTemplates(host, { onSave } = {}) {
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <button class="ghost" data-back style="padding:6px 12px">→ كل القوالب</button>
-          <span class="badge" title="مكتوب على الصيغ المتعارف عليها — راجع البنود قبل الاستخدام الرسمي" style="background:var(--c-warning-bg,#FEF3C7);color:#92400E;padding:4px 10px;border-radius:999px;font-size:12px">🔍 قالب استرشادي — راجعه قبل التوقيع</span>
         </div>
         <h3 style="margin:0 0 4px">${esc(tpl.title)}</h3>
         <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 12px">${esc(tpl.desc)}</p>
@@ -133,7 +132,7 @@ export function mountTemplates(host, { onSave } = {}) {
             </div>
           </div>
         </div>
-        <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 0">الخانة الفاضية بتطلع نقط (${DOTS}) عشان تتكتب بخط اليد.</p>
+        <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 0">📝 راجع المستند وعدّل البنود حسب حالتك قبل التوقيع. الخانة الفاضية بتطلع نقط (${DOTS}) عشان تتكتب بخط اليد.</p>
       </div>`;
     host.querySelector('[data-back]').addEventListener('click', list);
 
