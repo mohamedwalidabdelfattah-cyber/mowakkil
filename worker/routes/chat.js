@@ -6,6 +6,8 @@ import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { createMasker } from '../lib/redact.js';
 import { verifyText, annotate, summarize, summaryText } from '../lib/citations.js';
 import { officeCountry } from '../lib/country.js';
+import { canAccessCase } from '../lib/permissions.js';
+import { buildCaseContext } from '../services/case-context.js';
 
 const ATTACHMENT_MARK = '📎 **محتوى الملف المرفق';
 
@@ -22,7 +24,7 @@ const MAX_LAST_MSG_CHARS = 12000; // آخر رسالة (ممكن فيها ملف
 // ============================================================
 // POST /api/chat
 // ============================================================
-async function chatHandler({ request, env, officeId, userId }) {
+async function chatHandler({ request, env, officeId, userId, access, authUser }) {
   const gate = await requireFeature(env, officeId, 'ai');
   if (gate) return cors(gate, env, request);
 
@@ -65,20 +67,29 @@ async function chatHandler({ request, env, officeId, userId }) {
     if (!s) sessionId = null;
   }
 
-  // ملف موكل مرفق → لازم موافقة المكتب، ويتعامل حسب وضع الخصوصية.
+  // محادثة عن قضية: لازم تكون تبع المكتب وفي حدود صلاحية المستخدم
+  const caseId = Number(b.case_id) || null;
+  let caseCtx = null;
+  if (caseId) {
+    if (!(await canAccessCase(env, access, authUser, caseId))) return cors(fail(env, 'القضية مش موجودة', 404), env, request);
+    caseCtx = await buildCaseContext(env, officeId, caseId);
+    if (!caseCtx) return cors(fail(env, 'القضية مش موجودة', 404), env, request);
+  }
+
+  // ملف موكل مرفق أو بيانات قضية → لازم موافقة المكتب، ويتعامل حسب وضع الخصوصية.
   // من غير ملف (سؤال قانوني عام) → بنخفي البيانات الشخصية برضه ومن غير OpenRouter.
-  const hasClientDoc = !!attachmentText || validMessages.some(m => m.content.includes(ATTACHMENT_MARK));
+  const hasClientDoc = !!caseCtx || !!attachmentText || validMessages.some(m => m.content.includes(ATTACHMENT_MARK));
   let route = 'balanced';
   if (hasClientDoc) {
     const privacy = await requireClientDataAi(env, officeId);
     if (privacy.block) return cors(privacy.block, env, request);
     route = routeFor(privacy.mode);
   }
-  const masker = createMasker({ names: Array.isArray(b.party_names) ? b.party_names : [] });
+  const masker = createMasker({ names: [...(Array.isArray(b.party_names) ? b.party_names : []), ...(caseCtx?.names || [])] });
 
   let result;
   try {
-    result = await chatWithAgent(env, validMessages, officeId, attachmentText, { route, masker });
+    result = await chatWithAgent(env, validMessages, officeId, attachmentText, { route, masker, caseContext: caseCtx?.text || '' });
   } catch (e) {
     console.error('chat error:', e.message);
     return cors(fail(env, e.message || 'فشل الشات', 503), env, request);
@@ -95,9 +106,17 @@ async function chatHandler({ request, env, officeId, userId }) {
   try {
     if (!sessionId) {
       const title = lastMessage.content.split('\n---\n')[0].slice(0, 60) || 'محادثة';
-      const ins = await env.DB.prepare(
-        `INSERT INTO chat_sessions (office_id, user_id, title) VALUES (?, ?, ?)`
-      ).bind(officeId, userId, title).run();
+      let ins;
+      try {
+        ins = await env.DB.prepare(
+          `INSERT INTO chat_sessions (office_id, user_id, title, case_id) VALUES (?, ?, ?, ?)`
+        ).bind(officeId, userId, title, caseId).run();
+      } catch {
+        // عمود case_id لسه مااتضافش (migration 050)
+        ins = await env.DB.prepare(
+          `INSERT INTO chat_sessions (office_id, user_id, title) VALUES (?, ?, ?)`
+        ).bind(officeId, userId, title).run();
+      }
       sessionId = ins.meta.last_row_id;
     }
     await env.DB.batch([
@@ -124,10 +143,19 @@ async function chatHandler({ request, env, officeId, userId }) {
 // GET /api/chat/sessions
 // ============================================================
 async function listSessions({ env, officeId, request }) {
-  const r = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at FROM chat_sessions
-     WHERE office_id = ? ORDER BY updated_at DESC LIMIT 50`
-  ).bind(officeId).all();
+  let r;
+  try {
+    r = await env.DB.prepare(
+      `SELECT s.id, s.title, s.created_at, s.updated_at, s.case_id, c.case_number FROM chat_sessions s
+       LEFT JOIN cases c ON c.id = s.case_id
+       WHERE s.office_id = ? ORDER BY s.updated_at DESC LIMIT 50`
+    ).bind(officeId).all();
+  } catch {
+    r = await env.DB.prepare(
+      `SELECT id, title, created_at, updated_at FROM chat_sessions
+       WHERE office_id = ? ORDER BY updated_at DESC LIMIT 50`
+    ).bind(officeId).all();
+  }
   return cors(ok(env, { items: r.results || [] }), env, request);
 }
 

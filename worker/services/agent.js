@@ -146,7 +146,7 @@ const MAX_TOOL_RESULT = 9000;   // حد حجم نتيجة الأداة اللي 
 
 // privacy: { route: 'balanced'|'strict', masker } — الشات دايماً بيخفي البيانات الشخصية،
 // والملفات المرفقة بتتعامل حسب إعداد خصوصية المكتب (routes/chat.js)
-export async function chatWithAgent(env, messages, officeId, attachmentText = null, { route = 'balanced', masker = null } = {}) {
+export async function chatWithAgent(env, messages, officeId, attachmentText = null, { route = 'balanced', masker = null, caseContext = '' } = {}) {
   let processedMessages = messages.slice(-MAX_HISTORY);
   if (processedMessages[0]?.role === 'assistant') processedMessages = processedMessages.slice(1);
 
@@ -169,8 +169,10 @@ export async function chatWithAgent(env, messages, officeId, attachmentText = nu
         function: { ...t.function, description: 'ابحث في قاعدة الأنظمة السعودية الرسمية (نظام الإثبات، نظام المعاملات المدنية، نظام الأحوال الشخصية ولائحته، نظام الشركات، الأدلة الإجرائية لنظام الإثبات) عن مواد ذات صلة. استخدمها لأي سؤال في هذه المجالات.' },
       }))
     : TOOLS;
+  // محادثة عن قضية معيّنة: سياقها بيتحط مع التعليمات (chatCompletion بيخفي الأسماء فيه بالـ masker زي باقي الرسايل)
+  const system = localizeLegalPrompt(SYSTEM_PROMPT, country) + (caseContext ? `\n\n${caseContext}` : '');
   const currentMessages = [
-    { role: 'system', content: localizeLegalPrompt(SYSTEM_PROMPT, country) },
+    { role: 'system', content: system },
     ...processedMessages,
   ];
 

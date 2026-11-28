@@ -3,7 +3,7 @@ import { apiJson } from '../api.js';
 import { esc, toast, skeleton } from '../ui.js';
 import { mountExportMenu } from '../exporter.js';
 import { mountAiMeter } from '../ai-usage.js';
-import { mountDocStudio } from '../doc-studio.js';
+import { mountDocStudio, saveDocDialog } from '../doc-studio.js';
 import { dateLocale, fmtDay, hijriDate, isSaudi } from '../country.js';
 
 const GOV_LINKS = [
@@ -75,16 +75,17 @@ export async function render(host) {
           </button>
         </div>
 
+        <div class="chat-casebar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--border-soft);background:var(--bg)">
+          <span style="font-size:13px;font-weight:600">📁 بتسأل عن:</span>
+          <select id="chat-case" style="flex:1;min-width:200px;max-width:460px;padding:6px 10px"><option value="">💬 سؤال قانوني عام</option></select>
+          <span id="chat-case-hint" style="font-size:12px;color:var(--ink-soft)"></span>
+        </div>
+
         <div id="chat-messages" class="chat-messages">
           <div class="chat-welcome">
             <div style="font-size:48px;margin-bottom:12px">⚖️</div>
             ${chatWelcome(true)}
-            <div class="chat-suggestions">
-              <button class="chat-suggestion" data-suggestion="إيه شروط صحة عقد البيع؟">📄 شروط صحة عقد البيع؟</button>
-              <button class="chat-suggestion" data-suggestion="عندي قضية تعويض عن ضرر، إيه نقاط الضعف اللي ممكن تكون ضدي؟">⚖️ نقاط ضعف قضية تعويض</button>
-              <button class="chat-suggestion" data-suggestion="إيه شروط الطلاق للضرر في ${legalSystemWord()}؟">💔 شروط الطلاق للضرر</button>
-              <button class="chat-suggestion" data-suggestion="إيه أحكام ${isSaudi() ? 'نظام العمل' : 'قانون العمل'} بخصوص الفصل التعسفي؟">💼 الفصل التعسفي</button>
-            </div>
+            <div id="chat-sugg"></div>
           </div>
         </div>
 
@@ -230,12 +231,46 @@ export async function render(host) {
     chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
   });
 
-  host.querySelectorAll('[data-suggestion]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      chatInput.value = btn.dataset.suggestion;
-      sendMessage();
-    });
+  // ==================== اقتراحات (حسب التخصص، أو أسئلة عن القضية المختارة) ====================
+  let currentCaseId = null;
+  let suggArea = 'general';
+  function fillSuggestions() {
+    const box = chatMessages.querySelector('#chat-sugg');
+    if (!box) return;
+    const list = currentCaseId ? CASE_QUESTIONS : (SPECIALTY_QUESTIONS()[suggArea] || []);
+    const areas = currentCaseId ? '' : '<div class="chat-areas" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:10px">'
+      + SPECIALTIES.map(([k, label]) => '<button class="' + (k === suggArea ? 'primary' : 'ghost') + '" data-area="' + k + '" style="padding:4px 10px;font-size:12.5px">' + label + '</button>').join('') + '</div>';
+    box.innerHTML = areas + '<div class="chat-suggestions">'
+      + list.map(([q, label]) => '<button class="chat-suggestion" data-suggestion="' + esc(q) + '">' + esc(label || q) + '</button>').join('') + '</div>';
+    box.querySelectorAll('[data-area]').forEach(b => b.addEventListener('click', () => { suggArea = b.dataset.area; fillSuggestions(); }));
+    box.querySelectorAll('[data-suggestion]').forEach(btn => btn.addEventListener('click', () => { chatInput.value = btn.dataset.suggestion; sendMessage(); }));
+  }
+  fillSuggestions();
+
+  // ==================== اختيار قضية للمحادثة ====================
+  const caseSel = host.querySelector('#chat-case');
+  const caseHint = host.querySelector('#chat-case-hint');
+  function setCase(id, { silent } = {}) {
+    currentCaseId = id ? Number(id) : null;
+    caseSel.value = currentCaseId ? String(currentCaseId) : '';
+    caseHint.textContent = currentCaseId ? 'المساعد شايف بيانات القضية وجلساتها ومستنداتها وتحليلاتها' : '';
+    if (!silent) fillSuggestions();
+  }
+  const casesReady = apiJson('/api/cases').then(cs => {
+    caseSel.innerHTML += (cs || []).map(c => '<option value="' + c.id + '">' + esc([c.case_number, c.client_name, c.court].filter(Boolean).join(' — ') || 'قضية #' + c.id) + '</option>').join('');
+  }).catch(() => {});
+  caseSel.addEventListener('change', () => {
+    const next = caseSel.value;
+    // تغيير القضية في نص محادثة = محادثة جديدة (عشان السياقين ميتلخبطوش)
+    if (chatHistory.length && !confirm('تغيير القضية هيبدأ محادثة جديدة. متأكد؟')) { caseSel.value = currentCaseId ? String(currentCaseId) : ''; return; }
+    if (chatHistory.length) resetChat();
+    setCase(next);
   });
+  // جاي من زرار «اسأل المساعد» في ملف القضية
+  try {
+    const fromCase = sessionStorage.getItem('mowakkil_chat_case');
+    if (fromCase) { sessionStorage.removeItem('mowakkil_chat_case'); casesReady.then(() => setCase(fromCase)); }
+  } catch {}
 
   host.querySelector('#chat-new').addEventListener('click', () => {
     if (chatHistory.length > 0 && !confirm('هيتم بدء محادثة جديدة. متأكد؟')) return;
@@ -281,26 +316,17 @@ export async function render(host) {
       <div class="chat-welcome">
         <div style="font-size:48px;margin-bottom:12px">⚖️</div>
         ${chatWelcome(false)}
-        <div class="chat-suggestions">
-          <button class="chat-suggestion" data-suggestion="إيه شروط صحة عقد البيع؟">📄 شروط صحة عقد البيع؟</button>
-          <button class="chat-suggestion" data-suggestion="إيه شروط الطلاق للضرر في ${legalSystemWord()}؟">💔 شروط الطلاق للضرر</button>
-          <button class="chat-suggestion" data-suggestion="إيه أحكام ${isSaudi() ? 'نظام العمل' : 'قانون العمل'} بخصوص الفصل التعسفي؟">💼 الفصل التعسفي</button>
-        </div>
+        <div id="chat-sugg"></div>
       </div>
     `;
-    host.querySelectorAll('[data-suggestion]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        chatInput.value = btn.dataset.suggestion;
-        sendMessage();
-      });
-    });
+    fillSuggestions();
   }
 
   function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  function addMessage(role, content) {
+  function addMessage(role, content, opts = {}) {
     const welcome = chatMessages.querySelector('.chat-welcome');
     if (welcome) welcome.remove();
 
@@ -315,6 +341,26 @@ export async function render(host) {
           <div class="chat-ai-text">${formatAIResponse(content)}</div>
         </div>
       `;
+      // نسخ / Word / حفظ في القضية — للإجابات الحقيقية بس (مش رسايل الخطأ)
+      if (opts.actions !== false && !/^⚠️|^معلش، حصل خطأ/.test(content)) {
+        const bar = document.createElement('div');
+        bar.className = 'chat-answer-actions';
+        bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-soft)';
+        bar.innerHTML = '<button class="ghost" data-a="copy" style="padding:3px 10px;font-size:12px">📋 نسخ</button><span data-a="export"></span><button class="ghost" data-a="save" style="padding:3px 10px;font-size:12px">💾 حفظ في القضية</button>';
+        const plain = String(content).replace(/\*\*/g, '');
+        const question = opts.question || '';
+        bar.querySelector('[data-a="copy"]').addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(plain); toast('📋 اتنسخ', 'ok'); } catch { toast('انسخ يدوي', 'bad'); }
+        });
+        mountExportMenu(bar.querySelector('[data-a="export"]'), () => ({
+          title: 'رأي قانوني', meta: question ? [['السؤال', question.slice(0, 300)]] : [], blocks: [{ type: 'text', text: plain }],
+        }), { formats: ['word', 'pdf'], label: '⬇️ Word', filename: 'رأي قانوني' });
+        bar.querySelector('[data-a="save"]').addEventListener('click', () => saveDocDialog({
+          title: question ? 'رأي قانوني: ' + question.slice(0, 70) : 'رأي قانوني', body: plain, source: 'ai', case_id: currentCaseId,
+        }));
+        // جوه فقاعة الإجابة نفسها (رسالة الشات flex، فلو اتحطت جنبها بتتمط)
+        (msg.querySelector('.chat-ai-text') || msg).appendChild(bar);
+      }
     }
     chatMessages.appendChild(msg);
     scrollToBottom();
@@ -367,6 +413,7 @@ export async function render(host) {
         body: JSON.stringify({
           messages: chatHistory,
           session_id: currentSessionId,
+          case_id: currentCaseId,
         }),
       });
 
@@ -375,7 +422,7 @@ export async function render(host) {
       if (data.session_id) currentSessionId = data.session_id;
 
       if (data.answer) {
-        addMessage('assistant', data.answer);
+        addMessage('assistant', data.answer, { question: text });
         chatHistory.push({ role: 'assistant', content: data.answer });
       } else {
         addMessage('assistant', 'معلش، حصل خطأ. جرب تاني.');
@@ -415,7 +462,7 @@ export async function render(host) {
             <div class="chat-history-item" data-session-id="${s.id}">
               <div class="chat-history-title">${esc(s.title || 'محادثة')}</div>
               <div class="chat-history-meta">
-                ${new Date(s.updated_at).toLocaleDateString(dateLocale())}
+                ${s.case_number ? '📁 قضية ' + esc(s.case_number) + ' · ' : ''}${new Date(s.updated_at).toLocaleDateString(dateLocale())}
               </div>
               <button class="chat-history-delete" data-delete-id="${s.id}" title="حذف">🗑</button>
             </div>
@@ -446,9 +493,11 @@ export async function render(host) {
           try {
             const d = await apiJson(`/api/chat/sessions/${sid}`);
             currentSessionId = sid;
+            setCase(d.session?.case_id || null, { silent: true }); // المحادثة كانت عن قضية → نرجّع نفس السياق
             chatHistory = (d.messages || []).map(m => ({ role: m.role, content: m.content }));
             chatMessages.innerHTML = '';
-            d.messages.forEach(m => addMessage(m.role, m.content));
+            let lastQ = '';
+            d.messages.forEach(m => { if (m.role === 'user') lastQ = m.content.split('\n---\n')[0]; addMessage(m.role, m.content, { question: lastQ }); });
             modal.remove();
           } catch (err) {
             toast(err.message, 'bad');
@@ -657,6 +706,29 @@ function loadScript(src) {
 // ============================================================
 // Analysis rendering
 // ============================================================
+// أسئلة جاهزة حسب التخصص (القانون حسب دولة المكتب)
+const SPECIALTIES = [['general', '⚖️ عام'], ['criminal', '🚔 جنائي'], ['family', '👪 أسرة'], ['labor', '💼 عمل'], ['rent', '🏠 إيجارات'], ['civil', '📄 مدني وتجاري']];
+const SPECIALTY_QUESTIONS = () => {
+  const sys = legalSystemWord();
+  const work = isSaudi() ? 'نظام العمل' : 'قانون العمل';
+  return {
+    general: [['إيه شروط صحة عقد البيع؟', '📄 شروط صحة عقد البيع'], ['عندي قضية تعويض عن ضرر، إيه نقاط الضعف اللي ممكن تكون ضدي؟', '⚖️ نقاط ضعف قضية تعويض'], ['إيه شروط الطلاق للضرر في ' + sys + '؟', '💔 شروط الطلاق للضرر'], ['إيه أحكام ' + work + ' بخصوص الفصل التعسفي؟', '💼 الفصل التعسفي']],
+    criminal: [['إيه أركان جريمة خيانة الأمانة وإزاي أدافع فيها؟', '🔎 أركان خيانة الأمانة'], ['إمتى يجوز التصالح في الجنح وإيه أثره؟', '🤝 التصالح في الجنح'], ['إيه شروط الدفع ببطلان القبض والتفتيش؟', '🚫 بطلان القبض والتفتيش'], ['إيه الفرق بين الجنحة والجناية في العقوبة والإجراءات؟', '📚 جنحة أم جناية']],
+    family: [['إزاي بتتحسب نفقة الأولاد والزوجة؟', '💰 حساب النفقة'], ['إيه ترتيب الحاضنين وسن انتهاء الحضانة؟', '👶 ترتيب الحضانة'], ['إيه شروط الطلاق للضرر وإزاي أثبته؟', '💔 الطلاق للضرر'], ['إيه حقوق الزوجة عند الخلع؟', '📜 حقوق الخلع']],
+    labor: [['إيه أحكام ' + work + ' بخصوص الفصل التعسفي والتعويض عنه؟', '🚪 الفصل التعسفي'], ['إزاي تتحسب مكافأة نهاية الخدمة؟', '🧮 مكافأة نهاية الخدمة'], ['إيه مستحقات العامل لما يستقيل؟', '📝 مستحقات الاستقالة'], ['إيه حقوق العامل في الإجازات والساعات الإضافية؟', '⏰ الإجازات والإضافي']],
+    rent: [['إمتى يحق للمالك طلب إخلاء المستأجر؟', '🏚️ أسباب الإخلاء'], ['إزاي أثبت العلاقة الإيجارية من غير عقد مكتوب؟', '🧾 إثبات الإيجار'], ['إيه حقوق المستأجر لو المالك امتنع عن الصيانة؟', '🔧 الصيانة والترميم'], ['إيه أحكام زيادة الأجرة وانتهاء العقد؟', '📈 الأجرة وانتهاء العقد']],
+    civil: [['إمتى تسقط الدعوى المدنية بالتقادم؟', '⌛ التقادم'], ['إيه شروط أمر الأداء وإمتى ألجأ له؟', '📃 أمر الأداء'], ['إيه شروط صحة الشيك والحماية القانونية ليه؟', '🏦 الشيك'], ['إمتى يحق فسخ العقد مع التعويض؟', '✂️ فسخ العقد']],
+  };
+};
+// لما تكون المحادثة عن قضية
+const CASE_QUESTIONS = [
+  ['لخّصلي القضية دي وموقفنا فيها باختصار', '🧾 ملخص القضية وموقفنا'],
+  ['إيه أقوى الدفوع والأسانيد اللي ممكن نستخدمها في القضية دي؟', '🛡️ أقوى الدفوع'],
+  ['إيه المستندات أو الأدلة الناقصة اللي محتاجين نجهزها؟', '📂 المستندات الناقصة'],
+  ['اعملي خطة للجلسة الجاية: نقول إيه ونقدم إيه؟', '🗓️ خطة الجلسة الجاية'],
+  ['إيه المخاطر اللي لازم أنبّه الموكل ليها؟', '⚠️ المخاطر على الموكل'],
+];
+
 const TYPE_LABELS = { contract: 'تحليل عقد', case: 'تحليل قضية', document: 'تحليل مستند', judgment: 'تحليل حكم', compare: 'مقارنة نسختين', case_ai: 'تحليل القضية' };
 const TYPE_ICONS = { contract: '📄', case: '⚖️', document: '📋', judgment: '🏛️', compare: '🔀' };
 

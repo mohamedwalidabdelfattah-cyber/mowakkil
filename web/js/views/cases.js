@@ -716,6 +716,7 @@ function renderAiTab(el, c, documents = []) {
         <textarea id="ai-doc" rows="5" placeholder="الصق نص صحيفة الدعوى أو العقد أو المحضر...">${esc(draft.document_text || '')}</textarea>
       </details>
       <button class="btn btn-primary" id="ai-run" style="width:100%;margin-top:12px">🤖 حلل القضية</button>
+      <button class="btn btn-ghost" id="ai-ask" style="width:100%;margin-top:8px">💬 اسأل المساعد عن القضية دي</button>
     </div>
     <div id="ai-result"></div>
     <div id="ai-history" style="margin-top:12px"></div>
@@ -778,6 +779,14 @@ function renderAiTab(el, c, documents = []) {
     }
   });
 
+  // يفتح المساعد القانوني على محادثة عن القضية دي (بيشوف وقائعها وجلساتها ومستنداتها وتحليلاتها)
+  el.querySelector('#ai-ask')?.addEventListener('click', async () => {
+    try { sessionStorage.setItem('mowakkil_chat_case', String(c.id)); } catch {}
+    document.getElementById('case-detail-modal')?.remove();
+    const { showView } = await import('../router.js');
+    showView('search');
+  });
+
   const out = el.querySelector('#ai-result');
   const btn = el.querySelector('#ai-run');
   btn.addEventListener('click', async () => {
@@ -796,6 +805,7 @@ function renderAiTab(el, c, documents = []) {
       const d = await apiJson(`/api/cases/${c.id}/analyze`, { method: 'POST', body: JSON.stringify(body) });
       out.innerHTML = renderCaseAnalysis(d.result, d.provider);
       mountAnalysisExport(out, d.result, c);
+      mountCaseTasks(out, d.result, c.id);
       loadCaseAnalyses(el, c.id);
     } catch (e) {
       out.innerHTML = `<div class="warn">${esc(e.message)}</div>`;
@@ -806,6 +816,19 @@ function renderAiTab(el, c, documents = []) {
   });
 
   loadCaseAnalyses(el, c.id);
+}
+
+// تحليل القضية ← مهام: المواعيد الحرجة والخطوات التالية (التاريخ بيتحدد قبل الإضافة)
+async function mountCaseTasks(out, r = {}, caseId) {
+  const deadlines = (Array.isArray(r.deadlines) ? r.deadlines : []).map(d => typeof d === 'string'
+    ? { date: '', title: d } : { date: '', title: d.item || '', detail: [d.period, d.note].filter(Boolean).join(' — ') });
+  const steps = (Array.isArray(r.next_steps) ? r.next_steps : []).map(s => ({ date: '', title: typeof s === 'string' ? s : (s.step || s.title || '') }));
+  const key_dates = [...deadlines, ...steps].filter(x => x.title);
+  if (!key_dates.length) return;
+  try {
+    const { mountKeyDates } = await import('./search.js');
+    mountKeyDates(out, { type: 'case_ai', title: 'تحليل القضية', case_id: caseId, result: { key_dates } });
+  } catch (e) { console.warn('case tasks panel failed:', e.message); }
 }
 
 const ANALYSIS_LABELS = { case_ai: 'تحليل القضية', contract: '📄 تحليل عقد', document: '📋 تحليل مستند', judgment: '🏛️ تحليل حكم', compare: '🔀 مقارنة نسختين', case: '⚖️ تحليل قضية' };
@@ -836,6 +859,7 @@ async function loadCaseAnalyses(el, caseId) {
         } else {
           out.innerHTML = renderCaseAnalysis(r.result);
           mountAnalysisExport(out, r.result, { case_number: r.title?.replace('تحليل قضية ', '') });
+          mountCaseTasks(out, r.result, caseId);
         }
         out.scrollIntoView({ behavior: 'smooth' });
       } catch (e) { toast(e.message, 'bad'); }
