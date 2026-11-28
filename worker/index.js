@@ -17,6 +17,7 @@ import * as sessionsRoutes        from './routes/sessions.js';
 import * as tasksRoutes           from './routes/tasks.js';
 import * as documentsRoutes       from './routes/documents.js';
 import * as generatedDocsRoutes   from './routes/generated-docs.js';
+import * as lawsAdminRoutes       from './routes/laws-admin.js';
 import * as reportsRoutes         from './routes/reports.js';
 import * as toolsRoutes           from './routes/tools.js';
 import * as accountsRoutes        from './routes/accounts.js';
@@ -49,6 +50,7 @@ const PUBLIC_ROUTES = [
 
 const SUPERADMIN_ROUTES = [
   ...superadminRoutes.protectedRoutes,
+  ...lawsAdminRoutes.routes,
   ...paymentRequestsRoutes.superadminRoutes,
   ...followupRoutes.superadminRoutes,
 ];

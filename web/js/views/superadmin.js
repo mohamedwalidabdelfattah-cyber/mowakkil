@@ -8,6 +8,7 @@ import { waLinkFor } from '../phone.js';
 import { mountFollowup } from './sa-followup.js';
 import { mountSources } from './sa-sources.js';
 import { mountAlerts } from './sa-alerts.js';
+import { mountLaws } from './sa-laws.js';
 
 let currentFilter = { search: '', plan: '', status: '', country: '' };
 // دولة المكتب (بتظهر كشارة جنب اسمه، وفيه فلتر بيها)
@@ -21,6 +22,7 @@ const SA_TABS = [
   ['payments', '💳 طلبات الدفع'],
   ['sources', '📊 مصادر التسجيل'],
   ['ai', '🤖 الذكاء الاصطناعي'],
+  ['laws', '📚 القوانين'],
   ['alerts', '🚨 التنبيهات'],
 ];
 const SA_TAB_KEY = 'mowakkil_sa_tab';
@@ -166,6 +168,7 @@ async function renderSABody() {
     <!-- 📊 مصادر التسجيل -->
     <div class="card sa-pane" id="sa-sources" data-pane="sources" hidden></div>
     <div class="card sa-pane" id="sa-alerts" data-pane="alerts" hidden></div>
+    <div class="card sa-pane" id="sa-laws" data-pane="laws" hidden></div>
 
     <!-- 🏢 المكاتب -->
     <div class="card sa-pane" data-pane="offices" hidden>
@@ -239,6 +242,7 @@ async function renderSABody() {
     sources: () => mountSources(host.querySelector('#sa-sources')),
     ai: () => {},
     alerts: () => mountAlerts(host.querySelector('#sa-alerts')),
+    laws: () => mountLaws(host.querySelector('#sa-laws')),
   };
   const loaded = new Set();
   const openTab = (k) => {
