@@ -14,7 +14,59 @@ export const routes = [
   { method: 'GET',   path: '/api/superadmin/laws',        handler: listLaws },
   { method: 'POST',  path: '/api/superadmin/laws/import', handler: importLaw },
   { method: 'PATCH', path: '/api/superadmin/laws/status', handler: setLawStatus },
+  { method: 'POST',  path: '/api/superadmin/laws/ocr',    handler: ocrPage },
 ];
+
+// ============================================================
+// قراءة صفحة قانون متصوّرة بـ Gemini (أدق بكتير من Tesseract في العربي)
+// نصوص قوانين عامة — مفيش بيانات موكلين. صفحة واحدة في الطلب، والواجهة بتمشي بالراحة عشان الحصة المجانية.
+// ============================================================
+const OCR_PROMPT = `هذه صورة صفحة من نص قانوني رسمي (الجريدة الرسمية أو ما يماثلها).
+انسخ النص العربي الموجود في الصفحة حرفياً كما هو تماماً، سطراً بسطر وبنفس الترتيب.
+- لا تلخّص ولا تصحّح ولا تعيد الصياغة ولا تضف أي كلمة من عندك.
+- احتفظ بعناوين المواد كما هي (مثل: مادة (١) أو المادة الأولى) وبالأرقام كما هي.
+- تجاهل العلامة المائية والشعارات والأختام وأرقام الصفحات وترويسة الجريدة (اسم الجريدة والعدد والتاريخ أعلى الصفحة).
+- لو الصفحة فاضية أو غلاف بلا نص قانوني اكتب: [صفحة بدون نص]
+اكتب النص فقط بدون أي مقدمة أو تعليق.`;
+
+async function ocrPage({ request, env }) {
+  const key = String(env.GEMINI_API_KEY || '').trim();
+  if (key.length < 20) return fail(env, 'مفتاح Gemini مش متظبط', 503);
+  const b = await safeJson(request);
+  const image = String(b?.image || '');
+  const mime = /^image\/(jpeg|png|webp)$/.test(b?.mime) ? b.mime : 'image/jpeg';
+  if (image.length < 1000) return fail(env, 'مفيش صورة', 400);
+  if (image.length > 6_000_000) return fail(env, 'الصورة كبيرة — قلل الدقة', 400);
+
+  // Flash-Lite الأول (حصته المجانية أكبر)، وبعدين Flash
+  const models = ['gemini-flash-lite-latest', 'gemini-flash-latest'];
+  let lastErr = '';
+  for (const model of models) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          contents: [{ parts: [{ inline_data: { mime_type: mime, data: image } }, { text: OCR_PROMPT }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+        }),
+        signal: AbortSignal.timeout(60000),
+      });
+      if (res.status === 429 || res.status === 503) {
+        lastErr = res.status === 429 ? 'quota' : 'busy';
+        continue; // نجرب النموذج التاني
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { lastErr = `${res.status}: ${JSON.stringify(data).slice(0, 160)}`; continue; }
+      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+      if (!text) { lastErr = 'رد فاضي'; continue; }
+      return ok(env, { text, model });
+    } catch (e) { lastErr = e.message; }
+  }
+  if (lastErr === 'quota') return fail(env, 'حصة Gemini المجانية خلصت مؤقتاً — كمّل بعد شوية (التقدم محفوظ)', 429);
+  if (lastErr === 'busy') return fail(env, 'Gemini عليه ضغط دلوقتي — كمّل بعد دقيقة (التقدم محفوظ)', 503);
+  return fail(env, 'مقدرتش أقرا الصفحة: ' + lastErr, 502);
+}
 
 const STATUSES = ['active', 'review', 'repealed', 'unofficial'];
 const MAX_PER_REQUEST = 150;

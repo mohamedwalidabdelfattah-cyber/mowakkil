@@ -6,7 +6,7 @@
 import { saApiJson } from '../api.js';
 import { esc, toast } from '../ui.js';
 import { splitArticles } from '../law-splitter.js';
-import { extractLawText } from '../law-extract.js';
+import { extractLawText, aiReadPdf } from '../law-extract.js';
 
 const STATUS = {
   active: ['✅', 'ساري'], review: ['🔄', 'يُراجع'], repealed: ['⛔', 'ملغى'], unofficial: ['🚫', 'غير رسمي'], mixed: ['➖', 'مختلط'],
@@ -79,14 +79,38 @@ export function mountLaws(host) {
     if (b.dataset.src === 'wiki') loadWikiList();
   }));
 
+  const done = r => {
+    rawText = r.text;
+    status(`✅ اتقرا ${rawText.length.toLocaleString('en-US')} حرف${r.ai ? ' بالذكاء الاصطناعي — راجع العينة في المعاينة' : r.ocr ? ' بالـ OCR — راجع النص كويس (الـ OCR بيغلط في بعض الحروف)' : ''}${r.quality === 'broken' ? ' ⚠️ النص طالع حروف متقطعة — جرّب نسخة Word أو انسخ النص والصقه' : ''}`);
+    if (!$('#law-name').value) $('#law-name').value = guessName(rawText);
+  };
   $('#law-file').addEventListener('change', async e => {
     const f = e.target.files[0];
     if (!f) return;
+    e.target.value = ''; // عشان اختيار نفس الملف تاني يشتغل (استكمال)
     try {
-      const r = await extractLawText(f, status);
-      rawText = r.text;
-      status(`✅ اتقرا ${rawText.length.toLocaleString('en-US')} حرف${r.ocr ? ' بالـ OCR — راجع النص كويس (الـ OCR بيغلط في بعض الحروف)' : ''}${r.quality === 'broken' ? ' ⚠️ النص طالع حروف متقطعة — جرّب نسخة Word أو انسخ النص والصقه' : ''}`);
-      if (!$('#law-name').value) $('#law-name').value = guessName(rawText);
+      const r = await extractLawText(f, status, { ocr: 'none' });
+      if (!r.needsOcr) return done(r);
+      // ملف متصوّر (أو خطوطه بايظة): نخيّر — الذكاء الاصطناعي أدق بكتير في العربي
+      const mins = Math.ceil(r.pages * 4.5 / 60);
+      $('#law-extract-status').innerHTML = `📄 الملف ${r.garbled ? 'خطوطه مش مقروءة' : 'متصوّر (صور مش نص)'} — ${r.pages} صفحة. اختار طريقة القراءة:
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <button class="primary" id="law-read-ai">📸 قراءة بالذكاء الاصطناعي (أدق — حوالي ${mins} دقيقة)</button>
+          <button class="ghost" id="law-read-ocr">🔤 OCR عادي (أسرع — أخطاء كتير في العربي)</button>
+        </div>`;
+      // القراءة بتتحفظ صفحة صفحة؛ لو وقفت (الحصة) بيظهر «كمّل القراءة» بنفس الملف
+      const readAi = async () => {
+        try {
+          done(await aiReadPdf(f, async b64 => (await saApiJson('/api/superadmin/laws/ocr', { method: 'POST', body: JSON.stringify({ image: b64, mime: 'image/jpeg' }) })).text, status));
+        } catch (err) {
+          $('#law-extract-status').innerHTML = `⏸️ ${esc(err.message)} <button class="ghost" id="law-read-continue" style="padding:2px 10px;margin-inline-start:6px">▶️ كمّل القراءة</button>`;
+          $('#law-read-continue').addEventListener('click', readAi);
+        }
+      };
+      $('#law-read-ai').addEventListener('click', readAi);
+      $('#law-read-ocr').addEventListener('click', async () => {
+        try { done(await extractLawText(f, status)); } catch (err) { status('⚠️ ' + err.message); }
+      });
     } catch (err) { status('⚠️ ' + err.message); }
   });
 

@@ -33,8 +33,51 @@ async function pageText(page) {
   return text;
 }
 
-/** onProgress(msg) للتقدم — بيرجّع { text, ocr: boolean, quality: 'ok'|'broken' } */
-export async function extractLawText(file, onProgress = () => {}) {
+/**
+ * قراءة PDF متصوّر بالذكاء الاصطناعي (Gemini عن طريق السيرفر) صفحة صفحة — أدق بكتير من Tesseract في العربي.
+ * ocrPage(base64Jpeg) → نص الصفحة. التقدم بيتحفظ في المتصفح، فلو الحصة خلصت نكمّل بعدين بنفس الملف.
+ */
+export async function aiReadPdf(file, ocrPage, onProgress = () => {}) {
+  const lib = await pdfLib();
+  const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const key = `mowakkil_law_ocr:${file.name}:${file.size}`;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(saved)); } catch {} };
+  let last = 0;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    if (saved[i] != null) continue;
+    onProgress(`📸 قراءة الصفحة ${i} من ${pdf.numPages} بالذكاء الاصطناعي… (${Object.keys(saved).length} اتقرت)`);
+    const page = await pdf.getPage(i);
+    const vp = page.getViewport({ scale: 1.7 });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, vp.width, vp.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const b64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+    // حوالي 14 طلب في الدقيقة — تحت حد Gemini المجاني
+    const wait = 4300 - (Date.now() - last);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    last = Date.now();
+    try {
+      saved[i] = String(await ocrPage(b64)).replace(/^\s*\[صفحة بدون نص\]\s*$/, '');
+      save();
+    } catch (e) {
+      save();
+      const err = new Error(`اتقرا ${Object.keys(saved).length} من ${pdf.numPages} صفحة — ${e.message}. اختار نفس الملف تاني بعدين وهيكمّل من مكانه.`);
+      err.partial = true;
+      throw err;
+    }
+  }
+  const text = Array.from({ length: pdf.numPages }, (_, k) => saved[k + 1] || '').join('\n');
+  try { localStorage.removeItem(key); } catch {}
+  return { text, ocr: true, ai: true, quality: 'ok' };
+}
+
+/** onProgress(msg) للتقدم — بيرجّع { text, ocr: boolean, quality: 'ok'|'broken', needsOcr? }
+ *  opts.ocr = 'none': لو الـ PDF متصوّر ما نشغّلش Tesseract — نرجّع needsOcr والواجهة تخيّر المستخدم */
+export async function extractLawText(file, onProgress = () => {}, opts = {}) {
   const name = String(file.name || '').toLowerCase();
   if (name.endsWith('.txt')) return { text: await file.text(), ocr: false, quality: 'ok' };
   if (name.endsWith('.docx')) {
@@ -60,8 +103,10 @@ export async function extractLawText(file, onProgress = () => {}) {
   const letters = (text.match(/\p{L}/gu) || []).length;
   const arabic = (text.match(/[؀-ۿﭐ-﷿ﹰ-﻿]/g) || []).length;
   const garbled = letters > 200 && arabic / letters < 0.6;
+  const scanned = garbled || text.replace(/\s/g, '').length < pdf.numPages * 80;
+  if (scanned && opts.ocr === 'none') return { text: '', ocr: false, needsOcr: true, garbled, pages: pdf.numPages, quality: 'ok' };
   if (garbled) onProgress('⚠️ خطوط الملف مش مقروءة — هقراه بالـ OCR…');
-  if (garbled || text.replace(/\s/g, '').length < pdf.numPages * 80) {
+  if (scanned) {
     const w = await tesseract();
     text = '';
     try {
