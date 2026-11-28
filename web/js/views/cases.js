@@ -956,6 +956,8 @@ function citeBadge(status) {
   if (status === 'verified') return '<span class="cite-badge ok">✓ متحقق</span>';
   if (status === 'not_found') return '<span class="cite-badge warn">⚠️ غير متحقق</span>';
   if (status === 'law_unknown') return '<span class="cite-badge info">ℹ️ يُراجع يدوياً</span>';
+  if (status === 'repealed') return '<span class="cite-badge warn">⛔ قانون ملغى</span>';
+  if (status === 'review') return '<span class="cite-badge info">🔄 عليه تعديلات — يُراجع</span>';
   return '';
 }
 
@@ -967,7 +969,9 @@ function citationsSection(c) {
       <h4 style="margin:0 0 6px;font-size:14px">🔎 مراجعة الأسانيد آلياً</h4>
       <div><span class="cite-ok">${esc(c.verified || 0)} متحقق</span> من ${esc(c.checked)} استشهاد في قاعدة المواد
         ${c.not_found ? ` · <span class="cite-warn">${esc(c.not_found)} غير متحقق</span>` : ''}
-        ${c.law_unknown ? ` · ${esc(c.law_unknown)} بقوانين مش في القاعدة` : ''}</div>
+        ${c.law_unknown ? ` · ${esc(c.law_unknown)} بقوانين مش في القاعدة` : ''}
+        ${c.repealed ? ` · <span class="cite-warn">${esc(c.repealed)} بقانون ملغى</span>` : ''}
+        ${c.review ? ` · ${esc(c.review)} بقوانين عليها تعديلات` : ''}</div>
       ${items ? `<ul style="margin:8px 0 0;padding-inline-start:20px">${items}</ul>` : ''}
       <div class="meta" style="font-size:12px;margin-top:6px">«غير متحقق» معناها إن المادة مش موجودة في قاعدة المواد عندنا — ممكن تكون غلط أو القاعدة ناقصة. راجعها على النص الرسمي قبل التقديم.</div>
     </div>`;

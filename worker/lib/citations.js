@@ -58,7 +58,7 @@ function articleKey(s) {
 // ---------- فهرس القوانين ----------
 // بيتبني من law_articles كلها (~20 ألف صف) — فبنخزّنه في KV يوم كامل، وفي ذاكرة الـ isolate ساعة.
 // قبل كده كل isolate جديد كان بيقرا الجدول كله، وده بيستهلك حصة القراءة اليومية لـ D1 بسرعة.
-const CIT_KV_KEY = 'citations:index:v2'; // v2: دولة كل قانون
+const CIT_KV_KEY = 'citations:index:v3'; // v3: حالة القانون (ساري/يُراجع/ملغى) — v2: دولة كل قانون
 let index = null;
 async function getIndex(env) {
   if (index && index.exp > Date.now()) return index.laws;
@@ -87,7 +87,9 @@ export async function resetCitationIndex(env) {
 
 async function buildIndex(env) {
   const { results } = await env.DB.prepare(
-    `SELECT law_name, law_number, article_number, country FROM law_articles`
+    // النصوص غير الرسمية مش أساس للتحقق؛ والملغاة بتتسجل عشان ننبّه إن الاستشهاد بقانون ملغى
+    `SELECT law_name, law_number, article_number, country, status, status_note FROM law_articles
+     WHERE COALESCE(status, 'active') != 'unofficial'`
   ).all();
   const byLaw = new Map();
   for (const r of results || []) {
@@ -99,6 +101,8 @@ async function buildIndex(env) {
         tokens: new Set(lawTokens(r.law_name)),
         number: lawNumberKey(`${r.law_number || ''} ${r.law_name}`),
         articles: new Set(),
+        status: r.status || 'active',
+        note: r.status_note || '',
       });
     }
     const k = articleKey(r.article_number);
@@ -171,16 +175,23 @@ export async function verifyText(env, text, { country } = {}) {
   try { laws = forCountry(await getIndex(env), country); } catch (e) { console.warn('citations index failed:', e.message); return []; }
   return cites.map(c => {
     if (/دستور/.test(c.lawText)) return { ...c, status: 'law_unknown', law: 'الدستور' };
-    const cands = matchLaws(laws, c.lawText);
-    if (!cands.length) return { ...c, status: 'law_unknown', law: c.lawText };
-    const missing = c.articles.filter(a => !cands.some(l => l.articles.has(a)));
-    return { ...c, law: cands[0].name, status: missing.length ? 'not_found' : 'verified', missing };
+    const all = matchLaws(laws, c.lawText);
+    if (!all.length) return { ...c, status: 'law_unknown', law: c.lawText };
+    // لو فيه نسخة سارية من القانون نتحقق عليها؛ لو كل اللي لاقيناه ملغى ننبّه
+    const live = all.filter(l => l.status !== 'repealed');
+    if (!live.length) return { ...c, law: all[0].name, status: 'repealed', note: all[0].note };
+    const missing = c.articles.filter(a => !live.some(l => l.articles.has(a)));
+    if (missing.length) return { ...c, law: live[0].name, status: 'not_found', missing };
+    const rev = live.find(l => l.status === 'review');
+    return rev ? { ...c, law: rev.name, status: 'review', note: rev.note } : { ...c, law: live[0].name, status: 'verified', missing };
   });
 }
 
 const MARK = {
-  not_found: ' ⚠️(غير متحقق — المادة مش موجودة في قاعدة المواد، راجعها)',
-  law_unknown: ' ℹ️(القانون ده مش في قاعدة المواد — راجعه يدوياً)',
+  not_found: () => ' ⚠️(غير متحقق — المادة مش موجودة في قاعدة المواد، راجعها)',
+  law_unknown: () => ' ℹ️(القانون ده مش في قاعدة المواد — راجعه يدوياً)',
+  repealed: r => ` ⛔(${r.note || 'القانون ده ملغى'})`,
+  review: r => ` 🔄(${r.note || 'يُراجع على النص الساري'})`,
 };
 
 /** يعلّم على الاستشهادات اللي مش متحققة جوه النص نفسه. */
@@ -188,7 +199,7 @@ export function annotate(text, results) {
   let out = String(text || '');
   for (const r of [...results].sort((a, b) => b.end - a.end)) {
     if (!MARK[r.status]) continue;
-    out = out.slice(0, r.end) + MARK[r.status] + out.slice(r.end);
+    out = out.slice(0, r.end) + MARK[r.status](r) + out.slice(r.end);
   }
   return out;
 }
@@ -225,11 +236,15 @@ export async function verifyResult(env, result, { country } = {}) {
         const nums = latin(String(item.articles)).match(/\d+(?:\s*\/\s*\d+)?(?:\s*مكرر(?:اً|ا)?)?/g) || [];
         if (!nums.length) return item;
         const keys = nums.map(articleKey).filter(Boolean);
-        const cands = matchLaws(laws, item.law);
-        const status = !cands.length ? 'law_unknown'
-          : keys.every(k => cands.some(l => l.articles.has(k))) ? 'verified' : 'not_found';
-        all.push({ raw: `${item.articles} — ${item.law}`, status, law: item.law, articles: keys });
-        return { ...item, verification: status };
+        const found = matchLaws(laws, item.law);
+        const cands = found.filter(l => l.status !== 'repealed');
+        const status = !found.length ? 'law_unknown'
+          : !cands.length ? 'repealed'
+          : !keys.every(k => cands.some(l => l.articles.has(k))) ? 'not_found'
+          : cands.some(l => l.status === 'review') ? 'review' : 'verified';
+        const note = status === 'repealed' ? found[0].note : status === 'review' ? (cands.find(l => l.status === 'review') || {}).note : undefined;
+        all.push({ raw: `${item.articles} — ${item.law}`, status, law: item.law, articles: keys, note });
+        return { ...item, verification: status, ...(note ? { verification_note: note } : {}) };
       });
     }
   }
@@ -255,5 +270,7 @@ export function summaryText(summary) {
   const lines = [`\n\n---\n🔎 **مراجعة الأسانيد آلياً:** ${summary.verified} متحقق من ${summary.checked}.`];
   if (summary.not_found) lines.push(`⚠️ ${summary.not_found} مادة مش موجودة في قاعدة المواد — راجعها قبل الاعتماد عليها.`);
   if (summary.law_unknown) lines.push(`ℹ️ ${summary.law_unknown} استشهاد بقانون مش موجود في القاعدة — يُراجع يدوياً.`);
+  if (summary.repealed) lines.push(`⛔ ${summary.repealed} استشهاد بقانون ملغى — استبدله بالنص الساري.`);
+  if (summary.review) lines.push(`🔄 ${summary.review} استشهاد بقانون عليه تعديلات محتملة — راجعه على الجريدة الرسمية.`);
   return lines.join('\n');
 }

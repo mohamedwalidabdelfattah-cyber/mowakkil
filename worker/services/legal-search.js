@@ -38,6 +38,11 @@ async function callAI(env, prompt, maxTokens = 1500, systemPrompt = null, { rout
 }
 
 const MAX_ARTICLE_CHARS = 1200;
+// المواد الملغاة وغير الرسمية مبتوصلش للذكاء الاصطناعي (migration 051)
+const USABLE = `COALESCE(status, 'active') NOT IN ('unofficial', 'repealed')`;
+// مادة «يُراجع»: بتوصل مع تنبيه عشان الإجابة متعتمدش عليها كأنها ساري أكيد
+const withNote = a => (a && a.status === 'review' && a.status_note
+  ? { ...a, article_text: `${a.article_text}\n[⚠️ ${a.status_note}]` } : a);
 const trimArticle = t => {
   const s = String(t || '');
   return s.length > MAX_ARTICLE_CHARS ? s.slice(0, MAX_ARTICLE_CHARS) + '…' : s;
@@ -54,8 +59,8 @@ export async function keywordArticles(env, query, lawHints = [], limit = 8, coun
 
   const wordCond = words.map(() => 'article_text LIKE ?').join(' OR ');
   const binds = words.map(w => `%${w}%`);
-  let sql = `SELECT id, law_name, law_number, article_number, article_text, source_url
-             FROM law_articles WHERE country = ? AND (${wordCond})`;
+  let sql = `SELECT id, law_name, law_number, article_number, article_text, source_url, status, status_note
+             FROM law_articles WHERE country = ? AND ${USABLE} AND (${wordCond})`;
   binds.unshift(country === 'SA' ? 'SA' : 'EG');
   if (lawHints.length) {
     sql += ` AND (${lawHints.map(() => 'law_name LIKE ?').join(' OR ')})`;
@@ -68,7 +73,7 @@ export async function keywordArticles(env, query, lawHints = [], limit = 8, coun
 
   try {
     const r = await env.DB.prepare(sql).bind(...binds).all();
-    return r.results || [];
+    return (r.results || []).map(withNote);
   } catch (e) {
     console.warn('keyword search failed:', e.message);
     return [];
@@ -87,10 +92,10 @@ export async function findRelevantArticles(env, query, { lawHints = [], topK = 8
     const ids = (vr.matches || []).filter(m => (m.score ?? 0) >= 0.45).map(m => m.id);
     if (ids.length) {
       const r = await env.DB.prepare(
-        `SELECT id, law_name, law_number, article_number, article_text, source_url
-         FROM law_articles WHERE country = ? AND id IN (${ids.map(() => '?').join(',')})`
+        `SELECT id, law_name, law_number, article_number, article_text, source_url, status, status_note
+         FROM law_articles WHERE country = ? AND ${USABLE} AND id IN (${ids.map(() => '?').join(',')})`
       ).bind(c, ...ids).all();
-      const byId = new Map((r.results || []).map(x => [String(x.id), x]));
+      const byId = new Map((r.results || []).map(x => [String(x.id), withNote(x)]));
       const rows = ids.map(id => byId.get(String(id))).filter(Boolean).slice(0, topK);
       if (rows.length) return { method: 'vector', articles: rows.map(a => ({ ...a, article_text: trimArticle(a.article_text) })) };
     }
@@ -199,11 +204,11 @@ ${context}
   const ids = filteredMatches.map(m => m.id);
   const placeholders = ids.map(() => '?').join(',');
   const dbResult = await env.DB.prepare(
-    `SELECT id, law_name, law_number, article_number, article_text, source_url
-     FROM law_articles WHERE country = 'EG' AND id IN (${placeholders})`
+    `SELECT id, law_name, law_number, article_number, article_text, source_url, status, status_note
+     FROM law_articles WHERE country = 'EG' AND ${USABLE} AND id IN (${placeholders})`
   ).bind(...ids).all();
 
-  const byId = new Map(dbResult.results.map(r => [String(r.id), r]));
+  const byId = new Map(dbResult.results.map(r => [String(r.id), withNote(r)]));
   const results = filteredMatches.map(m => byId.get(String(m.id))).filter(Boolean);
 
   if (results.length === 0) return fallbackSearch(env, safeQuery);
@@ -248,10 +253,10 @@ async function fallbackSearch(env, query) {
   const conditions = words.map(() => 'article_text LIKE ?').join(' OR ');
   const binds = words.map(w => `%${w}%`);
   const r = await env.DB.prepare(
-    `SELECT law_name, law_number, article_number, article_text, source_url
-     FROM law_articles WHERE country = 'EG' AND (${conditions}) LIMIT 10`
+    `SELECT law_name, law_number, article_number, article_text, source_url, status, status_note
+     FROM law_articles WHERE country = 'EG' AND ${USABLE} AND (${conditions}) LIMIT 10`
   ).bind(...binds).all();
-  const results = r.results || [];
+  const results = (r.results || []).map(withNote);
   if (!results.length) return { answer: 'مفيش نصوص قانونية تطابق السؤال.', sources: [] };
   const context = results.map((r, i) => `[${i + 1}] ${r.law_name} — ${r.article_number}:\n${r.article_text}`).join('\n\n');
   const prompt = `أنت محامٍ مصري. حلل السؤال ده بناءً على النصوص دي:\n\n${context}\n\nالسؤال: ${query}\n\nجاوب بتحليل قانوني (مش مجرد سرد). لو النصوص مش متعلقة، قول "النصوص مش كافية".`;
