@@ -56,8 +56,12 @@ export async function extractLawText(file, onProgress = () => {}) {
     onProgress(`⏳ قراءة الصفحة ${i} من ${pdf.numPages}…`);
     text += await pageText(await pdf.getPage(i)) + '\n';
   }
-  // ملف متصوّر: نص قليل جداً بالنسبة لعدد الصفحات → OCR
-  if (text.replace(/\s/g, '').length < pdf.numPages * 80) {
+  // ملف متصوّر (نص قليل جداً) أو خطوطه بايظة (رموز بدل الحروف العربية — زي ملفات WIPO) → OCR
+  const letters = (text.match(/\p{L}/gu) || []).length;
+  const arabic = (text.match(/[؀-ۿﭐ-﷿ﹰ-﻿]/g) || []).length;
+  const garbled = letters > 200 && arabic / letters < 0.6;
+  if (garbled) onProgress('⚠️ خطوط الملف مش مقروءة — هقراه بالـ OCR…');
+  if (garbled || text.replace(/\s/g, '').length < pdf.numPages * 80) {
     const w = await tesseract();
     text = '';
     try {

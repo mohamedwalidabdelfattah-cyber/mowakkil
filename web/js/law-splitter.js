@@ -6,8 +6,14 @@
 const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 const toLatin = s => String(s).replace(/[٠-٩]/g, d => AR_DIGITS.indexOf(d));
 const normalize = t => String(t || '')
+  // ملفات PDF كتير بتطلّع «أشكال العرض» (ﻗﺎﻧﻮن) بدل الحروف العادية (قانون) — NFKC بيرجّعها
+  .normalize('NFKC')
+  .replace(/[ھہ]/g, 'ه')                         // ھ / ہ (هاء فارسية/أردية) ← ه
+  .replace(/[یے]/g, 'ي')                         // ی / ے ← ي
+  .replace(/ک/g, 'ك')                                 // ک ← ك
   .replace(/\r\n?/g, '\n')
   .replace(/\[\s*(?:عدل|تعديل|edit)\s*\]/gi, '')          // روابط التعديل في ويكي مصدر
+  .replace(/^\s*[-_ـ=]{5,}\s*$/gm, '')                    // خطوط فاصلة بين المواد
   .replace(/^\s*\d+(?:\.\d+)+\s+.*$/gm, '')                  // سطور الفهرس (4.3.3 المادة ٧١)
   .replace(/ـ/g, '')                    // تطويل
   .replace(/[ً-ْ]/g, '')           // تشكيل
@@ -27,7 +33,24 @@ export function splitArticles(rawText) {
   let lastNum = 0;
   let preamble = [];
 
-  const push = () => { if (cur) { cur.article_text = cur.lines.join('\n').trim(); delete cur.lines; if (cur.article_text) out.push(cur); } };
+  const push = () => {
+    if (!cur) return;
+    // النسخ المجمّعة (زي ملفات الهيئة العامة للرقابة المالية) بتحط بعد المادة المعدلة «نص المادة قبل التعديل: …»
+    // — النص القديم ده لازم يتشال عشان المساعد ميعتبروش ساري. ملاحظة التعديل نفسها بتفضل.
+    cur.article_text = cur.lines.join('\n').replace(/\s*[,،]?\s*نص (?:المادة|الفقرة|البند) قبل (?:التعديل|الإلغاء|الالغاء)\s*:[\s\S]*$/, '').trim();
+    delete cur.lines;
+    // «مكرر» اتقطع من العنوان وفضل منه «م» في أول النص
+    if (/^م\s/.test(cur.article_text) && !/مكرر/.test(cur.article_number)) {
+      cur.article_number += ' مكرر';
+      cur.article_text = cur.article_text.replace(/^م\s+/, '');
+    }
+    // بعض الملفات بتكتب «إصدار» في أول نص مادة الإصدار
+    if (/^إصدار\s/.test(cur.article_text)) {
+      cur.article_text = cur.article_text.replace(/^إصدار\s+/, '');
+      if (!cur.article_number.includes('مواد الإصدار')) cur.article_number += ' (مواد الإصدار)';
+    }
+    if (cur.article_text) out.push(cur);
+  };
 
   for (const line of lines) {
     let m = line.match(NUM_HEAD);
@@ -60,6 +83,24 @@ export function splitArticles(rawText) {
     else if (line.trim()) preamble.push(line.trim());
   }
   push();
+
+  // الترقيم رجع لـ 1 مرة واحدة = اللي قبله «مواد الإصدار» (ملفات كتير بترقّمها 1، 2، 3 زي مواد القانون)
+  const restarts = out.map((a, i) => (i > 0 && a.article_number === 'المادة 1' ? i : -1)).filter(i => i > 0);
+  if (restarts.length === 1 && restarts[0] <= 40) {
+    for (let i = 0; i < restarts[0]; i++) {
+      if (!out[i].article_number.includes('مواد الإصدار')) out[i].article_number += ' (مواد الإصدار)';
+    }
+  }
+  {
+    // مواد الإصدار متداخلة مع مواد القانون بنفس الأرقام: مادة الإصدار هي اللي بتتكلم عن «القانون المرافق»
+    const byNum = new Map();
+    out.forEach((a, i) => { if (!byNum.has(a.article_number)) byNum.set(a.article_number, []); byNum.get(a.article_number).push(i); });
+    for (const idxs of byNum.values()) {
+      if (idxs.length !== 2) continue;
+      const iss = idxs.filter(i => /القانون المرافق|المرافق لهذا القانون|ينشر هذا القانون في الجريدة الرسمية|يبصم هذا القانون/.test(out[i].article_text));
+      if (iss.length === 1) out[iss[0]].article_number += ' (مواد الإصدار)';
+    }
+  }
 
   // نفس رقم المادة اتكرر (غالباً قانون إصدار + قانون أو نسختين متلزقين)
   const seen = new Map();

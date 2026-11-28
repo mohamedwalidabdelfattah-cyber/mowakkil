@@ -250,11 +250,23 @@ export function mountLaws(host) {
             <div style="font-weight:700">${STATUS[l.status]?.[0] || ''} ${esc(l.law_name)} ${l.law_number ? `<span style="font-weight:400;color:var(--text-soft)">(${esc(l.law_number)})</span>` : ''}</div>
             <div style="font-size:12px;color:var(--text-soft)">${l.articles} مادة · ${esc(STATUS[l.status]?.[1] || l.status)}${l.note ? ' · ' + esc(l.note) : ''}${l.official_source ? ' · المصدر: ' + esc(l.official_source) : ''}</div>
           </div>
+          ${['active', 'review', 'mixed'].includes(l.status) && l.min_id ? `<button class="ghost" data-law-index="${i}" title="فهرسة مواد القانون ده في البحث الذكي (لو اتضاف من برة الأداة أو الفهرسة وقفت)" style="padding:4px 10px;font-size:12px">🔍 فهرسة</button>` : ''}
           <select data-law-status="${i}" style="width:auto">
             <option value="">تغيير الحالة…</option>
             ${Object.entries(STATUS).filter(([k]) => k !== 'mixed').map(([k, [ic, lb]]) => `<option value="${k}">${ic} ${lb}</option>`).join('')}
           </select>
         </div>`).join('')}`;
+    // فهرسة قانون واحد (من أول مادة ليه لآخر مادة) — بالـ id، من غير ما نلمس باقي القاعدة
+    box.querySelectorAll('[data-law-index]').forEach(btn => btn.addEventListener('click', async () => {
+      const l = laws[Number(btn.dataset.lawIndex)];
+      if (!confirm(`فهرسة ${l.articles} مادة من «${l.law_name}» في البحث الذكي؟`)) return;
+      btn.disabled = true;
+      const st = document.createElement('div');
+      st.style.cssText = 'width:100%;font-size:12px';
+      btn.closest('div').appendChild(st);
+      await reindex(l.min_id - 1, l.max_id, $('#laws-country').value, st);
+      btn.disabled = false;
+    }));
     box.querySelectorAll('[data-law-status]').forEach(sel => sel.addEventListener('change', async () => {
       const l = laws[Number(sel.dataset.lawStatus)];
       const st = sel.value;

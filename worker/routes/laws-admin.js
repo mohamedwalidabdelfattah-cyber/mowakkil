@@ -27,7 +27,7 @@ async function listLaws({ env, url }) {
     `SELECT law_name, MAX(law_number) AS law_number, COUNT(*) AS articles,
             MIN(COALESCE(status, 'active')) AS min_status, MAX(COALESCE(status, 'active')) AS max_status,
             MAX(status_note) AS note, MAX(official_source) AS official_source, MAX(verified_at) AS verified_at,
-            MAX(source_url) AS source_url
+            MAX(source_url) AS source_url, MIN(id) AS min_id, MAX(id) AS max_id
      FROM law_articles WHERE country = ? GROUP BY law_name ORDER BY COUNT(*) DESC`
   ).bind(country).all();
   return ok(env, (results || []).map(r => ({
