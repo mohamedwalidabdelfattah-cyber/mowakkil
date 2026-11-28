@@ -14,7 +14,8 @@ const normalize = t => String(t || '')
   .replace(/\r\n?/g, '\n')
   .replace(/\[\s*(?:عدل|تعديل|edit)\s*\]/gi, '')          // روابط التعديل في ويكي مصدر
   .replace(/^\s*[-_ـ=]{5,}\s*$/gm, '')                    // خطوط فاصلة بين المواد
-  .replace(/^\s*(?:الجريدة الرسمية|الوقائع المصرية)\s*[-–—]?\s*(?:ال)?عدد.*$/gm, '') // ترويسة كل صفحة في الجريدة
+  // ترويسة كل صفحة في الجريدة — بنشيل الترويسة بس لحد السنة، عشان لو عنوان المادة اتلزق في نفس السطر ميضيعش
+  .replace(/^[ \t0-9٠-٩]*(?:الجريدة الرسمية|الوقائع المصرية)\s*[-–—]?\s*(?:ال)?عدد[^\n]*?(?:سنة\s*[0-9٠-٩]{4}(?:\s*[0-9٠-٩]{1,4}(?=\s|$))?|$)/gm, '')
   .replace(/\*\*|__|^#+\s*/gm, '')                         // تنسيق markdown لو القراءة بالذكاء الاصطناعي حطته
   .replace(/^\s*\d+(?:\.\d+)+\s+.*$/gm, '')                  // سطور الفهرس (4.3.3 المادة ٧١)
   .replace(/ـ/g, '')                    // تطويل
@@ -34,6 +35,9 @@ export function splitArticles(rawText) {
   let cur = null;
   let lastNum = 0;
   let preamble = [];
+  let page = null;           // علامات الصفحات «⟦ص 12⟧» من القراءة بالذكاء الاصطناعي
+  const gaps = [];           // { after, before, pages: [من، لـ] } — عشان نعيد قراءة صفحات الفجوة بس
+  let lastPage = null;
 
   const push = () => {
     if (!cur) return;
@@ -55,6 +59,8 @@ export function splitArticles(rawText) {
   };
 
   for (const line of lines) {
+    const pm = line.match(/^\s*⟦ص\s*(\d+)⟧\s*$/);
+    if (pm) { page = Number(pm[1]); continue; }
     let m = line.match(NUM_HEAD);
     if (m) {
       const num = Number(toLatin(m[1]));
@@ -69,9 +75,13 @@ export function splitArticles(rawText) {
       if (isHead) {
         push();
         if (num < lastNum && num !== 1 && !bis) warnings.push(`ترتيب غريب: المادة ${num} بعد ${lastNum}`);
-        if (num > lastNum + 1 && !bis && lastNum) warnings.push(`فيه مواد ناقصة بين ${lastNum} و${num}`);
+        if (num > lastNum + 1 && !bis && lastNum) {
+          warnings.push(`فيه مواد ناقصة بين ${lastNum} و${num}`);
+          if (page != null) gaps.push({ after: lastNum, before: num, pages: [lastPage ?? page, page] });
+        }
         cur = { article_number: `المادة ${num}${bis}`, lines: rest ? [rest] : [] };
-        if (!bis) lastNum = num;
+        if (page != null) cur.page = page;
+        if (!bis) { lastNum = num; lastPage = page; }
         continue;
       }
     }
@@ -118,8 +128,14 @@ export function splitArticles(rawText) {
   if (abridged && abridged / Math.max(1, out.length) >= 0.03) {
     severe.push(`النص فيه اختصارات (…) في ${abridged} مادة من ${out.length} — غالباً ده ملخص مش النص الرسمي الكامل`);
   }
-  const gaps = warnings.filter(w => w.startsWith('فيه مواد ناقصة'));
-  if (gaps.length >= 2) severe.push(`فيه ${gaps.length} فجوات في ترقيم المواد — النسخة ناقصة`);
+  const gapWarns = warnings.filter(w => w.startsWith('فيه مواد ناقصة'));
+  if (gapWarns.length >= 2) severe.push(`فيه ${gapWarns.length} فجوات في ترقيم المواد — النسخة ناقصة`);
 
-  return { articles: out, warnings, severe, preamble: preamble.join('\n').slice(0, 1500) };
+  // الصفحات اللي محتاجة تتقري تاني (من صفحة آخر مادة قبل الفجوة لصفحة أول مادة بعدها)
+  const gapPages = [...new Set(gaps.flatMap(g => {
+    const [a, b] = [Math.min(...g.pages), Math.max(...g.pages)];
+    return Array.from({ length: Math.min(b - a, 4) + 1 }, (_, k) => a + k);
+  }))].sort((x, y) => x - y);
+  out.forEach(a => { delete a.page; }); // مش بتتبعت للسيرفر
+  return { articles: out, warnings, severe, gaps, gapPages, hasPages: page != null, preamble: preamble.join('\n').slice(0, 1500) };
 }

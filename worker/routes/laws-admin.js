@@ -24,7 +24,8 @@ export const routes = [
 const OCR_PROMPT = `هذه صورة صفحة من نص قانوني رسمي (الجريدة الرسمية أو ما يماثلها).
 انسخ النص العربي الموجود في الصفحة حرفياً كما هو تماماً، سطراً بسطر وبنفس الترتيب.
 - لا تلخّص ولا تصحّح ولا تعيد الصياغة ولا تضف أي كلمة من عندك.
-- احتفظ بعناوين المواد كما هي (مثل: مادة (١) أو المادة الأولى) وبالأرقام كما هي.
+- احتفظ بعناوين المواد كما هي (مثل: مادة (١) أو المادة الأولى) وبالأرقام كما هي، وكل عنوان مادة في سطر لوحده.
+- انسخ كل سطر من أول الصفحة لآخرها — خصوصاً عنوان المادة اللي تحت الترويسة مباشرة في أول الصفحة. لا تُسقط أي عنوان مادة.
 - تجاهل العلامة المائية والشعارات والأختام وأرقام الصفحات وترويسة الجريدة (اسم الجريدة والعدد والتاريخ أعلى الصفحة).
 - لو الصفحة فاضية أو غلاف بلا نص قانوني اكتب: [صفحة بدون نص]
 اكتب النص فقط بدون أي مقدمة أو تعليق.`;
@@ -94,7 +95,9 @@ async function ocrPage({ request, env }) {
   // الترتيب: Gemini Flash-Lite ← Flash (الأدق في العربي) ← NVIDIA (نموذج رؤية، 40 طلب/دقيقة) ← Gemma 4 على OpenRouter
   const attempts = [];
   if (sec('GEMINI_API_KEY').length >= 20) {
-    for (const m of ['gemini-flash-lite-latest', 'gemini-flash-latest']) attempts.push({ name: m, run: async () => {
+    // إعادة قراءة صفحات الفجوات (strict): Flash الأدق الأول
+    const order = b?.strict ? ['gemini-flash-latest', 'gemini-flash-lite-latest'] : ['gemini-flash-lite-latest', 'gemini-flash-latest'];
+    for (const m of order) attempts.push({ name: m, run: async () => {
       let r = await geminiOcr(env, m, image, mime, OCR_PROMPT);
       if (r.err === 'recitation') {
         r = await geminiOcr(env, m, image, mime, OCR_PROMPT_JSON);

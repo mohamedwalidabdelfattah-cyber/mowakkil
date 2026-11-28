@@ -6,7 +6,7 @@
 import { saApiJson } from '../api.js';
 import { esc, toast } from '../ui.js';
 import { splitArticles } from '../law-splitter.js';
-import { extractLawText, aiReadPdf } from '../law-extract.js';
+import { extractLawText, aiReadPdf, clearAiCache } from '../law-extract.js';
 
 const STATUS = {
   active: ['✅', 'ساري'], review: ['🔄', 'يُراجع'], repealed: ['⛔', 'ملغى'], unofficial: ['🚫', 'غير رسمي'], mixed: ['➖', 'مختلط'],
@@ -19,6 +19,8 @@ const RESUME_KEY = 'mowakkil_law_reindex';
 export function mountLaws(host) {
   let laws = null;   // قايمة القوانين (بتتحمل عند الطلب)
   let parsed = null; // نتيجة التقسيم
+  let aiFile = null; // آخر ملف اتقرا بالذكاء الاصطناعي (لإعادة قراءة صفحات الفجوات)
+  const ocrCall = async (b64, o = {}) => (await saApiJson('/api/superadmin/laws/ocr', { method: 'POST', body: JSON.stringify({ image: b64, mime: 'image/jpeg', strict: !!o.strict }) })).text;
   host.innerHTML = `
     <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <h3 style="margin:0">📚 قاعدة المواد القانونية</h3>
@@ -101,7 +103,8 @@ export function mountLaws(host) {
       // القراءة بتتحفظ صفحة صفحة؛ لو وقفت (الحصة) بيظهر «كمّل القراءة» بنفس الملف
       const readAi = async () => {
         try {
-          done(await aiReadPdf(f, async b64 => (await saApiJson('/api/superadmin/laws/ocr', { method: 'POST', body: JSON.stringify({ image: b64, mime: 'image/jpeg' }) })).text, status));
+          aiFile = f;
+          done(await aiReadPdf(f, ocrCall, status));
         } catch (err) {
           $('#law-extract-status').innerHTML = `⏸️ ${esc(err.message)} <button class="ghost" id="law-read-continue" style="padding:2px 10px;margin-inline-start:6px">▶️ كمّل القراءة</button>`;
           $('#law-read-continue').addEventListener('click', readAi);
@@ -175,13 +178,16 @@ export function mountLaws(host) {
 
   function renderPreview() {
     const box = $('#law-preview');
-    const { articles, warnings, severe } = parsed;
+    const { articles, warnings, severe, gapPages = [] } = parsed;
     if (!articles.length) { box.innerHTML = '<div class="warn">مالقيتش عناوين مواد (مادة 1 / المادة (1)…) — اتأكد من النص.</div>'; return; }
     const sample = [...articles.slice(0, 3), ...(articles.length > 6 ? articles.slice(-3) : articles.slice(3))];
     box.innerHTML = `
       <div style="font-weight:700;margin-bottom:6px">لقيت ${articles.length} مادة</div>
       ${severe.length ? `<div class="warn" style="border-color:var(--c-danger-bd);background:var(--c-danger-bg);color:var(--c-danger)">⛔ ${severe.map(esc).join('<br>⛔ ')}</div>` : ''}
       ${warnings.length ? `<div class="warn">⚠️ ${warnings.slice(0, 6).map(esc).join('<br>⚠️ ')}</div>` : ''}
+      ${gapPages.length && aiFile ? `<div style="margin:6px 0"><button class="primary" id="law-reread">🔁 أعد قراءة صفحات الفجوات بس (${gapPages.length} صفحة)</button>
+        <div style="font-size:12px;color:var(--text-soft);margin-top:3px">الصفحات: ${gapPages.join('، ')} — بنموذج أدق، وبعدها التقسيم بيتعمل تاني لوحده.</div><div id="law-reread-status" style="font-size:12.5px;margin-top:4px"></div></div>` : ''}
+      ${warnings.some(w => w.startsWith('فيه مواد ناقصة')) && !parsed.hasPages && !$('#law-paste').value ? `<div style="font-size:12px;color:var(--text-soft);margin:4px 0">💡 لو الملف متصوّر: اقراه تاني بالذكاء الاصطناعي — النص هيبقى فيه أرقام الصفحات، وهيظهر زرار يعيد قراءة صفحات الفجوات بس.</div>` : ''}
       <details style="margin:8px 0"><summary style="cursor:pointer;font-size:13px">عرض عينة (أول 3 وآخر 3 مواد)</summary>
         ${sample.map(a => `<div style="border-bottom:1px dashed var(--border-soft);padding:6px 0"><b>${esc(a.article_number)}</b><div style="font-size:13px;white-space:pre-wrap">${esc(a.article_text.slice(0, 600))}${a.article_text.length > 600 ? '…' : ''}</div></div>`).join('')}
       </details>
@@ -191,6 +197,18 @@ export function mountLaws(host) {
       <button class="primary" id="law-import">➕ أضف ${articles.length} مادة للقاعدة</button>
       <div id="law-import-status" style="font-size:12.5px;margin-top:8px"></div>`;
     $('#law-import').addEventListener('click', doImport);
+    $('#law-reread')?.addEventListener('click', async e => {
+      e.target.disabled = true;
+      const st = $('#law-reread-status');
+      try {
+        const r = await aiReadPdf(aiFile, ocrCall, m => { st.textContent = m; }, { pages: gapPages });
+        rawText = r.text;
+        const before = parsed.gaps.length;
+        parsed = splitArticles(rawText);
+        renderPreview();
+        toast(parsed.gaps.length ? `الفجوات بقت ${parsed.gaps.length} بدل ${before}` : '✅ الفجوات اتقفلت', parsed.gaps.length ? 'bad' : 'ok');
+      } catch (err) { st.textContent = '⏸️ ' + err.message + ' — دوس الزرار تاني يكمّل.'; e.target.disabled = false; }
+    });
   }
 
   async function doImport() {
@@ -222,6 +240,7 @@ export function mountLaws(host) {
     st.textContent = `✅ اتضاف ${done} مادة. ⏳ الفهرسة الذكية…`;
     await reindex(firstId - 1, lastId, meta.country, st);
     toast('✅ القانون اتضاف', 'ok');
+    if (aiFile) { clearAiCache(aiFile); aiFile = null; }
   }
 
   // فهرسة المواد الجديدة بس (بالـ id) — ولو الحصة خلصت بنحفظ مكان التوقف ونكمل بعدين

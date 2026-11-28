@@ -37,17 +37,28 @@ async function pageText(page) {
  * قراءة PDF متصوّر بالذكاء الاصطناعي (Gemini عن طريق السيرفر) صفحة صفحة — أدق بكتير من Tesseract في العربي.
  * ocrPage(base64Jpeg) → نص الصفحة. التقدم بيتحفظ في المتصفح، فلو الحصة خلصت نكمّل بعدين بنفس الملف.
  */
-export async function aiReadPdf(file, ocrPage, onProgress = () => {}) {
+const cacheKey = file => `mowakkil_law_ocr:${file.name}:${file.size}`;
+const loadCache = file => { try { return JSON.parse(localStorage.getItem(cacheKey(file)) || '{}'); } catch { return {}; } };
+const saveCache = (file, saved) => { try { localStorage.setItem(cacheKey(file), JSON.stringify(saved)); } catch {} };
+/** بعد الإضافة للقاعدة: نمسح الصفحات المحفوظة */
+export function clearAiCache(file) { try { localStorage.removeItem(cacheKey(file)); } catch {} }
+// كل صفحة قبلها علامة «⟦ص N⟧» — التقسيم بيشيلها، وبيستخدمها يعرف كل فجوة في أنهي صفحة
+const joinPages = (saved, n) => Array.from({ length: n }, (_, k) => `⟦ص ${k + 1}⟧\n${saved[k + 1] || ''}`).join('\n');
+const headCount = t => (String(t).match(/(?:^|\n)\s*[(\[]?\s*(?:ال)?مادة\s*[(\[]?\s*[0-9٠-٩]/g) || []).length;
+
+export async function aiReadPdf(file, ocrPage, onProgress = () => {}, opts = {}) {
   const lib = await pdfLib();
   const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const key = `mowakkil_law_ocr:${file.name}:${file.size}`;
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
-  const save = () => { try { localStorage.setItem(key, JSON.stringify(saved)); } catch {} };
-  let last = 0;
+  const saved = loadCache(file);
+  const save = () => saveCache(file, saved);
+  // opts.pages: إعادة قراءة صفحات معينة بس (صفحات الفجوات) — والنتيجة الجديدة بتتاخد لو فيها عناوين مواد أكتر
+  const only = opts.pages ? new Set(opts.pages) : null;
+  let last = 0, redone = 0;
   for (let i = 1; i <= pdf.numPages; i++) {
-    if (saved[i] != null) continue;
-    onProgress(`📸 قراءة الصفحة ${i} من ${pdf.numPages} بالذكاء الاصطناعي… (${Object.keys(saved).length} اتقرت)`);
+    if (only ? !only.has(i) : saved[i] != null) continue;
+    onProgress(only
+      ? `🔁 إعادة قراءة الصفحة ${i} (${++redone} من ${only.size})…`
+      : `📸 قراءة الصفحة ${i} من ${pdf.numPages} بالذكاء الاصطناعي… (${Object.keys(saved).length} اتقرت)`);
     const page = await pdf.getPage(i);
     const vp = page.getViewport({ scale: 1.7 });
     const canvas = document.createElement('canvas');
@@ -64,7 +75,8 @@ export async function aiReadPdf(file, ocrPage, onProgress = () => {}) {
     for (let attempt = 0; ; attempt++) {
       last = Date.now();
       try {
-        saved[i] = String(await ocrPage(b64)).replace(/^\s*\[صفحة بدون نص\]\s*$/, '');
+        const txt = String(await ocrPage(b64, { strict: !!only })).replace(/^\s*\[صفحة بدون نص\]\s*$/, '');
+        if (!only || saved[i] == null || headCount(txt) >= headCount(saved[i])) saved[i] = txt;
         save();
         break;
       } catch (e) {
@@ -84,9 +96,8 @@ export async function aiReadPdf(file, ocrPage, onProgress = () => {}) {
       }
     }
   }
-  const text = Array.from({ length: pdf.numPages }, (_, k) => saved[k + 1] || '').join('\n');
-  try { localStorage.removeItem(key); } catch {}
-  return { text, ocr: true, ai: true, quality: 'ok' };
+  // الصفحات بتفضل محفوظة لحد الإضافة للقاعدة — عشان «إعادة قراءة صفحات الفجوات» تشتغل
+  return { text: joinPages(saved, pdf.numPages), ocr: true, ai: true, quality: 'ok' };
 }
 
 /** onProgress(msg) للتقدم — بيرجّع { text, ocr: boolean, quality: 'ok'|'broken', needsOcr? }
