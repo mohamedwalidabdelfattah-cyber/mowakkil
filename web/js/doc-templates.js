@@ -7,29 +7,39 @@ import { esc, toast, localISO } from './ui.js';
 import { mountExportMenu } from './exporter.js';
 import { isSaudi } from './country.js';
 import { CATEGORIES_EG, TEMPLATES_EG } from './doc-templates-eg.js';
+import { CATEGORIES_SA, TEMPLATES_SA } from './doc-templates-sa.js';
 
 const DOTS = '................';
 
 const officeName = () => {
   try { const o = JSON.parse(localStorage.getItem('mowakkil_office') || '{}'); return o.name_ar || o.name || ''; } catch { return ''; }
 };
-const fmtDate = v => {
+const fmtDate = (v, withHijri = false) => {
   const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${+m[3]}/${+m[2]}/${m[1]}` : String(v || '');
+  if (!m) return String(v || '');
+  const greg = `${+m[3]}/${+m[2]}/${m[1]}`;
+  if (!withHijri) return greg;
+  // القوالب السعودية: ميلادي + هجري (تقويم أم القرى)
+  try {
+    const h = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' })
+      .format(new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00`));
+    return `${greg}م الموافق ${h}`;
+  } catch { return greg + 'م'; }
 };
 
 export function templatesFor() {
-  if (isSaudi()) return { categories: [], templates: [] }; // الدفعة السعودية جاية
+  if (isSaudi()) return { categories: CATEGORIES_SA, templates: TEMPLATES_SA };
   return { categories: CATEGORIES_EG, templates: TEMPLATES_EG };
 }
 
 /** بيملى نص القالب بالقيم — الفاضي بيبقى نقط للكتابة بخط اليد */
 export function fillTemplate(tpl, values) {
   const byKey = Object.fromEntries(tpl.fields.map(f => [f.k, f]));
+  const sa = String(tpl.id || '').startsWith('sa-');
   return tpl.body.replace(/\{\{(\w+)\}\}/g, (_, k) => {
     let v = String(values[k] ?? '').trim();
     if (!v) return DOTS;
-    if (byKey[k]?.type === 'date') v = fmtDate(v);
+    if (byKey[k]?.type === 'date') v = fmtDate(v, sa);
     if (byKey[k]?.type === 'number' && /^\d+(\.\d+)?$/.test(v)) v = Number(v).toLocaleString('en-US');
     return v;
   }).replace(/\n{3,}/g, '\n\n');
