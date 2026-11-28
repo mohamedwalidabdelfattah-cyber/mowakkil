@@ -143,10 +143,24 @@ export async function render(host) {
           <button class="analyze-type-btn primary" data-type="contract">📄 عقد</button>
           <button class="analyze-type-btn ghost" data-type="case">⚖️ قضية</button>
           <button class="analyze-type-btn ghost" data-type="document">📋 مستند</button>
+          <button class="analyze-type-btn ghost" data-type="judgment">🏛️ حكم</button>
+          <button class="analyze-type-btn ghost" data-type="compare">🔀 مقارنة نسختين</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:6px">
+          <div><label>⚡ ربط بقضية (اختياري)</label><select id="analyze-case"><option value="">— من غير —</option></select></div>
+          <div id="analyze-party-wrap" hidden><label>الطرف اللي بنمثله</label><input id="analyze-party" placeholder="مثلاً: المستأجر / شركة النيل"></div>
         </div>
 
-        <label style="margin-top:10px">النص</label>
+        <label style="margin-top:10px" id="analyze-text-label">النص</label>
         <textarea id="analyze-text" placeholder="الصق النص هنا..." style="min-height:140px"></textarea>
+        <div id="analyze-b-wrap" hidden>
+          <label style="margin-top:10px">النسخة الجديدة</label>
+          <textarea id="analyze-text-b" placeholder="الصق النسخة الجديدة هنا..." style="min-height:140px"></textarea>
+          <label class="file-btn ghost" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border-radius:8px;margin-top:6px">
+            📎 رفع النسخة الجديدة
+            <input type="file" id="analyze-file-b" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp" style="display:none">
+          </label>
+        </div>
 
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <label class="file-btn ghost" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border-radius:8px">
@@ -454,7 +468,27 @@ export async function render(host) {
       btn.classList.remove('ghost');
       btn.classList.add('primary');
       analyzeType = btn.dataset.type;
+      // المقارنة: نسختين + الطرف اللي بنمثله
+      const cmp = analyzeType === 'compare';
+      host.querySelector('#analyze-b-wrap').hidden = !cmp;
+      host.querySelector('#analyze-party-wrap').hidden = !cmp;
+      host.querySelector('#analyze-text-label').textContent = cmp ? 'النسخة القديمة' : analyzeType === 'judgment' ? 'نص الحكم' : 'النص';
     });
+  });
+  // قايمة القضايا للربط
+  apiJson('/api/cases').then(cs => {
+    const sel = host.querySelector('#analyze-case');
+    if (sel) sel.innerHTML += (cs || []).map(c => `<option value="${c.id}">${esc([c.case_number, c.client_name, c.court].filter(Boolean).join(' — ') || 'قضية #' + c.id)}</option>`).join('');
+  }).catch(() => {});
+  host.querySelector('#analyze-file-b').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    toast('جاري استخراج النص...', 'ok');
+    try {
+      const text = await extractAnyFile(file, host);
+      host.querySelector('#analyze-text-b').value = text;
+      toast(`✅ تم استخراج ${text.length} حرف`, 'ok');
+    } catch (err) { toast('فشل: ' + err.message, 'bad'); }
   });
 
   let uploadedFileName = '';
@@ -478,22 +512,23 @@ export async function render(host) {
   host.querySelector('#analyze-btn').addEventListener('click', async () => {
     const text = host.querySelector('#analyze-text').value.trim();
     const box = host.querySelector('#analyze-out');
-    if (text.length < 30) return toast('اكتب نص أطول', 'bad');
+    const case_id = host.querySelector('#analyze-case').value || null;
+    let body;
+    if (analyzeType === 'compare') {
+      const textB = host.querySelector('#analyze-text-b').value.trim();
+      if (text.length < 30 || textB.length < 30) return toast('حط النسختين: القديمة والجديدة', 'bad');
+      body = { text_a: text, text_b: textB, our_party: host.querySelector('#analyze-party').value.trim(), case_id };
+    } else {
+      if (text.length < 30) return toast('اكتب نص أطول', 'bad');
+      body = { text, file_name: uploadedFileName || null, case_id };
+    }
 
     box.innerHTML = skeleton(6);
     try {
-      const endpoint = {
-        contract: '/api/analyze/contract',
-        case: '/api/analyze/case',
-        document: '/api/analyze/document',
-      }[analyzeType];
-
-      const data = await apiJson(endpoint, {
-        method: 'POST',
-        body: JSON.stringify({ text, file_name: uploadedFileName || null }),
-      });
+      const data = await apiJson(`/api/analyze/${analyzeType}`, { method: 'POST', body: JSON.stringify(body) });
 
       box.innerHTML = renderAnalysisResult(data);
+      mountKeyDates(box, data);
       loadAnalyses();
     } catch (e) {
       box.innerHTML = `<div class="warn">${esc(e.message)}</div>`;
@@ -512,7 +547,7 @@ export async function render(host) {
       list.innerHTML = data.items.map(item => `
         <div class="item" style="cursor:pointer" data-id="${item.id}">
           <div class="name">${esc(item.title || 'تحليل')}</div>
-          <div class="meta">${esc(item.type)} · ${esc(item.created_at)}</div>
+          <div class="meta">${esc(TYPE_LABELS[item.type] || item.type)}${item.case_number ? ' · 📁 قضية ' + esc(item.case_number) : ''} · ${esc(item.created_at)}</div>
         </div>
       `).join('');
 
@@ -522,6 +557,7 @@ export async function render(host) {
           try {
             const detail = await apiJson('/api/analyze/history/' + id);
             host.querySelector('#analyze-out').innerHTML = renderAnalysisResult(detail);
+            mountKeyDates(host.querySelector('#analyze-out'), detail);
             host.querySelector('#analyze-out').scrollIntoView({ behavior: 'smooth' });
           } catch (e) { toast(e.message, 'bad'); }
         });
@@ -621,7 +657,81 @@ function loadScript(src) {
 // ============================================================
 // Analysis rendering
 // ============================================================
-function renderAnalysisResult(data) {
+const TYPE_LABELS = { contract: 'تحليل عقد', case: 'تحليل قضية', document: 'تحليل مستند', judgment: 'تحليل حكم', compare: 'مقارنة نسختين', case_ai: 'تحليل القضية' };
+const TYPE_ICONS = { contract: '📄', case: '⚖️', document: '📋', judgment: '🏛️', compare: '🔀' };
+
+const addDaysISO = (iso, days) => {
+  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
+  if (isNaN(d)) return '';
+  d.setDate(d.getDate() + Number(days));
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * «📅 مواعيد مهمة»: المواعيد اللي التحليل طلّعها (+ آخر ميعاد للطعن في الحكم) ← مهام في الأجندة بضغطة.
+ * التاريخ يتعدّل قبل الإضافة، والمهمة بتتربط بالقضية لو التحليل مربوط بيها.
+ */
+export function mountKeyDates(box, data) {
+  const r = data?.result || {};
+  const items = (Array.isArray(r.key_dates) ? r.key_dates : [])
+    .filter(x => x && (x.title || x.detail))
+    .map(x => ({ date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || '')) ? x.date : '', title: String(x.title || x.detail).slice(0, 150), detail: String(x.detail || '') }));
+  // الحكم: آخر ميعاد للطعن محسوب من تاريخ الحكم لو بيبدأ منه
+  const ar = r.appeal_route;
+  if (data?.type === 'judgment' && ar?.period_days > 0 && !/غير قابل/.test(ar.type || '')) {
+    const fromJudgment = /صدور/.test(ar.starts_from || '') && /^\d{4}-\d{2}-\d{2}$/.test(String(r.judgment_date || ''));
+    items.unshift({
+      date: fromJudgment ? addDaysISO(r.judgment_date, ar.period_days) : '',
+      title: `⏰ آخر ميعاد للطعن (${ar.type}) — ${ar.period_days} يوم من ${ar.starts_from || '—'}`,
+      detail: `${ar.legal_basis || ''}${fromJudgment ? '' : ' — حدد التاريخ من تاريخ الإعلان'}`, urgent: true,
+    });
+  }
+  if (!items.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-result-card';
+  wrap.innerHTML = `
+    <div class="ai-result-header"><span class="ai-result-icon">📅</span><span class="ai-result-title">مواعيد مهمة — حوّلها لمهام</span></div>
+    <div class="ai-result-body">
+      ${items.map((x, i) => `
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--border-soft)">
+          <input type="checkbox" data-kd="${i}" ${x.date ? 'checked' : ''} style="width:auto">
+          <input type="date" data-kd-date="${i}" value="${esc(x.date)}" style="width:auto">
+          <div style="flex:1;min-width:180px"><div style="font-weight:600${x.urgent ? ';color:var(--danger)' : ''}">${esc(x.title)}</div>
+            ${x.detail ? `<div style="font-size:12px;color:var(--ink-soft)">${esc(x.detail)}</div>` : ''}</div>
+        </div>`).join('')}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <button class="primary" data-kd-add>➕ أضف المختار للمهام</button>
+        <span style="font-size:12px;color:var(--ink-soft)">⚠️ راجع كل تاريخ قبل الإضافة — المواعيد القانونية بتتحسب حسب الإعلان ونوع الدعوى.</span>
+      </div>
+    </div>`;
+  box.appendChild(wrap);
+  wrap.querySelectorAll('[data-kd-date]').forEach(inp => inp.addEventListener('change', () => {
+    const cb = wrap.querySelector(`[data-kd="${inp.dataset.kdDate}"]`); if (inp.value) cb.checked = true;
+  }));
+  wrap.querySelector('[data-kd-add]').addEventListener('click', async (e) => {
+    const chosen = items.map((x, i) => ({ ...x, i, on: wrap.querySelector(`[data-kd="${i}"]`).checked, date: wrap.querySelector(`[data-kd-date="${i}"]`).value }))
+      .filter(x => x.on);
+    if (!chosen.length) return toast('اختار موعد واحد على الأقل', 'bad');
+    if (chosen.some(x => !x.date)) return toast('حدد التاريخ لكل موعد مختار', 'bad');
+    e.target.disabled = true;
+    let n = 0;
+    for (const x of chosen) {
+      try {
+        await apiJson('/api/tasks', { method: 'POST', body: JSON.stringify({
+          title: x.title.replace(/^⏰\s*/, ''), due_date: x.date, case_id: data.case_id || null,
+          notes: [x.detail, `من ${TYPE_LABELS[data.type] || 'التحليل'}${data.title ? ': ' + data.title : ''}`].filter(Boolean).join('\n'),
+        }) });
+        n++;
+        wrap.querySelector(`[data-kd="${x.i}"]`).checked = false;
+        wrap.querySelector(`[data-kd="${x.i}"]`).disabled = true;
+      } catch (err) { toast(err.message, 'bad'); }
+    }
+    e.target.disabled = false;
+    if (n) toast(`✅ اتضاف ${n} ${n === 1 ? 'مهمة' : 'مهام'} — هتلاقيها في المهام والأجندة`, 'ok');
+  });
+}
+
+export function renderAnalysisResult(data) {
   if (!data || !data.result) return '<div class="warn">مفيش نتيجة</div>';
   const r = data.result;
   const type = data.type || 'تحليل';
@@ -632,15 +742,48 @@ function renderAnalysisResult(data) {
 
   let html = `
     <div class="analysis-header">
-      <div class="analysis-icon">${type === 'contract' ? '📄' : type === 'case' ? '⚖️' : '📋'}</div>
+      <div class="analysis-icon">${TYPE_ICONS[type] || '📋'}</div>
       <div>
         <div class="analysis-title">${esc(r.summary || 'تحليل قانوني')}</div>
-        <div class="analysis-type">${type === 'contract' ? 'تحليل عقد' : type === 'case' ? 'تحليل قضية' : 'تحليل مستند'}</div>
+        <div class="analysis-type">${TYPE_LABELS[type] || 'تحليل'}</div>
       </div>
     </div>
   `;
 
   if (r.summary) html += `<div class="ai-result-card"><div class="ai-result-header"><span class="ai-result-icon">📋</span><span class="ai-result-title">الملخص</span></div><div class="ai-result-body" dir="rtl">${esc(r.summary)}</div></div>`;
+
+  // ---- الحكم ----
+  if (type === 'judgment') {
+    const kv = [['المحكمة', r.court], ['رقم الدعوى', r.case_number], ['تاريخ الحكم', r.judgment_date], ['لصالح', r.in_favor]].filter(([, v]) => v);
+    if (kv.length) html += `<div class="ai-result-card"><div class="ai-result-header"><span class="ai-result-icon">🏛️</span><span class="ai-result-title">بيانات الحكم</span></div><div class="ai-result-body">${kv.map(([k, v]) => `<div><strong>${k}:</strong> ${esc(String(v))}</div>`).join('')}</div></div>`;
+    if (r.ruling) html += `<div class="ai-result-card"><div class="ai-result-header"><span class="ai-result-icon">⚖️</span><span class="ai-result-title">المنطوق</span></div><div class="ai-result-body" dir="rtl" style="white-space:pre-wrap">${esc(r.ruling)}</div></div>`;
+    const ar = r.appeal_route;
+    if (ar && ar.type) html += `<div class="ai-result-card ai-result-danger"><div class="ai-result-header"><span class="ai-result-icon">⏰</span><span class="ai-result-title">طريق الطعن وميعاده</span></div><div class="ai-result-body">
+      <div><strong>${esc(ar.type)}</strong>${ar.period_days ? ` — خلال <strong>${esc(String(ar.period_days))} يوم</strong>` : ''}${ar.starts_from ? ` من ${esc(ar.starts_from)}` : ''}</div>
+      ${ar.legal_basis ? `<div class="defense-basis">📚 ${esc(ar.legal_basis)}</div>` : ''}
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:4px">⚠️ تأكد من الميعاد بنفسك — بيختلف حسب نوع الدعوى وتاريخ الإعلان.</div></div></div>`;
+    if (Array.isArray(r.grounds) && r.grounds.length) html += `<div class="ai-result-card"><div class="ai-result-header"><span class="ai-result-icon">🎯</span><span class="ai-result-title">أسباب الطعن المحتملة</span></div><div class="ai-result-body">${r.grounds.map((g, i) => typeof g === 'string' ? `<div class="defense-item"><strong>${i + 1}.</strong> ${esc(g)}</div>` : `<div class="defense-item"><div class="defense-text"><strong>${i + 1}. ${esc(g.ground || '')}</strong></div>${g.explanation ? `<div class="defense-basis">${esc(g.explanation)}</div>` : ''}</div>`).join('')}</div></div>`;
+    if (Array.isArray(r.execution_notes) && r.execution_notes.length) html += renderListSection('🔨', 'التنفيذ', r.execution_notes, 'neutral');
+  }
+
+  // ---- المقارنة ----
+  if (type === 'compare' && Array.isArray(r.changes) && r.changes.length) {
+    const badge = imp => /لصالح/.test(imp) ? '🟢 لصالحنا' : /ضد/.test(imp) ? '🔴 ضدنا' : '⚪ محايد';
+    html += `<div class="ai-result-card"><div class="ai-result-header"><span class="ai-result-icon">🔀</span><span class="ai-result-title">التغييرات (${r.changes.length})</span></div><div class="ai-result-body">${r.changes.map(c => `
+      <div class="term-item">
+        <div class="term-clause" style="display:flex;justify-content:space-between;gap:8px">📌 ${esc(c.clause || '')}<span style="white-space:nowrap">${badge(String(c.impact || ''))}</span></div>
+        ${c.before ? `<div class="term-issue">قبل: ${esc(c.before)}</div>` : ''}
+        ${c.after ? `<div class="term-suggestion">بعد: ${esc(c.after)}</div>` : ''}
+        ${c.explanation ? `<div style="font-size:12.5px;margin-top:4px">${esc(c.explanation)}</div>` : ''}
+      </div>`).join('')}</div></div>`;
+  }
+  if (type === 'compare' && Array.isArray(r.added) && r.added.length) html += renderListSection('➕', 'بنود اتضافت', r.added, 'info');
+  if (type === 'compare' && Array.isArray(r.removed) && r.removed.length) html += renderListSection('➖', 'بنود اتشالت', r.removed, 'danger');
+
+  // ---- الالتزامات (العقد) ----
+  if (Array.isArray(r.obligations) && r.obligations.length) {
+    html += `<div class="ai-result-card"><div class="ai-result-header"><span class="ai-result-icon">🤝</span><span class="ai-result-title">الالتزامات</span></div><div class="ai-result-body"><ul class="ai-result-list">${r.obligations.map(o => typeof o === 'string' ? `<li>${esc(o)}</li>` : `<li><strong>${esc(o.party || '')}:</strong> ${esc(o.obligation || '')}${o.due ? ` <span style="color:var(--ink-soft)">(${esc(o.due)})</span>` : ''}</li>`).join('')}</ul></div></div>`;
+  }
   if (Array.isArray(r.strengths) && r.strengths.length) html += renderListSection('💪', 'نقاط القوة', r.strengths, 'success');
   if (Array.isArray(r.weaknesses) && r.weaknesses.length) html += renderListSection('⚠️', 'نقاط الضعف', r.weaknesses, 'danger');
   if (Array.isArray(r.defenses) && r.defenses.length) {

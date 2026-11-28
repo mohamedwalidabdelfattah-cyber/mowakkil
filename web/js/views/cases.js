@@ -808,6 +808,8 @@ function renderAiTab(el, c, documents = []) {
   loadCaseAnalyses(el, c.id);
 }
 
+const ANALYSIS_LABELS = { case_ai: 'تحليل القضية', contract: '📄 تحليل عقد', document: '📋 تحليل مستند', judgment: '🏛️ تحليل حكم', compare: '🔀 مقارنة نسختين', case: '⚖️ تحليل قضية' };
+
 async function loadCaseAnalyses(el, caseId) {
   const box = el.querySelector('#ai-history');
   if (!box) return;
@@ -820,14 +822,22 @@ async function loadCaseAnalyses(el, caseId) {
       ${items.map(i => `
         <div class="item" style="cursor:pointer" data-analysis="${i.id}">
           <div class="name">${esc(i.title || 'تحليل')}</div>
-          <div class="meta">${esc(i.created_at || '')}</div>
+          <div class="meta">${esc(ANALYSIS_LABELS[i.type] || 'تحليل القضية')} · ${esc(i.created_at || '')}</div>
         </div>`).join('')}`;
     box.querySelectorAll('[data-analysis]').forEach(it => it.addEventListener('click', async () => {
       try {
         const r = await apiJson(`/api/analyze/history/${it.dataset.analysis}`);
-        el.querySelector('#ai-result').innerHTML = renderCaseAnalysis(r.result);
-        mountAnalysisExport(el.querySelector('#ai-result'), r.result, { case_number: r.title?.replace('تحليل قضية ', '') });
-        el.querySelector('#ai-result').scrollIntoView({ behavior: 'smooth' });
+        const out = el.querySelector('#ai-result');
+        if (r.type && r.type !== 'case_ai') {
+          // تحليل عقد/حكم/مستند/مقارنة اتربط بالقضية من قسم الذكاء الاصطناعي
+          const { renderAnalysisResult, mountKeyDates } = await import('./search.js');
+          out.innerHTML = renderAnalysisResult(r);
+          mountKeyDates(out, r);
+        } else {
+          out.innerHTML = renderCaseAnalysis(r.result);
+          mountAnalysisExport(out, r.result, { case_number: r.title?.replace('تحليل قضية ', '') });
+        }
+        out.scrollIntoView({ behavior: 'smooth' });
       } catch (e) { toast(e.message, 'bad'); }
     }));
   } catch {

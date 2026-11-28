@@ -7,6 +7,7 @@ import { findRelevantArticles } from '../services/legal-search.js';
 import { getSkill, formatSkill, GENERAL_METHOD } from '../services/legal-skills.js';
 import { getCaseDocumentsText } from '../services/doc-text.js';
 import { toInt } from '../lib/validation.js';
+import { canAccessCase } from '../lib/permissions.js';
 import { requireClientDataAi, routeFor } from '../lib/ai-privacy.js';
 import { createMasker } from '../lib/redact.js';
 import { verifyResult } from '../lib/citations.js';
@@ -16,6 +17,8 @@ export const routes = [
   { method: 'POST', path: '/api/analyze/contract', handler: analyzeContract },
   { method: 'POST', path: '/api/analyze/case', handler: analyzeCase },
   { method: 'POST', path: '/api/analyze/document', handler: analyzeDocument },
+  { method: 'POST', path: '/api/analyze/judgment', handler: analyzeJudgment },
+  { method: 'POST', path: '/api/analyze/compare', handler: analyzeCompare },
   { method: 'GET',  path: '/api/analyze/history', handler: getHistory },
   { method: 'GET',  path: /^\/api\/analyze\/history\/(\d+)$/, handler: getHistoryItem },
   // ✅ تحليل قضية محفوظة بالذكاء الاصطناعي (مع المهارات القانونية + المواد من الداتابيز)
@@ -109,8 +112,11 @@ const PROMPTS = {
   "risks": [{"risk": "نص", "explanation": "نص", "severity": "high|medium|low"}],
   "unfair_terms": [{"clause": "نص", "issue": "نص", "suggestion": "نص"}],
   "recommendations": ["نص"],
-  "overall_assessment": "نص"
-}`,
+  "overall_assessment": "نص",
+  "obligations": [{"party": "الطرف الملتزم", "obligation": "الالتزام بالتحديد", "due": "موعده إن وجد"}],
+  "key_dates": [{"date": "YYYY-MM-DD أو فاضي لو التاريخ مش محدد بيوم", "title": "عنوان قصير (مثلاً: آخر موعد لسداد القسط الثاني)", "detail": "التفاصيل والبند"}]
+}
+- key_dates: كل موعد يستاهل تذكير (سداد، تسليم، تجديد، إخطار قبل الانتهاء، انتهاء العقد). احسب التاريخ لو العقد بيحدده بمدة من تاريخ معروف.`,
 
   case: `حلل القضية التالية تحليلاً استراتيجياً.
 
@@ -164,7 +170,53 @@ const PROMPTS = {
   "amounts": ["مبلغ - وصف"],
   "key_facts": ["نص"],
   "legal_issues": ["نص"],
-  "missing_info": ["نص"]
+  "missing_info": ["نص"],
+  "key_dates": [{"date": "YYYY-MM-DD أو فاضي", "title": "عنوان قصير", "detail": "التفاصيل"}]
+}
+- key_dates: المواعيد المستقبلية اللي تستاهل تذكير أو مهمة (جلسة، مهلة، سداد، انتهاء).`,
+
+  judgment: `حلل الحكم القضائي التالي تحليلاً عملياً لمحامٍ يقرر هيعمل إيه بعده.
+
+**استخرج:**
+1. بيانات الحكم: المحكمة، رقم الدعوى، تاريخ الحكم، الأطراف.
+2. المنطوق بدقة كما ورد.
+3. الحكم لصالح مين.
+4. طريق الطعن المناسب (استئناف / نقض / معارضة / اعتراض / التماس…) وميعاده بالأيام وبداية حسابه (من تاريخ صدور الحكم أو من تاريخ الإعلان) مع السند القانوني — وفقاً لقانون الدولة ونوع الدعوى.
+5. أسباب الطعن المحتملة (الخطأ في تطبيق القانون، القصور في التسبيب، الفساد في الاستدلال، الإخلال بحق الدفاع، مخالفة الثابت بالأوراق…) مع شرح كل سبب من واقع الحكم.
+6. ملاحظات التنفيذ (هل الحكم نهائي/مشمول بالنفاذ المعجل، إيه المطلوب لتنفيذه أو وقفه).
+7. الخطوات المقترحة.
+
+أرجع JSON فقط:
+{
+  "summary": "نص",
+  "court": "نص",
+  "case_number": "نص",
+  "judgment_date": "YYYY-MM-DD أو فاضي",
+  "parties": ["اسم - صفة"],
+  "ruling": "المنطوق",
+  "in_favor": "نص (مثلاً: لصالح المدعي جزئياً)",
+  "appeal_route": {"type": "استئناف|نقض|معارضة|اعتراض|التماس|غير قابل للطعن", "period_days": 0, "starts_from": "تاريخ صدور الحكم|تاريخ الإعلان", "legal_basis": "المادة والقانون"},
+  "grounds": [{"ground": "سبب الطعن", "explanation": "الشرح من واقع الحكم"}],
+  "execution_notes": ["نص"],
+  "recommendations": ["نص"],
+  "key_dates": [{"date": "YYYY-MM-DD أو فاضي", "title": "عنوان قصير", "detail": "التفاصيل"}]
+}`,
+
+  compare: `قارن بين نسختين من نفس العقد/المستند (القديمة والجديدة) من وجهة نظر الطرف اللي بنمثله.
+
+**المطلوب:**
+1. كل بند اتغير: قبل وبعد، وأثره علينا (لصالحنا / ضدنا / محايد) مع الشرح.
+2. البنود اللي اتضافت والبنود اللي اتشالت وأثرها.
+3. توصية: نوافق؟ نفاوض على إيه بالتحديد؟
+
+أرجع JSON فقط:
+{
+  "summary": "نص",
+  "changes": [{"clause": "البند", "before": "نص قبل", "after": "نص بعد", "impact": "لصالحنا|ضدنا|محايد", "explanation": "نص"}],
+  "added": ["بند جديد + أثره"],
+  "removed": ["بند اتشال + أثره"],
+  "recommendations": ["نص"],
+  "overall_assessment": "التوصية النهائية"
 }`,
 };
 
@@ -172,22 +224,18 @@ const PROMPTS = {
 // Handlers
 // ============================================================
 
-async function analyzeContract({ request, env, officeId, userId }) {
-  return runAnalysis(env, officeId, userId, 'contract', request);
-}
-async function analyzeCase({ request, env, officeId, userId }) {
-  return runAnalysis(env, officeId, userId, 'case', request);
-}
-async function analyzeDocument({ request, env, officeId, userId }) {
-  return runAnalysis(env, officeId, userId, 'document', request);
-}
+// function declarations (مش const) عشان قايمة routes فوق بتتقري قبل السطور دي
+function analyzeContract(ctx) { return runAnalysis(ctx, 'contract'); }
+function analyzeCase(ctx) { return runAnalysis(ctx, 'case'); }
+function analyzeDocument(ctx) { return runAnalysis(ctx, 'document'); }
+function analyzeJudgment(ctx) { return runAnalysis(ctx, 'judgment'); }
+function analyzeCompare(ctx) { return runAnalysis(ctx, 'compare'); }
 
-async function runAnalysis(env, officeId, userId, type, request) {
+const TYPE_TITLES = { contract: 'تحليل عقد', case: 'تحليل قضية', document: 'تحليل مستند', judgment: 'تحليل حكم', compare: 'مقارنة نسختين' };
+
+async function runAnalysis({ env, officeId, userId, request, access, authUser }, type) {
   const gate = await requireFeature(env, officeId, 'ai');
   if (gate) return cors(gate, env, request);
-  // النص الملصوق ده مستند موكل → موافقة + خصوصية حسب إعداد المكتب
-  const privacy = await requireClientDataAi(env, officeId);
-  if (privacy.block) return cors(privacy.block, env, request);
 
   let b;
   try {
@@ -196,17 +244,34 @@ async function runAnalysis(env, officeId, userId, type, request) {
     return cors(fail(env, 'JSON غير صالح', 400), env, request);
   }
 
-  if (!b || typeof b.text !== 'string') {
-    return cors(fail(env, 'حقل "text" مطلوب', 400), env, request);
+  // المقارنة: نسختين؛ الباقي: نص واحد
+  let source;
+  if (type === 'compare') {
+    const a = typeof b?.text_a === 'string' ? b.text_a.trim() : '';
+    const c = typeof b?.text_b === 'string' ? b.text_b.trim() : '';
+    if (a.length < 30 || c.length < 30) return cors(fail(env, 'حط النسختين (القديمة والجديدة) — كل واحدة 30 حرف على الأقل', 400), env, request);
+    const party = String(b.our_party || '').trim().slice(0, 200);
+    source = `${party ? `الطرف اللي بنمثله: ${party}\n\n` : ''}===== النسخة القديمة =====\n${a.slice(0, 7500)}\n\n===== النسخة الجديدة =====\n${c.slice(0, 7500)}`;
+  } else {
+    if (!b || typeof b.text !== 'string') return cors(fail(env, 'حقل "text" مطلوب', 400), env, request);
+    if (b.text.length < 30) return cors(fail(env, 'النص قصير جداً — اكتب 30 حرف على الأقل', 400), env, request);
+    source = b.text;
   }
 
-  if (b.text.length < 30) {
-    return cors(fail(env, 'النص قصير جداً — اكتب 30 حرف على الأقل', 400), env, request);
+  // ربط بقضية (اختياري): لازم تكون تبع المكتب وفي حدود صلاحية المستخدم
+  const caseId = toInt(b.case_id) || null;
+  if (caseId) {
+    const c = await env.DB.prepare('SELECT id FROM cases WHERE id = ? AND office_id = ? AND deleted_at IS NULL').bind(caseId, officeId).first();
+    if (!c || !(await canAccessCase(env, access, authUser, caseId))) return cors(fail(env, 'القضية مش موجودة', 404), env, request);
   }
+
+  // النص الملصوق ده مستند موكل → موافقة + خصوصية حسب إعداد المكتب
+  const privacy = await requireClientDataAi(env, officeId);
+  if (privacy.block) return cors(privacy.block, env, request);
 
   // النماذج المجانية بتدعم نصوص أطول بكتير من 4000 حرف
-  const text = b.text.slice(0, 15000);
-  const truncated = b.text.length > 15000;
+  const text = source.slice(0, 15000);
+  const truncated = source.length > 15000;
 
   let result, provider;
   try {
@@ -224,9 +289,9 @@ async function runAnalysis(env, officeId, userId, type, request) {
   }
   if (truncated) result._truncated = true;
 
-  const title = result.summary ? String(result.summary).slice(0, 80) : `تحليل ${type}`;
+  const title = result.summary ? String(result.summary).slice(0, 80) : TYPE_TITLES[type] || 'تحليل';
   const insertId = await saveAnalysis(env, {
-    officeId, userId, type, title, input: text, result, fileName: b.file_name || null,
+    officeId, userId, type, title, input: text, result, fileName: b.file_name || null, caseId,
   });
 
   return cors(ok(env, {
@@ -235,6 +300,7 @@ async function runAnalysis(env, officeId, userId, type, request) {
     title,
     result,
     provider,
+    case_id: caseId,
     created_at: new Date().toISOString(),
   }), env, request);
 }
@@ -382,9 +448,10 @@ async function listCaseAnalyses({ env, officeId, params }) {
   let rows = [];
   try {
     const r = await env.DB.prepare(
-      `SELECT id, title, created_at FROM analyses
-       WHERE office_id = ? AND type = 'case_ai' AND (case_id = ? OR file_name = ?)
-       ORDER BY id DESC LIMIT 10`
+      // كل التحليلات المربوطة بالقضية (تحليل القضية نفسه + عقد/حكم/مستند/مقارنة اتربطوا بيها من قسم الذكاء الاصطناعي)
+      `SELECT id, type, title, created_at FROM analyses
+       WHERE office_id = ? AND (case_id = ? OR (type = 'case_ai' AND file_name = ?))
+       ORDER BY id DESC LIMIT 15`
     ).bind(officeId, caseId, `case:${caseId}`).all();
     rows = r.results || [];
   } catch {
@@ -404,8 +471,9 @@ async function listCaseAnalyses({ env, officeId, params }) {
 
 async function getHistory({ env, officeId, request }) {
   const r = await env.DB.prepare(
-    `SELECT id, type, title, created_at FROM analyses
-     WHERE office_id = ? AND type != 'case_ai' ORDER BY id DESC LIMIT 20`
+    `SELECT a.id, a.type, a.title, a.created_at, a.case_id, c.case_number FROM analyses a
+     LEFT JOIN cases c ON c.id = a.case_id
+     WHERE a.office_id = ? AND a.type != 'case_ai' ORDER BY a.id DESC LIMIT 20`
   ).bind(officeId).all();
   return cors(ok(env, { items: r.results || [] }), env, request);
 }

@@ -22,7 +22,7 @@ const AI_PATHS = [
   /^\/api\/chat$/,
   /^\/api\/legal-search$/,
   /^\/api\/generate-doc(\/refine)?$/,
-  /^\/api\/analyze\/(contract|case|document)$/,
+  /^\/api\/analyze\/(contract|case|document|judgment|compare)$/,
   /^\/api\/cases\/\d+\/analyze$/,
 ];
 export function isAiRequest(method, path) {
